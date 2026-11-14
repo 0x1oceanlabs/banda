@@ -7,9 +7,9 @@
  * without an answer, it keeps asking until its time is out, and this
  * window says no more of it.
  */
-import { useContext, useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import type { Engine } from "@banda/contract"
-import type { Ask, DeviceKind } from "@banda/contract/devices"
+import type { Ask } from "@banda/contract/devices"
 import { Button } from "@banda/ui/components/button"
 import {
   Dialog,
@@ -19,31 +19,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@banda/ui/components/dialog"
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldLabel,
-  FieldTitle,
-} from "@banda/ui/components/field"
-import { RadioGroup, RadioGroupItem } from "@banda/ui/components/radio-group"
+import { RadioGroup } from "@banda/ui/components/radio-group"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useNow } from "@banda/ui/hooks/use-now"
-import { THIS_COMPUTER } from "@banda/ui/lib/outside"
-import {
-  HostsContext,
-  sameEach,
-  type Shown,
-  useHereNamed,
-  useHostsBy,
-} from "@banda/core/react"
-import {
-  GlobeIcon,
-  type LucideIcon,
-  MonitorIcon,
-  SmartphoneIcon,
-  TerminalIcon,
-} from "lucide-react"
 import { toast } from "@banda/ui/components/sonner"
 import {
   allow,
@@ -53,32 +31,8 @@ import {
   named,
   type Reached,
 } from "./asking"
-
-/** The machines the window reaches now, this one first. Made again
- * only as one comes or goes, or is named anew, so each door is heard
- * once. */
-function useReached(engine: Engine): readonly Reached[] {
-  const hosts = useContext(HostsContext)
-  const here = useHereNamed()?.name ?? THIS_COMPUTER
-  const live = useHostsBy(liveNamed, sameEach)
-  return useMemo(
-    () => [
-      { engine, name: here },
-      ...live.map((one) => {
-        const [key, name] = one.split("\n") as [string, string]
-        return { engine: hosts.engine(key), name }
-      }),
-    ],
-    [engine, hosts, here, live]
-  )
-}
-
-/** Each live host's key and the name the window shows it by, as one
- * word a store compares. */
-const liveNamed = (hosts: readonly Shown[]): string[] =>
-  hosts
-    .filter((one) => one.state.state === "live")
-    .map((one) => `${one.name}\n${one.named?.name ?? one.name}`)
+import { ChoiceCard } from "./ChoiceCard"
+import { KIND_ICONS, useReached } from "./reached"
 
 /** Who asks at each of `reached`'s doors now, the first to ask first. */
 function useAsked(reached: readonly Reached[]): Asked[] {
@@ -113,13 +67,6 @@ export function DevicesAsking({ engine }: { engine: Engine }) {
   )
 }
 
-const ICONS: Record<DeviceKind, LucideIcon> = {
-  desktop: MonitorIcon,
-  browser: GlobeIcon,
-  phone: SmartphoneIcon,
-  cli: TerminalIcon,
-}
-
 function Question({
   asked: { ask, at },
   others,
@@ -133,7 +80,7 @@ function Question({
   const [where, setWhere] = useState<"every" | "one">("every")
   const { busy, problem, act } = useAct()
   const now = useNow(10_000)
-  const Icon = ICONS[ask.kind]
+  const Icon = KIND_ICONS[ask.kind]
   const every = named([at, ...others].map(({ name }) => name))
   const answer = (how: "allow" | "refuse") =>
     act(
@@ -192,12 +139,12 @@ function Question({
             value={where}
             onValueChange={(value) => setWhere(value as "every" | "one")}
           >
-            <Choice
+            <ChoiceCard
               value="every"
               title={`Allow on ${every}`}
               about="Every machine this window reaches."
             />
-            <Choice
+            <ChoiceCard
               value="one"
               title={`Only ${at.name}`}
               about="It asks again at each other machine."
@@ -223,27 +170,5 @@ function Question({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function Choice({
-  value,
-  title,
-  about,
-}: {
-  value: string
-  title: string
-  about: string
-}) {
-  return (
-    <FieldLabel className="w-full">
-      <Field orientation="horizontal">
-        <RadioGroupItem value={value} />
-        <FieldContent>
-          <FieldTitle>{title}</FieldTitle>
-          <FieldDescription>{about}</FieldDescription>
-        </FieldContent>
-      </Field>
-    </FieldLabel>
   )
 }

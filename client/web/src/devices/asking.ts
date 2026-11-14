@@ -57,7 +57,7 @@ const LIST = new Intl.ListFormat("en-GB", { type: "conjunction" })
 /** Machines as one reads them in a row: "arc, devbox and this Mac". */
 export const named = (names: readonly string[]): string => LIST.format(names)
 
-const KINDS: Record<DeviceKind, string> = {
+export const KINDS: Record<DeviceKind, string> = {
   desktop: "Desktop",
   browser: "Browser",
   phone: "Phone",
@@ -81,7 +81,7 @@ export function askedWords({ kind, asked_at, origin }: Ask, now: number) {
 
 /** An origin's host, and its port where it has one; as it is, where it
  * is no address. */
-function addressOf(origin: string): string {
+export function addressOf(origin: string): string {
   try {
     return new URL(origin).host || origin
   } catch {

@@ -18,7 +18,9 @@ import {
   PanelLeftIcon,
   SettingsIcon,
   Share2Icon,
+  TabletSmartphoneIcon,
 } from "lucide-react"
+import { DevicesSettings } from "../devices/Settings"
 import { modules } from "../modules"
 import { General } from "./General"
 import { Keys } from "./Keys"
@@ -72,6 +74,16 @@ export const SECTIONS: Section[] = [
       "Where your Projects and Agents run. Each machine names itself, and every window shows that name.",
     machine: false,
     Body: MachinesSettings,
+  },
+  {
+    // ADR 0124, decision 3: each machine keeps its own devices.
+    id: "devices",
+    title: "Devices",
+    icon: TabletSmartphoneIcon,
+    about:
+      "Where you sit: each device reaches a machine as you, by its own key.",
+    machine: true,
+    Body: DevicesSettings,
   },
   {
     id: "appearance",
