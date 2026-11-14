@@ -74,16 +74,23 @@ refuses a manifest whose id is not its folder's name, whose kind is not
 its bucket's, or whose `api` or `[needs]` is wrong, and a folder with a
 part's files (`engine/Cargo.toml`, `pane/` or `desktop/`'s
 `package.json`, `window.json`) but no manifest. It writes the list
-`engine/src/apps.rs` includes: each manifest and `window.json`, and the
-engine parts `banda serve` builds, in its order, each by its builder
+`engine/src/apps.rs` includes: each manifest and `window.json`, the
+`SETTINGS` of the engine part's crate when the manifest names settings
+files, and the engine parts `banda serve` builds, in its order, each by its builder
 there (one function per App's id: a part with none fails the build, a
 builder with no part fails clippy). The engine serves those and no
 other, as the contract's tests check against `banda modules`. The lists
 still kept by hand are held to it by the engine's tests:
-`engine/Cargo.toml`'s crates and the workspace's members, the settings'
-window parts (until B2), and the window's `client/web/src/modules.ts`
-and `client/desktop/src/modules.ts`; the tests write the contract's
-`Methods` (`sdk/contract/src/generated/Methods.ts`) from it.
+`engine/Cargo.toml`'s crates and the workspace's members, and the
+window's `client/web/src/modules.ts` and `client/desktop/src/modules.ts`; the tests write the contract's
+`Methods` (`sdk/contract/src/generated/Methods.ts`) from it. The
+settings' crate takes no App's crate but the agents': the scan writes
+what each part hands it, its settings files and its window part
+(`apps::HANDED`), the window parts in the window's order (`WINDOW_ORDER`
+in `engine/build.rs`: a window part with no place there stops the
+build). The settings' tests and the keys' read the same parts from
+`platform/settings/tests/whole`, with the Apps' crates as
+dev-dependencies, which the engine's tests count and hold to the list.
 
 ## A module's contract
 

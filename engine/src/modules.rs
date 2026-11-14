@@ -533,11 +533,11 @@ mod tests {
             .filter(|offer| !offer.manifest.settings.is_empty())
             .map(|offer| (offer.manifest.id, offer.manifest.settings))
             .collect();
-        let mut described: Vec<(String, Vec<String>)> = banda_settings::MODULES
-            .iter()
-            .map(|(id, files)| {
-                let names = files.iter().map(|file| file.name.to_owned()).collect();
-                (id.to_string(), names)
+        let mut described: Vec<(String, Vec<String>)> = (crate::apps::HANDED.iter())
+            .filter(|part| !part.files.is_empty())
+            .map(|part| {
+                let names = part.files.iter().map(|file| file.name.to_owned()).collect();
+                (part.id.to_owned(), names)
             })
             .collect();
         said.sort();

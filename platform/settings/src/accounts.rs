@@ -7,11 +7,12 @@ use std::path::PathBuf;
 use toml_edit::{InlineTable, Value};
 
 pub struct Store {
+    settings: crate::Settings,
     config: PathBuf,
 }
 impl Store {
-    pub fn new(config: PathBuf) -> Self {
-        Self { config }
+    pub fn new(settings: crate::Settings, config: PathBuf) -> Self {
+        Self { settings, config }
     }
 
     /// `agents.toml` as it reads, its defaults when it is not there; none
@@ -48,11 +49,11 @@ impl AccountStore for Store {
         let key = format!("models.{}", Value::from(harness));
         let what = "The menu of models could not be saved";
         if models.is_empty() {
-            return written(crate::reset(&self.config, "agents.toml", &key), what);
+            return written(self.settings.reset(&self.config, "agents.toml", &key), what);
         }
         let list: toml_edit::Array = models.iter().map(String::as_str).collect();
         written(
-            crate::set(
+            self.settings.set(
                 &self.config,
                 "agents.toml",
                 &key,
@@ -70,7 +71,8 @@ impl AccountStore for Store {
         // the Account usable and reports the problem; repeating is safe.
         if clear_fallback {
             written(
-                crate::reset(&self.config, "agents.toml", "start.fallback"),
+                self.settings
+                    .reset(&self.config, "agents.toml", "start.fallback"),
                 "Could not clear the fallback",
             )?;
         }
@@ -86,7 +88,7 @@ impl AccountStore for Store {
         retired.insert("by", Value::InlineTable(author));
         let value = Value::InlineTable(retired);
         written(
-            crate::set(
+            self.settings.set(
                 &self.config,
                 "harnesses.toml",
                 &format!("harness.{}.retired", Value::from(id)),
@@ -115,7 +117,7 @@ impl AccountStore for Store {
         }
         entry.insert("env", Value::InlineTable(env));
         written(
-            crate::set(
+            self.settings.set(
                 &self.config,
                 "harnesses.toml",
                 &format!("harness.{}", account.id()),
@@ -145,14 +147,19 @@ impl AccountStore for Store {
         if !named.is_empty() {
             let value = Value::InlineTable(named).to_string();
             written(
-                crate::set(&self.config, "harnesses.toml", &entry, &value),
+                self.settings
+                    .set(&self.config, "harnesses.toml", &entry, &value),
                 what,
             )?;
         }
         // On is how an entry is when it says nothing.
         if change.enabled == Some(true) {
             let enabled = format!("{entry}.enabled");
-            written(crate::reset(&self.config, "harnesses.toml", &enabled), what)?;
+            written(
+                self.settings
+                    .reset(&self.config, "harnesses.toml", &enabled),
+                what,
+            )?;
         }
         Ok(())
     }
@@ -164,13 +171,13 @@ impl AccountStore for Store {
         };
         written(
             match harness {
-                Some(id) => crate::set(
+                Some(id) => self.settings.set(
                     &self.config,
                     "agents.toml",
                     key,
                     &Value::from(id).to_string(),
                 ),
-                None => crate::reset(&self.config, "agents.toml", key),
+                None => self.settings.reset(&self.config, "agents.toml", key),
             },
             "The account could not be chosen",
         )
@@ -205,7 +212,7 @@ mod tests {
         let harnesses = Harnesses::load(&path).unwrap();
         let accounts = Accounts::new(harnesses.clone()).with_store(
             root.path().join("accounts"),
-            Arc::new(Store::new(config)),
+            Arc::new(Store::new(crate::whole::WHOLE, config)),
             secrets(root.path()),
         );
         let view = accounts
@@ -245,7 +252,7 @@ mod tests {
         let harnesses = Harnesses::load(&path).unwrap();
         let accounts = Accounts::new(harnesses).with_store(
             root.join("accounts"),
-            Arc::new(Store::new(config.clone())),
+            Arc::new(Store::new(crate::whole::WHOLE, config.clone())),
             secrets(root),
         );
         accounts.connect(add("work", None)).unwrap();
@@ -405,7 +412,7 @@ mod tests {
         let owned = root.path().join("accounts");
         let accounts = Accounts::new(harnesses.clone()).with_store(
             owned.clone(),
-            Arc::new(Store::new(config.clone())),
+            Arc::new(Store::new(crate::whole::WHOLE, config.clone())),
             secrets(root.path()),
         );
         accounts.connect(add("work", None)).unwrap();

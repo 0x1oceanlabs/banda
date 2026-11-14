@@ -15,6 +15,7 @@ use banda_keys::KeysModule;
 use banda_machines::awake::{self, Why};
 use banda_machines::power::{Battery, Meter, Source};
 use banda_machines::{Machine, Machines};
+use banda_settings::{Part, Settings};
 use futures::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -69,7 +70,15 @@ async fn open_with(root: &Path, owner: PersonId, meter: Meter) -> Arc<Kernel> {
         .named(machine.named())
         .power(move || meter.stream())
         .module(Machines::new(machine))
-        .module(KeysModule::new(config))
+        .module(KeysModule::new(
+            // The settings with this part's file alone, as it hands it.
+            Settings::over(&[Part {
+                id: "machines",
+                files: &banda_machines::SETTINGS,
+                window: None,
+            }]),
+            config,
+        ))
         .open()
         .await
         .unwrap()

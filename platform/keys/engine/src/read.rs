@@ -7,6 +7,7 @@
 use banda_kernel::{Refusal, Stream};
 use banda_look::keyed::Keyed;
 use banda_look::{Class, Places, Problem, SettingsFile};
+use banda_settings::Settings;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -64,8 +65,8 @@ pub struct SettingChanged {
 
 /// The machine's part of the settings file `name` in `config`, or why
 /// there is none to read.
-pub fn read(config: &Path, name: &str) -> Result<SettingsRead, Refusal> {
-    let Some(file) = banda_settings::file(name) else {
+pub fn read(settings: Settings, config: &Path, name: &str) -> Result<SettingsRead, Refusal> {
+    let Some(file) = settings.file(name) else {
         return Err(Refusal::not_found(format!(
             "{name} is not one of Banda's settings files"
         )));
@@ -94,8 +95,8 @@ fn read_of(config: &Path, file: &SettingsFile) -> SettingsRead {
 
 /// Each settings file with a part that is this machine's, and its `rev`
 /// now.
-pub fn revs(config: &Path) -> Vec<SettingChanged> {
-    (banda_settings::files())
+pub fn revs(settings: Settings, config: &Path) -> Vec<SettingChanged> {
+    (settings.files())
         .filter(|file| file.has(Class::Machine))
         .map(|file| SettingChanged {
             file: file.name.to_owned(),
@@ -107,14 +108,15 @@ pub fn revs(config: &Path) -> Vec<SettingChanged> {
 /// Each machine file's `rev`, first as it is now, then each one again as
 /// its part reads otherwise; `heard` says when something in `config`
 /// changed. A change of this device's own keys alone says nothing.
-pub fn follow(config: PathBuf, mut heard: watch::Receiver<()>) -> Stream {
+pub fn follow(settings: Settings, config: PathBuf, mut heard: watch::Receiver<()>) -> Stream {
     let (say, stream) = mpsc::channel(8);
     tokio::spawn(async move {
         let mut told: HashMap<String, String> = HashMap::new();
         loop {
             heard.mark_unchanged();
             let reading = config.clone();
-            let Ok(now) = tokio::task::spawn_blocking(move || revs(&reading)).await else {
+            let Ok(now) = tokio::task::spawn_blocking(move || revs(settings, &reading)).await
+            else {
                 return;
             };
             for changed in now {
@@ -143,6 +145,7 @@ pub fn follow(config: PathBuf, mut heard: watch::Receiver<()>) -> Stream {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::whole::WHOLE;
     use banda_kernel::Code;
     use serde_json::json;
 
@@ -157,7 +160,7 @@ mod tests {
     #[test]
     fn a_machine_file_is_read_whole() {
         let config = config_with(&[("sharing.toml", "problems = true\n")]);
-        let read = read(config.path(), "sharing.toml").unwrap();
+        let read = read(WHOLE, config.path(), "sharing.toml").unwrap();
         assert_eq!(read.file, "sharing.toml");
         assert_eq!(
             read.values,
@@ -178,7 +181,7 @@ mod tests {
         let browser = "search = \"https://kagi.com/?q=%s\"\ntabs = 3\n\n\
                        [agents]\nscreenshots = \"no\"\nsites.github = \"allow\"\n";
         let config = config_with(&[("browser.toml", browser)]);
-        let read = read(config.path(), "browser.toml").unwrap();
+        let read = read(WHOLE, config.path(), "browser.toml").unwrap();
         let keys: Vec<&String> = read.keyed.keys().collect();
         assert!(
             keys.iter().all(|key| key.starts_with("agents.")),
@@ -198,7 +201,7 @@ mod tests {
     #[test]
     fn the_harness_list_is_read_for_its_problems_alone() {
         let config = config_with(&[("harnesses.toml", "[[harness]]\nid = \"x\"\n")]);
-        let read = read(config.path(), "harnesses.toml").unwrap();
+        let read = read(WHOLE, config.path(), "harnesses.toml").unwrap();
         assert_eq!(read.values, None);
         assert!(read.keyed.is_empty());
         assert_eq!(read.problems.len(), 1, "{:?}", read.problems);
@@ -210,7 +213,7 @@ mod tests {
         // their path nowhere else.
         let config = config_with(&[("harnesses.toml", "[[harness]]\nid = \"claude\"\n")]);
         for name in ["harnesses.toml", "machine.toml"] {
-            let read = read(config.path(), name).unwrap();
+            let read = read(WHOLE, config.path(), name).unwrap();
             assert!(read.problems.is_empty(), "{name}: {:?}", read.problems);
             let named = (read.keyed.values()).any(|setting| setting.from.path.is_some());
             assert!(!named, "{name}");
@@ -223,18 +226,18 @@ mod tests {
     fn a_file_with_nothing_of_the_machine_s_is_refused() {
         let config = tempfile::tempdir().unwrap();
         for name in ["look.toml", "keys.toml", "sidebar.toml", "terminal.toml"] {
-            let refused = read(config.path(), name).unwrap_err();
+            let refused = read(WHOLE, config.path(), name).unwrap_err();
             assert_eq!(refused.code, Code::Invalid, "{name}");
             assert!(refused.message.contains("each window reads its own copy"));
         }
-        let unknown = read(config.path(), "hosts.toml").unwrap_err();
+        let unknown = read(WHOLE, config.path(), "hosts.toml").unwrap_err();
         assert_eq!(unknown.code, Code::NotFound);
     }
 
     #[test]
     fn a_rev_changes_with_the_machine_s_part_alone() {
         let config = config_with(&[("files.toml", "editor = \"vim\"\npinned = [\"/a\"]\n")]);
-        let rev = |config: &Path| read(config, "files.toml").unwrap().rev;
+        let rev = |config: &Path| read(WHOLE, config, "files.toml").unwrap().rev;
         let before = rev(config.path());
         assert_eq!(rev(config.path()), before, "the same, read again");
         // This device's editor, on its own line, changes.
@@ -256,12 +259,12 @@ mod tests {
     fn a_harness_list_s_rev_changes_with_its_text() {
         let one = "[[harness]]\nid = \"claude\"\n";
         let config = config_with(&[("harnesses.toml", one)]);
-        let before = read(config.path(), "harnesses.toml").unwrap();
+        let before = read(WHOLE, config.path(), "harnesses.toml").unwrap();
         assert!(before.problems.is_empty(), "{:?}", before.problems);
         let two = "[[harness]]\nid = \"claude\"\nenabled = false\n\n\
                    [[harness]]\nid = \"codex\"\n";
         std::fs::write(config.path().join("harnesses.toml"), two).unwrap();
-        let after = read(config.path(), "harnesses.toml").unwrap();
+        let after = read(WHOLE, config.path(), "harnesses.toml").unwrap();
         assert!(after.problems.is_empty(), "{:?}", after.problems);
         assert_ne!(after.rev, before.rev, "the list it checks alone changed");
     }
@@ -269,7 +272,7 @@ mod tests {
     #[test]
     fn every_file_with_a_machine_s_part_has_a_rev() {
         let config = tempfile::tempdir().unwrap();
-        let mut files: Vec<String> = (revs(config.path()).into_iter())
+        let mut files: Vec<String> = (revs(WHOLE, config.path()).into_iter())
             .map(|changed| changed.file)
             .collect();
         files.sort();

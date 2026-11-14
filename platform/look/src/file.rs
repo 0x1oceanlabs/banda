@@ -2,8 +2,8 @@
 //!
 //! A [`SettingsFile`] names a file in `~/.config/banda/`, its schema, what
 //! a new one starts as, and how its text is checked. The look describes the
-//! files it reads; a module describes its own; `banda_settings` gathers
-//! them. A file that is one layer, the Person's, over Banda's defaults is a
+//! files it reads; a module describes its own; the engine hands
+//! `banda_settings` each from its list of Apps. A file that is one layer, the Person's, over Banda's defaults is a
 //! [`OneFile`], and [`resolve`] resolves every such file the same way, so
 //! the look carries a module's file by its name, a value and its keys.
 //!

@@ -26,6 +26,7 @@ use banda_kernel::{
 };
 use banda_look::Problem;
 use banda_look::keys::{self as look, Args, Keys, Mod, NONE};
+use banda_settings::Settings;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -37,6 +38,10 @@ use tokio::sync::watch;
 use ts_rs::TS;
 
 pub mod read;
+// Banda's settings whole, for the tests: the settings' own list.
+#[cfg(test)]
+#[path = "../../../settings/tests/whole/mod.rs"]
+mod whole;
 use read::{ReadSetting, SettingsRead};
 
 /// The file the Person's keys are in.
@@ -137,13 +142,13 @@ pub struct SetMod {
 
 /// Every action there is with its keys in force, and what is wrong in the
 /// Person's keys.toml.
-pub fn list(config: &Path) -> (Vec<Listed>, Vec<Problem>) {
-    let (keys, problems) = resolved(config);
+pub fn list(settings: Settings, config: &Path) -> (Vec<Listed>, Vec<Problem>) {
+    let (keys, problems) = resolved(settings, config);
     // The look gives each action its keys, in the manifests' order.
-    let listed = banda_settings::manifests()
+    let listed = (settings.manifests())
         .actions
         .iter()
-        .zip(banda_settings::owners())
+        .zip(settings.owners())
         .zip(&keys.actions)
         .map(|((action, owner), inforce)| Listed {
             owner: owner.to_owned(),
@@ -167,7 +172,7 @@ pub fn list(config: &Path) -> (Vec<Listed>, Vec<Problem>) {
 }
 
 /// Binds `bind.key` to its action, in its scope's table.
-pub fn bind(config: &Path, bind: &Bind) -> Result<String, Vec<Problem>> {
+pub fn bind(settings: Settings, config: &Path, bind: &Bind) -> Result<String, Vec<Problem>> {
     let key = named(config, &bind.key)?;
     // The line names the id that was checked, as the look reads it.
     let action = bind.action.trim();
@@ -176,8 +181,8 @@ pub fn bind(config: &Path, bind: &Bind) -> Result<String, Vec<Problem>> {
         Some(args) => call_of(action, args),
     };
     let path = look::path_of(&key, bind.scope.as_deref());
-    banda_settings::set(config, FILE, &path, &value)?;
-    Ok(format!("{key} runs “{}” now", title_of(action)))
+    settings.set(config, FILE, &path, &value)?;
+    Ok(format!("{key} runs “{}” now", title_of(settings, action)))
 }
 
 /// Whether `by` may bind `bind`: only the Person binds a key whose action,
@@ -185,7 +190,7 @@ pub fn bind(config: &Path, bind: &Bind) -> Result<String, Vec<Problem>> {
 /// Agent or opens a file in its app (ADR 0083, decision 3). The action is
 /// found as the look finds a line's, and any caller but the Person binds
 /// only an action Banda has.
-fn may_bind(by: Participant, bind: &Bind) -> Result<(), Refusal> {
+fn may_bind(settings: Settings, by: Participant, bind: &Bind) -> Result<(), Refusal> {
     if let Participant::Person(_) = by {
         return Ok(());
     }
@@ -193,7 +198,7 @@ fn may_bind(by: Participant, bind: &Bind) -> Result<(), Refusal> {
     if id == NONE {
         return Ok(());
     }
-    let manifests = banda_settings::manifests();
+    let manifests = settings.manifests();
     let action = declared(&manifests, id)?;
     match as_person(action, bind.args.as_ref()) {
         None => Ok(()),
@@ -239,8 +244,8 @@ fn as_person(action: &look::Action, args: Option<&Args>) -> Option<String> {
 /// and the focus's too. An action that declares no args is given none, so
 /// what only another part of the window hands it, as `terminal.run` its
 /// line, no caller here does.
-fn may_act(by: Participant, act: &Act) -> Result<(String, String), Refusal> {
-    let manifests = banda_settings::manifests();
+fn may_act(settings: Settings, by: Participant, act: &Act) -> Result<(String, String), Refusal> {
+    let manifests = settings.manifests();
     let action = declared(&manifests, act.action.trim())?;
     let none = Args::new();
     if let Some(wrong) = look::wrong_args(action, act.args.as_ref().unwrap_or(&none)) {
@@ -302,18 +307,18 @@ fn may_change(by: Participant, name: &str, key: &str, why: Option<&str>) -> Resu
 }
 
 /// Frees `key` in its scope's table, so it goes to the Pane.
-pub fn free(config: &Path, key: &Key) -> Result<String, Vec<Problem>> {
+pub fn free(settings: Settings, config: &Path, key: &Key) -> Result<String, Vec<Problem>> {
     let text = named(config, &key.key)?;
     let path = look::path_of(&text, key.scope.as_deref());
-    banda_settings::set(config, FILE, &path, &quoted(NONE))?;
+    settings.set(config, FILE, &path, &quoted(NONE))?;
     Ok(format!("{text} goes to the Pane now"))
 }
 
 /// Takes the Person's line of `key` out, so Banda's own key, if any, is
 /// back.
-pub fn reset(config: &Path, key: &Key) -> Result<String, Vec<Problem>> {
+pub fn reset(settings: Settings, config: &Path, key: &Key) -> Result<String, Vec<Problem>> {
     let text = named(config, &key.key)?;
-    banda_settings::reset(config, FILE, &look::path_of(&text, key.scope.as_deref()))?;
+    settings.reset(config, FILE, &look::path_of(&text, key.scope.as_deref()))?;
     Ok(format!("{text} is Banda's own again"))
 }
 
@@ -321,21 +326,21 @@ pub fn reset(config: &Path, key: &Key) -> Result<String, Vec<Problem>> {
 /// old one to the new, each at its level, as Settings does: a `none` held
 /// with it goes, as its key is no longer Banda's. Alt, Banda's own, takes
 /// the `mod` line out.
-pub fn set_mod(config: &Path, set: &SetMod) -> Result<String, Vec<Problem>> {
+pub fn set_mod(settings: Settings, config: &Path, set: &SetMod) -> Result<String, Vec<Problem>> {
     let file = config.join(FILE);
     let to = look::mod_of(&set.keys, cfg!(target_os = "macos"))
         .map_err(|message| vec![Problem::whole(&file, message)])?;
-    let (keys, _) = resolved(config);
+    let (keys, _) = resolved(settings, config);
     if to == Mod::default() {
-        banda_settings::reset(config, FILE, "mod")?;
+        settings.reset(config, FILE, "mod")?;
     } else {
-        banda_settings::set(config, FILE, "mod", &quoted(&to.text()))?;
+        settings.set(config, FILE, "mod", &quoted(&to.text()))?;
     }
     for moved in look::moves(&keys.binds, keys.held, to) {
         let path = look::path_of(&moved.bind.text, moved.bind.scope.as_deref());
         match moved.to {
-            Some(to) => banda_settings::rename(config, FILE, &path, &to)?,
-            None => banda_settings::reset(config, FILE, &path)?,
+            Some(to) => settings.rename(config, FILE, &path, &to)?,
+            None => settings.reset(config, FILE, &path)?,
         }
     }
     Ok(format!("Banda's keys are held with {} now", to.text()))
@@ -343,12 +348,12 @@ pub fn set_mod(config: &Path, set: &SetMod) -> Result<String, Vec<Problem>> {
 
 /// The Person's keys and what is wrong in them, read as the look reads
 /// them, with every manifest's actions.
-fn resolved(config: &Path) -> (Keys, Vec<Problem>) {
+fn resolved(settings: Settings, config: &Path) -> (Keys, Vec<Problem>) {
     let places = banda_look::Places::at(config);
     let mut problems = Vec::new();
     let (keys, _) = look::resolve(
         &places,
-        &banda_settings::manifests(),
+        &settings.manifests(),
         &mut problems,
         &mut Vec::new(),
     );
@@ -402,14 +407,16 @@ fn toml_of(value: &Value) -> toml_edit::Value {
 
 /// An action's title, by its id, for what was done; its id when Banda has
 /// none such.
-fn title_of(id: &str) -> String {
-    let manifests = banda_settings::manifests();
+fn title_of(settings: Settings, id: &str) -> String {
+    let manifests = settings.manifests();
     look::action_named(&manifests, id)
         .map_or_else(|| id.to_owned(), |(_, action)| action.title.clone())
 }
 
 /// The keys module, over the Person's config folder.
 pub struct KeysModule {
+    /// Banda's settings, over the parts the engine hands them.
+    settings: Settings,
     config: PathBuf,
     /// The file that keeps the modes the Person chose for each Harness's
     /// new Threads in Settings; none in a test that gives none.
@@ -420,8 +427,9 @@ pub struct KeysModule {
 }
 
 impl KeysModule {
-    pub fn new(config: PathBuf) -> Self {
+    pub fn new(settings: Settings, config: PathBuf) -> Self {
         KeysModule {
+            settings,
             config,
             modes: None,
             heard: Arc::new(watch::Sender::new(())),
@@ -457,11 +465,11 @@ impl KeysModule {
     }
 
     async fn list(&self, _: Call, _: Nothing) -> Result<Vec<Listed>, Refusal> {
-        Ok(list(&self.config).0)
+        Ok(list(self.settings, &self.config).0)
     }
 
     async fn act(&self, call: Call, act: Act) -> Result<String, Refusal> {
-        let (action, title) = may_act(call.participant(), &act)?;
+        let (action, title) = may_act(self.settings, call.participant(), &act)?;
         // The id as Banda has it now, which the window runs by.
         let asked = Act { action, ..act };
         let () = call.ask_window("act", &asked, ACTING).await?;
@@ -469,27 +477,29 @@ impl KeysModule {
     }
 
     async fn bind(&self, call: Call, key: Bind) -> Result<String, Refusal> {
-        may_bind(call.participant(), &key)?;
-        bind(&self.config, &key).map_err(refused)
+        may_bind(self.settings, call.participant(), &key)?;
+        bind(self.settings, &self.config, &key).map_err(refused)
     }
 
     async fn free(&self, _: Call, key: Key) -> Result<String, Refusal> {
-        free(&self.config, &key).map_err(refused)
+        free(self.settings, &self.config, &key).map_err(refused)
     }
 
     async fn reset(&self, _: Call, key: Key) -> Result<String, Refusal> {
-        reset(&self.config, &key).map_err(refused)
+        reset(self.settings, &self.config, &key).map_err(refused)
     }
 
     async fn set_mod(&self, _: Call, set: SetMod) -> Result<String, Refusal> {
-        set_mod(&self.config, &set).map_err(refused)
+        set_mod(self.settings, &self.config, &set).map_err(refused)
     }
 
     async fn settings_set(&self, call: Call, set: SetSetting) -> Result<String, Refusal> {
         let SetSetting { file, key, value } = set;
         let why = banda_settings::only_the_person(&file, &key, Some(&value));
         may_change(call.participant(), &file, &key, why)?;
-        banda_settings::set(&self.config, &file, &key, &value).map_err(refused)?;
+        self.settings
+            .set(&self.config, &file, &key, &value)
+            .map_err(refused)?;
         self.heard.send_replace(());
         self.keep_choice(call.participant(), |modes| {
             banda_settings::chose(modes, &file, &key, Some(&value))
@@ -501,7 +511,9 @@ impl KeysModule {
         let ResetSetting { file, key } = reset;
         let why = banda_settings::only_the_person(&file, &key, None);
         may_change(call.participant(), &file, &key, why)?;
-        banda_settings::reset(&self.config, &file, &key).map_err(refused)?;
+        self.settings
+            .reset(&self.config, &file, &key)
+            .map_err(refused)?;
         self.heard.send_replace(());
         self.keep_choice(call.participant(), |modes| {
             banda_settings::chose(modes, &file, &key, None)
@@ -513,7 +525,9 @@ impl KeysModule {
         let RenameSetting { file, key, to } = rename;
         let why = banda_settings::only_the_person_renames(&file, &key, &to);
         may_change(call.participant(), &file, &key, why)?;
-        banda_settings::rename(&self.config, &file, &key, &to).map_err(refused)?;
+        self.settings
+            .rename(&self.config, &file, &key, &to)
+            .map_err(refused)?;
         self.heard.send_replace(());
         self.keep_choice(call.participant(), |modes| {
             banda_settings::chose_renamed(modes, &file, &key, &to)
@@ -522,11 +536,15 @@ impl KeysModule {
     }
 
     async fn settings_read(&self, _: Call, ask: ReadSetting) -> Result<SettingsRead, Refusal> {
-        read::read(&self.config, &ask.file)
+        read::read(self.settings, &self.config, &ask.file)
     }
 
     async fn settings_changed(&self, _: Call, _: Nothing) -> Result<Stream, Refusal> {
-        Ok(read::follow(self.config.clone(), self.heard.subscribe()))
+        Ok(read::follow(
+            self.settings,
+            self.config.clone(),
+            self.heard.subscribe(),
+        ))
     }
 }
 
@@ -678,6 +696,7 @@ impl Module for KeysModule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::whole::WHOLE;
     use banda_kernel::{AgentId, Code, PersonId};
     use banda_look::keys::RunsAsPerson;
     use serde_json::json;
@@ -687,7 +706,7 @@ mod tests {
     }
 
     fn keys_of(config: &Path, id: &str) -> Vec<String> {
-        let (listed, _) = list(config);
+        let (listed, _) = list(WHOLE, config);
         let action = listed.iter().find(|action| action.id == id).unwrap();
         action.keys.iter().map(|key| key.key.clone()).collect()
     }
@@ -705,7 +724,7 @@ mod tests {
     fn a_key_bound_runs_its_action_and_reset_takes_it_back() {
         let config = tempfile::tempdir().unwrap();
         let config = config.path();
-        let said = bind(config, &bound("alt+m", "column.maximize")).unwrap();
+        let said = bind(WHOLE, config, &bound("alt+m", "column.maximize")).unwrap();
         assert!(said.starts_with("Alt+M runs"), "{said}");
         assert!(keys_of(config, "column.maximize").contains(&"Alt+M".to_owned()));
         assert!(keys_toml(config).contains("\"Alt+M\" = \"column.maximize\""));
@@ -713,7 +732,7 @@ mod tests {
             key: "Alt+M".to_owned(),
             scope: None,
         };
-        reset(config, &key).unwrap();
+        reset(WHOLE, config, &key).unwrap();
         assert!(!keys_of(config, "column.maximize").contains(&"Alt+M".to_owned()));
     }
 
@@ -721,9 +740,9 @@ mod tests {
     fn a_line_the_look_would_name_is_refused_and_the_file_kept() {
         let config = tempfile::tempdir().unwrap();
         let config = config.path();
-        bind(config, &bound("Alt+M", "column.maximize")).unwrap();
+        bind(WHOLE, config, &bound("Alt+M", "column.maximize")).unwrap();
         let before = keys_toml(config);
-        let refused = bind(config, &bound("Alt+J", "no.such")).unwrap_err();
+        let refused = bind(WHOLE, config, &bound("Alt+J", "no.such")).unwrap_err();
         assert!(
             refused[0].message.contains("Banda has no action no.such"),
             "{refused:?}"
@@ -734,9 +753,9 @@ mod tests {
             args: Some(args),
             ..bound("Ctrl+Alt+H", "browser.open")
         };
-        assert!(bind(config, &wrong).is_err());
+        assert!(bind(WHOLE, config, &wrong).is_err());
         // A key the window's fields would type.
-        assert!(bind(config, &bound("M", "column.maximize")).is_err());
+        assert!(bind(WHOLE, config, &bound("M", "column.maximize")).is_err());
         assert_eq!(keys_toml(config), before);
     }
 
@@ -750,19 +769,19 @@ mod tests {
             args: Some(args),
             ..bound("Ctrl+Alt+H", "browser.open")
         };
-        bind(config, &open).unwrap();
+        bind(WHOLE, config, &open).unwrap();
         let send = Bind {
             scope: Some("composer".to_owned()),
             ..bound("Ctrl+Return", "agents.composer.send")
         };
-        bind(config, &send).unwrap();
+        bind(WHOLE, config, &send).unwrap();
         let text = keys_toml(config);
         assert!(
             text.contains(r#""Ctrl+Alt+H" = { action = "browser.open", args = { address = "https://github.com" } }"#),
             "{text}"
         );
         assert!(text.contains("[binds.composer]"), "{text}");
-        let (listed, problems) = list(config);
+        let (listed, problems) = list(WHOLE, config);
         assert!(problems.is_empty(), "{problems:?}");
         let opens = listed
             .iter()
@@ -781,13 +800,13 @@ mod tests {
             key: maximize[0].clone(),
             scope: None,
         };
-        free(config, &key).unwrap();
+        free(WHOLE, config, &key).unwrap();
         assert!(keys_of(config, "column.maximize").is_empty());
         let nothing = Key {
             key: "Ctrl+Alt+Super+F12".to_owned(),
             scope: None,
         };
-        let refused = free(config, &nothing).unwrap_err();
+        let refused = free(WHOLE, config, &nothing).unwrap_err();
         assert!(refused[0].message.contains("frees nothing"), "{refused:?}");
     }
 
@@ -795,14 +814,15 @@ mod tests {
     fn a_new_mod_moves_the_person_s_lines_with_it() {
         let config = tempfile::tempdir().unwrap();
         let config = config.path();
-        bind(config, &bound("Alt+M", "column.maximize")).unwrap();
+        bind(WHOLE, config, &bound("Alt+M", "column.maximize")).unwrap();
         // A `none` held with Alt goes: Alt+F is no key of Banda's then.
         let alt_f = Key {
             key: "Alt+F".to_owned(),
             scope: None,
         };
-        free(config, &alt_f).unwrap();
+        free(WHOLE, config, &alt_f).unwrap();
         set_mod(
+            WHOLE,
             config,
             &SetMod {
                 keys: "Ctrl+Alt".to_owned(),
@@ -821,6 +841,7 @@ mod tests {
         );
         assert!(
             set_mod(
+                WHOLE,
                 config,
                 &SetMod {
                     keys: "Shift".to_owned()
@@ -830,6 +851,7 @@ mod tests {
         );
         // Alt, Banda's own, takes the line out.
         set_mod(
+            WHOLE,
             config,
             &SetMod {
                 keys: "Alt".to_owned(),
@@ -873,7 +895,7 @@ mod tests {
             bound("Alt+F", "none"),
         ];
         for bind in staying {
-            assert_eq!(may_bind(agent, &bind), Ok(()), "{bind:?}");
+            assert_eq!(may_bind(WHOLE, agent, &bind), Ok(()), "{bind:?}");
         }
     }
 
@@ -881,7 +903,7 @@ mod tests {
     fn only_the_person_binds_a_key_that_acts_as_them() {
         let agent = Participant::Agent(AgentId::new());
         let ask = given(bound("Ctrl+Alt+H", "thread.new"), json!({ "ask": "hello" }));
-        let refused = may_bind(agent, &ask).unwrap_err();
+        let refused = may_bind(WHOLE, agent, &ask).unwrap_err();
         assert_eq!(refused.code, Code::Forbidden);
         assert!(
             refused
@@ -926,16 +948,16 @@ mod tests {
             ),
         ];
         for bind in acting {
-            let refused = may_bind(agent, &bind).unwrap_err();
+            let refused = may_bind(WHOLE, agent, &bind).unwrap_err();
             assert_eq!(refused.code, Code::Forbidden, "{bind:?}");
         }
         // An action Banda has not is refused too.
-        let nothing = may_bind(agent, &bound("Alt+J", "no.such")).unwrap_err();
+        let nothing = may_bind(WHOLE, agent, &bound("Alt+J", "no.such")).unwrap_err();
         assert_eq!(nothing.code, Code::Invalid);
         assert!(nothing.message.contains("Banda has no action no.such"));
         // The Person binds it, as with a line of their own in keys.toml.
         let person = Participant::Person(PersonId::new());
-        assert_eq!(may_bind(person, &ask), Ok(()));
+        assert_eq!(may_bind(WHOLE, person, &ask), Ok(()));
     }
 
     fn acted(action: &str, args: Value) -> Act {
@@ -950,20 +972,20 @@ mod tests {
         let person = Participant::Person(PersonId::new());
         let agent = Participant::Agent(AgentId::new());
         for by in [person, agent] {
-            let (id, title) = may_act(by, &acted("overview.toggle", Value::Null)).unwrap();
+            let (id, title) = may_act(WHOLE, by, &acted("overview.toggle", Value::Null)).unwrap();
             assert_eq!(id, "overview.toggle");
             assert_eq!(title, "Overview of every window");
             // The Tiling's and the focus's are an Agent's to run too.
             for id in ["terminal.new", "column.maximize", "pane.close"] {
-                assert!(may_act(by, &acted(id, Value::Null)).is_ok(), "{id}");
+                assert!(may_act(WHOLE, by, &acted(id, Value::Null)).is_ok(), "{id}");
             }
             let open = acted("browser.open", json!({ "address": "https://github.com" }));
-            assert!(may_act(by, &open).is_ok());
+            assert!(may_act(WHOLE, by, &open).is_ok());
             // An id it had before runs the action as it is called now.
-            let (id, _) = may_act(by, &acted(" sidebar.settle\n", Value::Null)).unwrap();
+            let (id, _) = may_act(WHOLE, by, &acted(" sidebar.settle\n", Value::Null)).unwrap();
             assert_eq!(id, "sidebar.archive");
 
-            let nothing = may_act(by, &acted("no.such", Value::Null)).unwrap_err();
+            let nothing = may_act(WHOLE, by, &acted("no.such", Value::Null)).unwrap_err();
             assert_eq!(nothing.code, Code::Invalid);
             assert_eq!(
                 nothing.message,
@@ -976,7 +998,7 @@ mod tests {
     fn args_an_action_does_not_take_are_refused_by_name() {
         let person = Participant::Person(PersonId::new());
         let said = |action: &str, args: Value| {
-            let refused = may_act(person, &acted(action, args)).unwrap_err();
+            let refused = may_act(WHOLE, person, &acted(action, args)).unwrap_err();
             assert_eq!(refused.code, Code::Invalid);
             refused.message
         };
@@ -1001,7 +1023,7 @@ mod tests {
         );
         // A yes or a no is taken as one.
         let pin = json!({ "project": "p", "pinned": true });
-        assert!(may_act(person, &acted("projects.pin", pin)).is_ok());
+        assert!(may_act(WHOLE, person, &acted("projects.pin", pin)).is_ok());
         assert_eq!(
             said("projects.pin", json!({ "project": "p", "pinned": "yes" })),
             "pinned is a boolean"
@@ -1014,7 +1036,7 @@ mod tests {
         let person = Participant::Person(PersonId::new());
         let file = json!({ "file": "/tmp/a.pdf" });
         let ask = acted("thread.new", json!({ "ask": "hello" }));
-        let refused = may_act(agent, &ask).unwrap_err();
+        let refused = may_act(WHOLE, agent, &ask).unwrap_err();
         assert_eq!(refused.code, Code::Forbidden);
         assert!(
             refused
@@ -1023,7 +1045,7 @@ mod tests {
             "{}",
             refused.message
         );
-        let outside = may_act(agent, &acted("file.outside", file.clone())).unwrap_err();
+        let outside = may_act(WHOLE, agent, &acted("file.outside", file.clone())).unwrap_err();
         assert_eq!(outside.code, Code::Forbidden);
         assert!(
             outside
@@ -1046,7 +1068,7 @@ mod tests {
             acted("agents.delete-thread", thread),
         ];
         for act in &theirs {
-            let refused = may_act(agent, act).unwrap_err();
+            let refused = may_act(WHOLE, agent, act).unwrap_err();
             assert_eq!(refused.code, Code::Forbidden, "{act:?}");
             assert!(
                 refused
@@ -1055,33 +1077,33 @@ mod tests {
                 "{}",
                 refused.message
             );
-            assert!(may_act(person, act).is_ok(), "{act:?}");
+            assert!(may_act(WHOLE, person, act).is_ok(), "{act:?}");
         }
         // An Agent still binds the Composer's keys for its Person.
         let send = Bind {
             scope: Some("composer".to_owned()),
             ..bound("Ctrl+Return", "agents.composer.send")
         };
-        assert_eq!(may_bind(agent, &send), Ok(()));
+        assert_eq!(may_bind(WHOLE, agent, &send), Ok(()));
         // The Person's own `banda act` runs them.
-        assert!(may_act(person, &ask).is_ok());
-        assert!(may_act(person, &acted("file.outside", file)).is_ok());
+        assert!(may_act(WHOLE, person, &ask).is_ok());
+        assert!(may_act(WHOLE, person, &acted("file.outside", file)).is_ok());
         // Given none of the args that make it so, it is an Agent's too.
         let new = acted("thread.new", json!({ "harness": "fake" }));
-        assert!(may_act(agent, &new).is_ok());
+        assert!(may_act(WHOLE, agent, &new).is_ok());
     }
 
     #[test]
     fn a_line_names_the_action_it_was_checked_for() {
         let config = tempfile::tempdir().unwrap();
         let config = config.path();
-        bind(config, &bound("Alt+M", " column.maximize\n")).unwrap();
+        bind(WHOLE, config, &bound("Alt+M", " column.maximize\n")).unwrap();
         assert!(keys_toml(config).contains("\"Alt+M\" = \"column.maximize\""));
     }
 
     #[test]
     fn an_action_marked_by_args_names_args_it_takes() {
-        for action in &banda_settings::manifests().actions {
+        for action in &WHOLE.manifests().actions {
             let Some(RunsAsPerson::Given(names)) = &action.runs_as_person else {
                 continue;
             };

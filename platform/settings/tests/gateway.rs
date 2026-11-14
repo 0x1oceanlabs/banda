@@ -13,6 +13,8 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+mod whole;
+
 struct World {
     kernel: Arc<Kernel>,
     owner: PersonId,
@@ -37,7 +39,7 @@ impl World {
             Secrets::with_keyring("banda-test", root.path().join("secrets"), Some(keyring));
         let module = HarnessesModule::new(list.clone()).with_accounts(
             root.path().join("accounts"),
-            Arc::new(Store::new(root.path().to_owned())),
+            Arc::new(Store::new(whole::WHOLE, root.path().to_owned())),
             secrets.clone(),
         );
         let owner = PersonId::new();
