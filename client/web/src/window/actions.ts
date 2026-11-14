@@ -723,31 +723,16 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   ...windowModule.actions,
 ]
 
-/** Where the modules' item actions stand among the Window's own: after
- * its own Thread actions, as the key sheet listed them while they were
- * the Window's. It goes with B4h, actions by owner. */
-const ITEMS_AT =
-  WINDOW_ACTIONS.findIndex((action) => action.id === "sidebar.archive") + 1
-
-/** Where the Tiling's last actions start, a Pane's to a workspace by its
- * number: the key sheet lists a section's rows in this list's order, and
- * has had them after the Window's own of the Panes, the Pane in a window
- * of its own. It goes once the key sheet keeps an order of its own
- * (#1731). */
-const SENDS_AT = TILING_ACTIONS.findIndex(
-  (action) => action.id === "pane.send-1"
-)
-
-/** Every action: the modules' (`modules.ts`), then the Tiling's and the
- * Window's own, with the modules' item actions among them (ADR 0087,
- * decisions 12 and 13). */
+/** Every action, by its owner (ADR 0087, decisions 12 and 13): the Apps'
+ * (`modules.ts`), their item actions after, then the Tiling's and the
+ * Window's own, each owner's in its own order. The key sheet lists a
+ * section's rows in this order (#1731), so an owner that takes its
+ * actions out takes their rows with it and moves no other's. */
 export const ACTIONS: readonly Action<Shell>[] = [
   ...modules.flatMap((module) => module.actions),
-  ...TILING_ACTIONS.slice(0, SENDS_AT),
-  ...WINDOW_ACTIONS.slice(0, ITEMS_AT),
   ...modules.flatMap((module) => module.items),
-  ...WINDOW_ACTIONS.slice(ITEMS_AT),
-  ...TILING_ACTIONS.slice(SENDS_AT),
+  ...TILING_ACTIONS,
+  ...WINDOW_ACTIONS,
 ]
 
 /**
