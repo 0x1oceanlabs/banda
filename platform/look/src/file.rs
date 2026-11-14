@@ -148,12 +148,14 @@ impl SettingsFile {
         self.moved
     }
 
-    /// The file's JSON Schema, titled with its name, each top-level key
-    /// saying its class as `x-class`, for the window to know whose copy a
-    /// row is.
+    /// The file's JSON Schema, titled with its name, saying its class as
+    /// `x-class` and each top-level key its own, for the window to know
+    /// whose copy the file is, and a row.
     pub fn schema(&self) -> Schema {
         let mut schema = (self.schema)();
         schema.insert("title".into(), self.name.into());
+        let class = serde_json::to_value(self.class);
+        schema.insert("x-class".into(), class.expect("a class is a word"));
         if let Some(Value::Object(keys)) = schema.get_mut("properties") {
             for (name, key) in keys.iter_mut() {
                 if let Value::Object(key) = key {
@@ -598,11 +600,12 @@ mod tests {
     }
 
     #[test]
-    fn the_schema_says_each_top_level_key_s_class() {
+    fn the_schema_says_the_file_s_class_and_each_top_level_key_s() {
         let schema = serde_json::to_value(MIXED.schema()).unwrap();
         let properties = &schema["properties"];
         assert_eq!(properties["agents"]["x-class"], "machine");
         assert_eq!(properties["search"]["x-class"], "device");
         assert_eq!(properties["tabs"]["x-class"], "device");
+        assert_eq!(schema["x-class"], "device", "the file's own");
     }
 }

@@ -27,6 +27,7 @@
     }
   },
   "additionalProperties": false,
+  "x-class": "shared",
   "$defs": {
     "Flow": {
       "description": "How an Agent's windows stand, its Flow (ADR 0079): where its Thread\nopens, and what a pick of it shows.",

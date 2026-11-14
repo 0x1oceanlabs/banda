@@ -8,7 +8,14 @@ import { useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import type { Owner } from "@banda/core"
 import type { Problem } from "@banda/contract/look"
-import { aboutOf, type Row, SCHEMAS } from "@banda/contract/settings"
+import type { Named } from "@banda/contract/machines"
+import {
+  aboutOf,
+  type Class,
+  fileClass,
+  type Row,
+  SCHEMAS,
+} from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import {
@@ -16,12 +23,14 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@banda/ui/components/input-group"
+import { MachineIcon } from "@banda/ui/components/machine-icon"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { cn } from "@banda/ui/lib/utils"
 import {
   HostsContext,
   useAnyHost,
+  useHereNamed,
   useHosts,
   useShownOf,
 } from "@banda/core/react"
@@ -31,9 +40,14 @@ import type { PaneProps, PaneState } from "@banda/ui/pane"
 import type { Section, SectionProps } from "@banda/ui/settings"
 import { useScope } from "@banda/ui/hooks/use-scope"
 import { useMachine } from "@banda/ui/hooks/use-status"
-import { CopyIcon, ExternalLinkIcon, SearchIcon } from "lucide-react"
+import {
+  CopyIcon,
+  ExternalLinkIcon,
+  LaptopIcon,
+  SearchIcon,
+} from "lucide-react"
 import { problemWords } from "../bar/problems/Problems"
-import { useLookProblems, useLookSettings } from "../look"
+import { useLookConfig, useLookProblems, useLookSettings } from "../look"
 import {
   groupsOf,
   ownFile,
@@ -56,6 +70,15 @@ import { kindOf } from "../registry"
 import { MachinePill } from "../window/named"
 import { classOf, throughEngine, useMachineSettings } from "./machine-settings"
 import { device } from "../boot"
+import {
+  filesOf,
+  inFolder,
+  marksOf,
+  partsOf,
+  tilde,
+  whoseAbout,
+  whoseWords,
+} from "./whose"
 
 const NONE: Problem[] = []
 
@@ -167,6 +190,28 @@ export function Settings({
   }
   const theirs = (r: Row) =>
     on !== undefined && classOf(r.file, r.key) === "machine"
+  // Whose copy each file is, said once under its rows (#1736, point 4):
+  // a machine's by the name of the machine shown, this one's or the one
+  // picked, and where its file is there.
+  const folder = useLookConfig()
+  const hereNamed = useHereNamed()
+  // Another machine is named by its key until the Window knows its name.
+  const named: Whose =
+    on === undefined
+      ? { name: hereNamed?.name, icon: hereNamed?.icon }
+      : { name: shownOn?.named.name ?? on, icon: shownOn?.named.icon }
+  const line = (file: string) => {
+    const of = fileClass(file)
+    const path =
+      of === "machine" && on !== undefined
+        ? machine.paths[file]
+        : folder && inFolder(folder, file)
+    return <FileLine key={file} file={file} path={path} of={of} named={named} />
+  }
+  const [firstLine, ...restLines] = filesOf(section).map(line)
+  // A section of two files says its first's under its Body, which draws
+  // that file, and the last's under all its rows.
+  const bodyLine = section.Body && restLines.length > 0
   const found = useMemo(
     () => (words.trim() ? search(words, others) : []),
     [words, others]
@@ -177,7 +222,7 @@ export function Settings({
     if (link !== args.link) update({ ...args, link })
   }
   // A problem shows at the row of its key; the rest, above the section.
-  const row = (r: Row) => {
+  const row = (r: Row, whose?: Class) => {
     const mine = theirs(r)
     const setting = mine
       ? machine.keyed[r.file]?.[r.key]
@@ -194,7 +239,11 @@ export function Settings({
         problems={here}
         Custom={section.custom?.[r.key]}
         writer={mine ? machineWriter : undefined}
-        where={on !== undefined && !mine ? `on ${THIS_COMPUTER}` : undefined}
+        where={
+          on !== undefined && !mine
+            ? `on ${THIS_COMPUTER}`
+            : whose && whoseWords(whose, named.name)
+        }
       />
     )
   }
@@ -202,11 +251,20 @@ export function Settings({
   const shown = new Set(
     sectionGroups.flatMap((g) => g.rows.map((r) => `${r.file}:${r.key}`))
   )
-  const groups = sectionGroups.map((group) => (
-    <Group key={group.title} title={group.title}>
-      {group.rows.map(row)}
-    </Group>
-  ))
+  // A group that is not whose its file is says so at its heading, or at
+  // the rows that differ.
+  const groups = sectionGroups.map((group) => {
+    const marks = marksOf(group)
+    return (
+      <Group
+        key={group.title}
+        title={group.title}
+        whose={marks.heading && <WhoseMark of={marks.heading} named={named} />}
+      >
+        {group.rows.map((r) => row(r, marks.rows.get(r.key)))}
+      </Group>
+    )
+  })
   // A file the section names twice says its problems once; a Body says
   // those of what it draws at its own rows.
   const names = new Set(
@@ -361,8 +419,11 @@ export function Settings({
                     // another's.
                     <section.Body key={on ?? ""} {...body} />
                   )}
+                  {bodyLine && firstLine}
                   {groups}
                   {section.Foot && <section.Foot {...body} />}
+                  {!bodyLine && firstLine}
+                  {restLines}
                   {above.length > 0 && (
                     <div
                       role="alert"
@@ -460,6 +521,53 @@ function PaneOver({
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** The machine Settings shows, as far as the Window knows it. */
+type Whose = { name?: string; icon?: Named["icon"] }
+
+/** Whose copy it is: the device's or the machine's icon, and the words. */
+function WhoseMark({ of, named }: { of: Class; named: Whose }) {
+  return (
+    <span
+      title={whoseAbout(of, named.name)}
+      className="inline-flex items-center gap-1 whitespace-nowrap"
+    >
+      {of === "device" && <LaptopIcon aria-hidden className="size-3" />}
+      {of === "machine" && named.icon && <MachineIcon icon={named.icon} />}
+      {whoseWords(of, named.name)}
+    </span>
+  )
+}
+
+/** The one quiet line under a file's rows: where the file is, home as
+ * `~` and a long path cut in its folders, then whose copy it is. Its
+ * name alone while where it is on another machine is not read yet. */
+function FileLine({
+  file,
+  path,
+  of,
+  named,
+}: {
+  file: string
+  path?: string
+  of: Class
+  named: Whose
+}) {
+  const { folders, name } = partsOf(path ? tilde(path) : file)
+  return (
+    <p
+      data-whose={file}
+      className="-mt-2 flex min-w-0 flex-wrap items-center gap-x-1.5 px-1 text-small text-muted-foreground"
+    >
+      <span title={path} className="flex min-w-0 font-mono">
+        <span className="truncate">{folders}</span>
+        <span className="shrink-0">{name}</span>
+      </span>
+      <span aria-hidden>·</span>
+      <WhoseMark of={of} named={named} />
+    </p>
   )
 }
 

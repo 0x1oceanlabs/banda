@@ -229,9 +229,11 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   what is a screen's and a mouse's, `center`, `min` and `snap`, and the
   page draws by the two joined (`columnsOf`, `client/web/src/look.ts`). The settings Pane writes every file through `banda
   settings set` too; nothing else the page asks of Node writes a file. A Pane reads its part of the look
-  through `@banda/ui/lib/look`. Each file says whose copy each of its
-  top-level keys is (ADR 0101, decision 3), in its `SettingsFile` and as
-  `x-class` in its schema: the shared, the device's, or the machine's.
+  through `@banda/ui/lib/look`. Each file says whose copy it is, and each
+  of its top-level keys that is another's (ADR 0101, decision 3), in its
+  `SettingsFile` and as `x-class` in its schema: the shared, the device's,
+  or the machine's. Settings says it under a file's rows, with where the
+  file is (`client/web/src/settings/whose.ts`).
   The machine's part (`machine.toml`, `harnesses.toml`, `sharing.toml`,
   `agents.toml`'s `[start]`, `browser.toml`'s `[agents]`, `files.toml`'s
   `pinned`) is read through that machine's engine, `keys.settings_read`,

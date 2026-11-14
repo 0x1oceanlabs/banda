@@ -42,6 +42,14 @@ test("Alt+, opens the settings Pane, which writes the files and follows them (AD
     .getByRole("button", { name: /Appearance/ })
     .click()
 
+  // Under the section's rows, one line: where its file is, and whose
+  // copy it is (#1736, point 4). The look is this device's.
+  const whose = settings.locator('[data-whose="look.toml"]')
+  await expect(whose).toHaveCount(1)
+  await expect(whose).toContainText("config/look.toml")
+  await expect(whose).toContainText("on this device")
+  await expect(whose.locator(`[title="${file}"]`)).toHaveCount(1)
+
   // Each value says where it comes from; the Person's has a ↶.
   const radius = settings.locator('[data-key="radius"]')
   await expect(radius).toContainText("look.toml:2")
@@ -872,6 +880,12 @@ test("Settings → Tiling shows the Flow, the widths and the rules and writes ti
   })
   await sections.getByRole("button", { name: /Tiling/ }).click()
   await expect(settings.getByRole("heading", { name: "Tiling" })).toBeVisible()
+  // The Tiling is the Person's everywhere: its file says so under its
+  // rows, once, though the section names it twice (#1736, point 4).
+  const whose = settings.locator('[data-whose="tiling.toml"]')
+  await expect(whose).toHaveCount(1)
+  await expect(whose).toContainText("config/tiling.toml")
+  await expect(whose).toContainText("on every device")
 
   // The Flow, as the file says it.
   const flow = settings.getByRole("radiogroup", { name: "Flow" })

@@ -27,6 +27,7 @@
       "x-class": "machine"
     }
   },
+  "x-class": "machine",
   "$defs": {
     "HarnessEntry": {
       "description": "One `[[harness]]` table. An entry with the ID of a Harness Banda\nknows, `claude` or `codex`, takes each key it leaves out from Banda:\nso a Banda that moves an adapter to a newer version moves this\nmachine's too. Any other ID needs a `name` and a `command`.",

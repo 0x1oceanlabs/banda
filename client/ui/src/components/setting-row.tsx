@@ -23,19 +23,28 @@ export function Rows({ children }: { children: ReactNode }) {
   return <Card className="gap-0 divide-y py-0">{children}</Card>
 }
 
-/** A group of rows under its title, if it has one. */
+/** A group of rows under its title, if it has one, and beside it whose
+ * copy the group is, where that is not as its file says under the rows. */
 export function Group({
   title,
+  whose,
   children,
 }: {
   title?: string
+  whose?: ReactNode
   children: ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       {title && (
-        <h2 className="px-1 text-meta font-medium text-muted-foreground">
+        <h2 className="flex flex-wrap items-center gap-x-1.5 px-1 text-meta font-medium text-muted-foreground">
           {title}
+          {whose && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="font-normal">{whose}</span>
+            </>
+          )}
         </h2>
       )}
       <Rows>{children}</Rows>
