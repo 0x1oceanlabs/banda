@@ -952,8 +952,10 @@ fn a_window_follows_its_engine_on_as_it_moves_onto_another_copy() {
 }
 
 /// A process the test started, killed once the test is over.
+#[cfg(unix)]
 struct Ends(Child);
 
+#[cfg(unix)]
 impl Drop for Ends {
     fn drop(&mut self) {
         let _ = self.0.kill();
