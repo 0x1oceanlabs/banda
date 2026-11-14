@@ -1,7 +1,8 @@
 {
   "panes": [
     {
-      "kind": "files.tree"
+      "kind": "files.tree",
+      "narrow": true
     },
     {
       "kind": "files.file"

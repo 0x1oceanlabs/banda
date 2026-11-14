@@ -185,6 +185,13 @@ impl Tracing {
         self.facts.rules.insert(kind.to_owned(), rule);
     }
 
+    /// The next steps run with `kind` a list beside other Panes, and
+    /// `narrowest` the narrowest of the Tiling's widths.
+    fn lists(&mut self, kind: &str, narrowest: &str) {
+        self.facts.narrow.insert(kind.to_owned());
+        self.facts.narrowest = Some(narrowest.to_owned());
+    }
+
     /// Each workspace's columns by their width, where one was given.
     fn widths(&self) -> Vec<Vec<Option<&str>>> {
         (self.list.iter())
@@ -1484,7 +1491,9 @@ fn rules() -> Tracing {
          or last on its Project's workspace, over what the kind says of itself. It \
          gives way with no Pane in front, and in the row from a workspace another \
          Project owns; a place named and what is opened for an Agent go as without \
-         it.",
+         it. A list's new column, where no rule of its kind says a width, takes \
+         the narrowest of the Tiling's widths, for an Agent too; under another \
+         Pane it takes none.",
     );
     t.ruled("w.w", Some("1/3"), None);
     t.ruled("r.r", Some("2/3"), Some(Opens::Beside));
@@ -1539,9 +1548,39 @@ fn rules() -> Tracing {
     // What is opened for an Agent goes as an Agent's: last on its
     // Project's workspace, at its kind's width.
     let agents = and(from(&eight), json!({ "agents": true }));
-    t.ok("open", and(shows(HOME, "r.r", 13), agents));
+    t.ok("open", and(shows(HOME, "r.r", 13), agents.clone()));
     assert_eq!(t.layout()[1].last().unwrap(), &[13]);
     assert_eq!(t.widths()[1].last().unwrap(), &Some("2/3"));
+
+    // A list, a kind with no rule: its new column is the narrowest of
+    // the Tiling's widths, for the Person and for an Agent; the width
+    // named else. Under another Pane it has no column of its own.
+    t.lists("l.l", "1/4");
+    t.lists("w.w", "1/4");
+    let fourteen = t.opened(and(shows(HOME, "l.l", 14), from(&eight)));
+    t.ok("open", and(shows(HOME, "l.l", 15), agents));
+    t.ok(
+        "open",
+        and(shows(HOME, "l.l", 16), json!({ "width": "1/2" })),
+    );
+    let under = json!({ "place": { "to": "beside", "pane": fourteen, "side": "below" } });
+    t.ok("open", and(shows(HOME, "l.l", 17), under));
+    // A list whose rule says a width opens at the rule's.
+    t.ok("open", and(shows(HOME, "w.w", 18), from(&eight)));
+    let width_of = |n: u64| {
+        let at = t.layout()[1].iter().position(|c| c.contains(&n)).unwrap();
+        t.widths()[1][at]
+    };
+    assert_eq!(
+        [14, 15, 16, 17, 18].map(width_of),
+        [
+            Some("1/4"),
+            Some("1/4"),
+            Some("1/2"),
+            Some("1/4"),
+            Some("1/3")
+        ]
+    );
     t
 }
 

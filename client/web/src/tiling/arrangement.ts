@@ -92,14 +92,26 @@ export type Applied =
  * `placing::Facts` (ADR 0110, decision 5): its machine's Flow, solo being
  * each client's view of the row, the Pane kinds that stand on their
  * Project's workspace (`PaneKind.home`), those that lead a Group, as
- * an Agent's Thread does (`PaneKind.grouped`), and the Person's rules by
- * kind of Pane, from `tiling.toml` (ADR 0127, decision 4); left out, none.
+ * an Agent's Thread does (`PaneKind.grouped`), the Person's rules by
+ * kind of Pane, from `tiling.toml` (ADR 0127, decision 4), the kinds that
+ * are lists beside other Panes (`PaneKind.narrow`), and the narrowest of
+ * the Tiling's widths, which a list's new column takes; left out, none.
  */
 export type Facts = {
   flow: "free" | "row"
   home: readonly string[]
   leads?: readonly string[]
   rules?: { readonly [kind: string]: Rule | undefined }
+  narrow?: readonly string[]
+  narrowest?: string
+}
+
+/** As `Facts::width`: a new column's width for a Pane of `kind`, where
+ * the command names none: the one its rule gives, else, for a list, the
+ * narrowest of the Tiling's. */
+export function widthIn(facts: Facts, kind: string): string | undefined {
+  const ruled = facts.rules?.[kind]?.width
+  return ruled ?? (facts.narrow?.includes(kind) ? facts.narrowest : undefined)
 }
 
 /** As `Facts::at_home`: whether a Pane of `kind` stands on its Project's
@@ -401,8 +413,9 @@ function openCommand(
       on: open.on,
       agents: open.agents === true,
     })
-  // A new column with no width takes the one its kind's rule gives.
-  const width = open.width ?? facts.rules?.[open.kind]?.width
+  // A new column with no width takes the one its kind's rule gives, or
+  // a list's.
+  const width = open.width ?? widthIn(facts, open.kind)
   const opening: Opening = { shown, place, instead, width, again }
   const pane = openPane(list, opening, seed)
   if (isNew && grouped) groupPane(list, pane, seed)

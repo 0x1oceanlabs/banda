@@ -128,6 +128,11 @@ struct PaneKind {
     /// (`PaneKind.home`; ADR 0065, decision 9).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     home: bool,
+    /// It is a list beside other Panes: its new column opens at the
+    /// narrowest of the Tiling's widths (`PaneKind.narrow`; ADR 0127,
+    /// decision 4).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    narrow: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -217,6 +222,12 @@ pub fn grouped_kinds() -> BTreeSet<String> {
 /// window parts in the list of Apps say; read as `grouped_kinds` is.
 pub fn home_kinds() -> BTreeSet<String> {
     kinds_in(APPS, |pane| pane.home)
+}
+
+/// The kinds of Pane that are lists beside other Panes, as the window
+/// parts in the list of Apps say; read as `grouped_kinds` is.
+pub fn narrow_kinds() -> BTreeSet<String> {
+    kinds_in(APPS, |pane| pane.narrow)
 }
 
 fn grouped_in(parts: &[Part]) -> BTreeSet<String> {
@@ -482,6 +493,13 @@ mod tests {
     #[test]
     fn a_threads_pane_alone_stands_on_its_projects_workspace() {
         assert_eq!(home_kinds(), BTreeSet::from(["agents.thread".to_owned()]));
+    }
+
+    /// What opens at the narrowest of the Tiling's widths is what the
+    /// window's code says: Files alone.
+    #[test]
+    fn files_alone_is_a_list_beside_other_panes() {
+        assert_eq!(narrow_kinds(), BTreeSet::from(["files.tree".to_owned()]));
     }
 
     /// A window part that does not read groups nothing, and the engine

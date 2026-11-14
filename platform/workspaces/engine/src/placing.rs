@@ -44,6 +44,15 @@ pub struct Facts {
     /// decision 4): each over what its kind and the Flow say.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub rules: BTreeMap<String, Rule>,
+    /// The Pane kinds that are lists beside other Panes
+    /// (`PaneKind.narrow`): a new column for one opens at `narrowest`
+    /// where no rule of the kind says a width.
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub narrow: BTreeSet<String>,
+    /// The narrowest of the Tiling's widths, the first of `tiling.toml`'s
+    /// `[columns]` `presets` (ADR 0127, decision 4).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub narrowest: Option<String>,
 }
 
 impl Facts {
@@ -61,9 +70,17 @@ impl Facts {
         self.rules.get(kind)?.opens
     }
 
-    /// A new column's width for a Pane of `kind`, when its rule gives one.
+    /// A new column's width for a Pane of `kind`, where the command names
+    /// none: the one its rule gives, else, for a list, the narrowest of
+    /// the Tiling's. Any other is each client's to draw, by what stands
+    /// beside it.
     pub fn width(&self, kind: &str) -> Option<String> {
-        self.rules.get(kind)?.width.clone()
+        let ruled = self.rules.get(kind).and_then(|rule| rule.width.clone());
+        ruled.or_else(|| {
+            self.narrowest
+                .clone()
+                .filter(|_| self.narrow.contains(kind))
+        })
     }
 }
 
@@ -643,6 +660,34 @@ mod tests {
             ..asked_row(work, pane)
         };
         assert_eq!(place(&list, at_home), on_its_workspace(work));
+    }
+
+    #[test]
+    fn a_list_s_new_column_is_the_narrowest_of_the_tiling_s_unless_its_rule_says_a_width() {
+        let rule = |width: Option<&str>| Rule {
+            width: width.map(str::to_owned),
+            opens: Some(Opens::Beside),
+        };
+        let facts = Facts {
+            narrow: BTreeSet::from(["l.l".to_owned(), "r.r".to_owned(), "o.o".to_owned()]),
+            narrowest: Some("1/4".to_owned()),
+            rules: BTreeMap::from([
+                ("r.r".to_owned(), rule(Some("1/2"))),
+                ("o.o".to_owned(), rule(None)),
+            ]),
+            ..Facts::default()
+        };
+        assert_eq!(facts.width("l.l").as_deref(), Some("1/4"));
+        // Its rule's width over it; a rule that says none leaves it.
+        assert_eq!(facts.width("r.r").as_deref(), Some("1/2"));
+        assert_eq!(facts.width("o.o").as_deref(), Some("1/4"));
+        // No other kind takes it: its column is each client's to draw.
+        assert_eq!(facts.width("a.a"), None);
+        let unsaid = Facts {
+            narrowest: None,
+            ..facts
+        };
+        assert_eq!(unsaid.width("l.l"), None);
     }
 
     #[test]

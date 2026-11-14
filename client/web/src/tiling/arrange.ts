@@ -482,7 +482,6 @@ export function asking(
     from?: string
     instead?: string
     grouped?: boolean
-    width?: string
     agents?: boolean
     scratch?: boolean
   } = {}
@@ -497,7 +496,6 @@ export function asking(
         kind: pane.kind,
         args: pane.args,
         ...(how.grouped && { grouped: true }),
-        ...(how.width !== undefined && { width: how.width }),
         ...(how.instead !== undefined
           ? { instead: how.instead, moved: true }
           : // The window shows it anew, though another tile shows the same.

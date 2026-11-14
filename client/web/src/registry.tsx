@@ -31,14 +31,11 @@ import { connectionWidget } from "./bar/connection/Connection"
 import { flowWidget } from "./bar/flow/Flow"
 import { problemsWidget } from "./bar/problems/Problems"
 import { updateWidget } from "./bar/update/Update"
-import { TILING_FILE } from "@banda/contract/workspaces"
-import { fileNow } from "@banda/ui/lib/look"
-import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
 import { settingsPane } from "./settings/pane"
 import { countsWidget, SIDEBAR } from "./sidebar"
-import type { Entry, Width } from "./tiling/model"
+import type { Entry } from "./tiling/model"
 import { tilingWidgets } from "./tiling/widgets"
 
 export { launcher }
@@ -267,6 +264,14 @@ export const HOME_KINDS: readonly string[] = kinds
   .filter((kind) => kind.home !== undefined)
   .map((kind) => kind.kind)
 
+/** The kinds that are lists beside other Panes (`PaneKind.narrow`): as
+ * the engine reads them from the Apps' `window.json`, and gives a new
+ * column for one the narrowest of the Tiling's widths (ADR 0127, decision
+ * 4). */
+export const NARROW_KINDS: readonly string[] = kinds
+  .filter((kind) => kind.narrow === true)
+  .map((kind) => kind.kind)
+
 /** The kinds that open as a Group of their own, which lead a Group as it
  * moves: as the engine reads them from the Apps' `window.json`, and
  * refuses a move by (ADR 0110, decision 8). */
@@ -449,15 +454,6 @@ function narrow(pane: PaneState): boolean {
  * ADR 0102, decision 5). */
 export function sheetsOf(pane: PaneState): boolean {
   return kindOf(pane.kind)?.sheet === true
-}
-
-/** How wide a new column for a Pane opens, as the engine gives it one
- * that names none: what the rule of its kind says in `tiling.toml` (ADR
- * 0127, decision 4); with none, a list at the narrowest step of the
- * file's `[columns]`, and the rest as those say, by what is beside it. */
-export function widthOf(pane: PaneState): Width | undefined {
-  const ruled = fileNow(TILING_FILE).rules[pane.kind]?.width
-  return ruled ?? (narrow(pane) ? columnsOf().presets[0] : undefined)
 }
 
 /**

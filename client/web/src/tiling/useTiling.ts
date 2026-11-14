@@ -7,7 +7,7 @@ import {
   useState,
 } from "react"
 import { type Engine, newId, type ProjectId } from "@banda/contract"
-import { type Flow, type Rule, TILING_FILE } from "@banda/contract/workspaces"
+import { type Flow, type Tiling, TILING_FILE } from "@banda/contract/workspaces"
 import { type Readable, Store, useStore } from "@banda/core/react"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { fileNow, useFile } from "@banda/ui/lib/look"
@@ -16,8 +16,8 @@ import {
   groupedOf,
   HOME_KINDS,
   LEAD_KINDS,
+  NARROW_KINDS,
   startable,
-  widthOf,
 } from "../registry"
 import {
   type Change,
@@ -27,7 +27,7 @@ import {
   tidiedInFront,
   viewOf,
 } from "./arrange"
-import { type Facts, NO_FACTS } from "./arrangement"
+import { type Facts, NO_FACTS, widthIn } from "./arrangement"
 import { focused, type Gone, NONE_GONE, soloed, type Workspaces } from "./model"
 import {
   answered,
@@ -46,19 +46,20 @@ import { useArranged } from "./useArranged"
 
 /** What the engine places a Pane by, and refuses a move by, as this client
  * believes them (ADR 0110, decision 9): solo is its own view of the row,
- * and the rules are `tiling.toml`'s, as the engine reads them (ADR 0127,
- * decision 4). Which Projects are of no Project each command says itself
- * (`asking`). */
+ * and the rules and the narrowest width are `tiling.toml`'s, as the
+ * engine reads them (ADR 0127, decision 4). Which Projects are of no
+ * Project each command says itself (`asking`). */
 export function factsOf(
   flow: Flow,
-  rules: { readonly [kind: string]: Rule | undefined } = fileNow(TILING_FILE)
-    .rules
+  { rules, columns }: Pick<Tiling, "rules" | "columns"> = fileNow(TILING_FILE)
 ): Facts {
   return {
     flow: flow === "free" ? "free" : "row",
     home: HOME_KINDS,
     leads: LEAD_KINDS,
     rules,
+    narrow: NARROW_KINDS,
+    narrowest: columns.presets[0],
   }
 }
 
@@ -110,10 +111,10 @@ export function useTiling({
 }) {
   const solo = flow === "solo"
   const facts = useRef(NO_FACTS)
-  const rules = useFile(TILING_FILE).rules
+  const tiling = useFile(TILING_FILE)
   useLayoutEffect(() => {
-    facts.current = factsOf(flow, rules)
-  }, [flow, rules])
+    facts.current = factsOf(flow, tiling)
+  }, [flow, tiling])
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const live = useArranged(engine)
   const ready = live.state === "ready"
@@ -196,7 +197,8 @@ export function useTiling({
       home,
       first && {
         pane: first,
-        width: widthOf(first),
+        // As the engine gives a new column one, which `take` does not.
+        width: widthIn(facts.current, first.kind),
         grouped: groupedOf(first),
       }
     )

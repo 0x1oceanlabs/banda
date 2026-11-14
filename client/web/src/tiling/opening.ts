@@ -21,7 +21,7 @@ import type { Flow } from "@banda/contract/workspaces"
 import { toast } from "@banda/ui/components/sonner"
 import type { Args } from "@banda/ui/module"
 import type { PaneState, Place } from "@banda/ui/pane"
-import { groupedOf, homeOf, identityOf, showsOf, widthOf } from "../registry"
+import { groupedOf, homeOf, identityOf, showsOf } from "../registry"
 import {
   asking,
   moved,
@@ -92,7 +92,8 @@ export function sayRefused(
 }
 
 /** Shows a Pane of a Project and focuses it at the place its caller
- * named, as `how` says; a new column takes its width. A Pane is the one
+ * named, as `how` says; a new column's width is the engine's to give, by
+ * its kind (`placing::Facts::width`). A Pane is the one
  * shown as its kind names it, so a Project has one Diff. With no place, as
  * a Pane's own `open` leaves it out, it takes the place of the one of its
  * kind on the opener's workspace, or goes right of the opener. */
@@ -105,7 +106,6 @@ export function opening(
   const next = open(workspaces, project, pane, {
     identity: identityOf,
     ...how,
-    width: widthOf(pane),
   })
   // Into the Group of the Pane it opens from, as the engine names it.
   const from = how.from ?? focused(workspaces)?.id
@@ -166,17 +166,16 @@ export function placed(
 }
 
 /** What the window says of a Pane the engine places, beside where the
- * Person is: its kind's Group and width, and whether its Project is of no
- * Project, which the engine takes of another machine's alone. */
+ * Person is: its kind's Group, and whether its Project is of no Project,
+ * which the engine takes of another machine's alone. */
 function saidOf(project: ProjectId, pane: PaneState, placing: Placing) {
   return {
     grouped: groupedOf(pane),
-    width: widthOf(pane),
     scratch: placing.scratch(project),
   }
 }
 
-/** Shows a Pane here, right of the focused one, with its width; one
+/** Shows a Pane here, right of the focused one; one
  * another workspace shows moves here. Onto another Project's workspace,
  * in the row and solo, the engine refuses it as it does a move, and as
  * `Alt+Shift+N` the window says why, by `projectOf` (ADR 0102, decision
@@ -190,7 +189,6 @@ export function bringing(
 ): Step {
   const next = bring(workspaces, project, pane, {
     place: "right",
-    width: widthOf(pane),
     identity: identityOf,
   })
   const away = entries(workspaces).find(
