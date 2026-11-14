@@ -55,6 +55,7 @@ const START: UsageArgs = {
 
 export const usagePane = definePane<UsageArgs>({
   kind: "harnesses.usage",
+  name: "Usage",
   title: () => "Usage",
   icon: GaugeIcon,
   sheet: true,

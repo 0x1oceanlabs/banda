@@ -18,7 +18,7 @@
 //! value of the file: the row, and the Person's default for a device that
 //! has not chosen.
 
-use banda_look::columns::{Widths, WidthsSettings, share};
+use banda_look::columns::{Widths, WidthsSettings, no_width, share};
 use banda_look::keyed::{Moved, Renamed, spans_in};
 use banda_look::{OneFile, Problem};
 use schemars::JsonSchema;
@@ -234,7 +234,7 @@ impl OneFile for TilingSettings {
         let rules = self.rule.iter_mut().flatten();
         for rule in rules.flat_map(|(_, panes)| panes.values_mut()) {
             if let Some(width) = rule.width.take_if(|width| share(width.get_ref()).is_none()) {
-                let says = "width is a share of the screen, such as \"1/3\", \"2/5\" or \"1\"";
+                let says = no_width(width.get_ref());
                 problems.push(Problem::at(path, text, Some(width.span()), says));
             }
         }

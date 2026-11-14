@@ -83,6 +83,7 @@ const SAVED_FOR = 1_500
 
 export const filePane = definePane<FileArgs>({
   kind: "files.file",
+  name: "File",
   title: (args) => nameAndFolder(args.path).name,
   detail: (args) => nameAndFolder(args.path).folder ?? null,
   icon: FileIcon,

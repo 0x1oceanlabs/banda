@@ -208,7 +208,16 @@ fn valid(width: &Spanned<String>) -> Option<String> {
     share(text).map(|_| text.to_owned())
 }
 
-const WIDTH: &str = "is a share of the screen, such as \"1/3\", \"2/5\" or \"1\"";
+/// What a width that is none is told, naming what was written: the words
+/// a row of Settings says under it as the write is refused.
+pub fn no_width(written: &str) -> String {
+    format!("\"{written}\" is no width: a share of the screen, such as \"1/2\" or \"1\"")
+}
+
+/// The same of a height, a share of its column.
+fn no_height(written: &str) -> String {
+    format!("\"{written}\" is no height: a share of the column, such as \"1/3\" or \"1/2\"")
+}
 
 impl WidthsSettings {
     pub fn over(self, under: WidthsSettings) -> WidthsSettings {
@@ -235,20 +244,23 @@ impl WidthsSettings {
     pub fn problems(&self) -> Vec<(Option<std::ops::Range<usize>>, String)> {
         let mut problems = Vec::new();
         for (key, list) in [("presets", &self.presets), ("heights", &self.heights)] {
-            for preset in list.iter().flatten() {
-                if share(preset.get_ref()).is_none() {
-                    problems.push((Some(preset.span()), format!("columns.{key}: {WIDTH}")));
+            for one in list.iter().flatten() {
+                let written = one.get_ref();
+                if share(written).is_none() {
+                    let says = match key {
+                        "heights" => no_height(written),
+                        _ => no_width(written),
+                    };
+                    problems.push((Some(one.span()), says));
                 }
             }
             if list.as_ref().is_some_and(Vec::is_empty) {
                 problems.push((None, format!("columns.{key} needs one share at least")));
             }
         }
-        for (key, width) in [("default", &self.default), ("alone", &self.alone)] {
-            if let Some(width) = width
-                && share(width.get_ref()).is_none()
-            {
-                problems.push((Some(width.span()), format!("columns.{key} {WIDTH}")));
+        for width in [&self.default, &self.alone].into_iter().flatten() {
+            if share(width.get_ref()).is_none() {
+                problems.push((Some(width.span()), no_width(width.get_ref())));
             }
         }
         problems
@@ -324,7 +336,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_width_is_a_share_of_the_screen() {
+    fn a_width_is_a_oneof_the_screen() {
         assert_eq!(share("1/3"), Some(1.0 / 3.0));
         assert_eq!(share("1"), Some(1.0));
         assert_eq!(share(" 3 / 5 "), Some(0.6));
@@ -342,12 +354,21 @@ mod tests {
         }
         let read = |text: &str| toml::from_str::<File>(text).unwrap().columns;
         let mine = read("[columns]\npresets = [\"1\", \"2/5\", \"wide\", \"2/5\"]\n");
-        assert_eq!(mine.problems().len(), 1);
+        let said = |problems: Vec<(_, String)>| -> Vec<String> {
+            problems.into_iter().map(|(_, says)| says).collect()
+        };
+        assert_eq!(
+            said(mine.problems()),
+            ["\"wide\" is no width: a share of the screen, such as \"1/2\" or \"1\""]
+        );
         let columns = mine.over(WidthsSettings::defaults()).resolve();
         assert_eq!(columns.presets, ["2/5", "1"]);
         assert_eq!(columns.heights, ["1/3", "1/2", "2/3"]);
         let tall = read("[columns]\nheights = [\"3/4\", \"1/4\", \"tall\"]\n");
-        assert_eq!(tall.problems().len(), 1);
+        assert_eq!(
+            said(tall.problems()),
+            ["\"tall\" is no height: a share of the column, such as \"1/3\" or \"1/2\""]
+        );
         assert_eq!(tall.resolve().heights, ["1/4", "3/4"]);
         assert_eq!(columns.default, "1/2");
         assert_eq!(columns.alone, "1");

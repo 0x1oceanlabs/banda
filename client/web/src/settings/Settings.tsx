@@ -349,7 +349,7 @@ export function Settings({
                         {section.about}
                       </p>
                     </div>
-                    {own && on === undefined && (
+                    {own && on === undefined && section.openFile !== false && (
                       <OpenFile file={own} words="Open file" />
                     )}
                     {own && on !== undefined && machine.paths[own] && (

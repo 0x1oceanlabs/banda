@@ -30,7 +30,7 @@ import { PlaySound, PresetPicker } from "./rows"
 import { SharingSettings } from "./SharingSettings"
 import { ProjectsSettings } from "./ProjectsSettings"
 import { ThemePicker } from "./ThemePicker"
-import { RULES_ROW, Shares, TilingRules } from "./Tiling"
+import { RULES_ROW, Shares, TilingRules, Width } from "./Tiling"
 
 export const SECTIONS: Section[] = [
   {
@@ -95,7 +95,14 @@ export const SECTIONS: Section[] = [
       { name: "tiling.toml", tables: ["columns"], title: "Widths" },
     ],
     about: aboutOf("tiling.toml"),
-    custom: { "columns.presets": Shares, "columns.heights": Shares },
+    // The rules' row opens the file, where a rule is written.
+    openFile: false,
+    custom: {
+      "columns.default": Width,
+      "columns.alone": Width,
+      "columns.presets": Shares,
+      "columns.heights": Shares,
+    },
     Foot: TilingRules,
   },
   {

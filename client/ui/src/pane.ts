@@ -208,6 +208,9 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   /** Unique, with its module's id first: `agents.thread`. The window
    * hides it while the engine does not run that module (`Module`). */
   kind: string
+  /** What a Pane of this kind is called, in a word, whatever it shows:
+   * "Terminal". Settings names a rule of its kind by it. */
+  name: string
   /** The words in its header. */
   title: (args: A) => string
   /** Quieter words after the title in its header, as a terminal's folder. */

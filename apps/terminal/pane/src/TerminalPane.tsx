@@ -115,6 +115,7 @@ export const NEW_TERMINAL: TerminalArgs = {
 
 export const terminalPane = definePane<TerminalArgs>({
   kind: "terminal.terminal",
+  name: "Terminal",
   title: (args) => args.title,
   // A line typed once is not what the Pane is: forgetting it keeps the
   // Pane, and its program.

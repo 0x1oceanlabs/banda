@@ -169,6 +169,7 @@ function Reads({ engine }: PaneProps<None>) {
 const kind = (id: string, Pane: ComponentType<PaneProps<None>>) =>
   definePane<None>({
     kind: id,
+    name: "Probe",
     title: () => id,
     icon: MessageSquareIcon,
     elsewhere: true,

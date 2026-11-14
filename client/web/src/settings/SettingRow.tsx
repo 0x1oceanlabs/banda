@@ -43,7 +43,7 @@ export function SettingRow({
   Custom?: CustomRow
 }) {
   // What was wrong when it was refused.
-  const { refused, write } = useWrite({ against: setting?.value })
+  const { refused, write, forget } = useWrite({ against: setting?.value })
   const set = (value: string) => write(writer.set(row.file, row.key, value))
   const reset = () => write(writer.reset(row.file, row.key))
   const control = (
@@ -67,7 +67,14 @@ export function SettingRow({
       wrong={[...problems.map((p) => p.message), ...refused]}
     >
       {Custom ? (
-        <Custom row={row} setting={setting} set={set} control={control} />
+        <Custom
+          row={row}
+          setting={setting}
+          set={set}
+          control={control}
+          refused={refused}
+          forget={forget}
+        />
       ) : (
         control
       )}
