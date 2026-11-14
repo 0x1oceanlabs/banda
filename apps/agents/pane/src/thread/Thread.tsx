@@ -605,7 +605,9 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                     )
                   }
                   onAddProject={
-                    here && run ? () => run("project.add") : undefined
+                    // On its Project's machine: the menu asks no more
+                    // (ADR 0120, decision 1).
+                    run ? () => run("project.add", { project }) : undefined
                   }
                 />
               }

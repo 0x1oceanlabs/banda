@@ -2716,7 +2716,7 @@ test("a file is stamped with its Project or its device only in the places listed
  */
 const ASKING_WHERE: Record<string, number> = {
   "apps/agents/pane/src/ThreadPane.tsx": 1,
-  "apps/agents/pane/src/thread/Thread.tsx": 11,
+  "apps/agents/pane/src/thread/Thread.tsx": 10,
 }
 
 const askingWhere = Object.fromEntries(

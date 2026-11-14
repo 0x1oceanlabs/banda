@@ -17,6 +17,8 @@ import type { GroupBy } from "@banda/contract/sidebar"
 import { standOf } from "@banda/ui/status"
 import { type Key, keyLabel, keyText } from "@banda/ui/lib/keys"
 import type { Listed, Lists } from "@banda/ui/pane"
+import { THIS_COMPUTER } from "@banda/ui/lib/outside"
+import type { MachineIcon, Named } from "@banda/contract/machines"
 import type { Action, ItemAction, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../window/actions"
 import { GROUP_WORDS } from "../sidebar"
@@ -82,10 +84,12 @@ export type Choice =
       project: ProjectId
       listed: Listed
     }
-  /** A branch: the ways to add a Project (ADR 0026). */
-  | { kind: "add"; id: string }
+  /** A branch: the ways to add a Project (ADR 0026), `on` a machine once
+   * it is known; with none, where the Window reaches other machines, it
+   * asks where first (ADR 0120, decision 1). */
+  | { kind: "add"; id: string; on?: On }
   /** A branch: one way to add a Project; the field takes its name or path. */
-  | { kind: "source"; id: string; source: Source }
+  | { kind: "source"; id: string; source: Source; on?: On }
   /** Adds a Project: a new one by its name, or a folder on disk. */
   | { kind: "adding"; id: string; how: Adding }
   /** A branch: whether to trust a folder on disk that looks foreign, as
@@ -102,6 +106,52 @@ export type Choice =
   /** A branch: one module's source alone, its rows with no words too,
    * as quick open shows the Project's files (ADR 0073, decision 11). */
   | { kind: "finds"; id: string; source: string; label: string }
+
+/** A machine a Project is added on (ADR 0120, decision 1): this one, or
+ * another by its key in `hosts.toml`, as its row of "Add Project" shows
+ * it. An `away` one is listed and adds nothing. */
+export type On = {
+  /** Its key; none for this machine. */
+  host?: string
+  name: string
+  icon: MachineIcon
+  /** What its row says of it: its Projects, or that it is away. */
+  about: string
+  away?: true
+}
+
+/** A machine as "Add Project" takes it: its Projects as the Window shows
+ * them, and whether the Window reaches it now. */
+export type MachineOn = {
+  host?: string
+  named: Named
+  projects: number
+  away: boolean
+}
+
+/** The machines "Add Project" asks about: this one first, then the
+ * others in the Window's order; none where it reaches no other, so
+ * the branch goes on as it did. */
+export function machinesOn(machines: readonly MachineOn[]): On[] {
+  if (!machines.some((one) => one.host !== undefined)) return []
+  return machines.map(({ host, named, projects, away }) => {
+    const has = away
+      ? "away"
+      : projects === 0
+        ? "no Projects yet"
+        : projects === 1
+          ? "1 Project"
+          : `${projects} Projects`
+    return {
+      ...(host !== undefined && { host }),
+      name: named.name,
+      icon: named.icon,
+      // This one says so, as its name alone is one among the others'.
+      about: host === undefined ? `${THIS_COMPUTER} · ${has}` : has,
+      ...(away && { away: true as const }),
+    }
+  })
+}
 
 /** How a Project is added: a new folder by its name, or a folder on disk,
  * made first when it does not exist, trusted as the Person answered when
@@ -165,9 +215,9 @@ export function branchName(branch: Branch): string {
     case "themes":
       return THEMES
     case "add":
-      return ADD_PROJECT
+      return branch.on ? `on ${branch.on.name}` : ADD_PROJECT
     case "source":
-      return SOURCES[branch.source].title
+      return sourceWords(branch).title
     case "locate":
       return LOCATE
     case "finds":
@@ -190,11 +240,40 @@ export const SOURCES: Record<Source, { title: string; about: string }> = {
   folder: { title: "Local folder", about: "Browse a folder on disk" },
 }
 
+/** A way's words on machine `on`: another machine's folders are its
+ * own, not this disk's. */
+export function sourceWords({ source, on }: { source: Source; on?: On }): {
+  title: string
+  about: string
+} {
+  return source === "folder" && on?.host !== undefined
+    ? { title: `Folder on ${on.name}`, about: `Browse ${on.name}'s folders` }
+    : SOURCES[source]
+}
+
 /** "Add Project", as the branch the menu goes into. */
 const ADD_BRANCH: Branch = { kind: "add", id: "project.add" }
 
-function sourceBranch(source: Source): Branch {
-  return { kind: "source", id: `project.add.${source}`, source }
+/** "Add Project" on machine `on`, as the branch under it. */
+function onBranch(on: On): Extract<Branch, { kind: "add" }> {
+  return { kind: "add", id: `project.add@${on.host ?? ""}`, on }
+}
+
+function sourceBranch(source: Source, on?: On): Branch {
+  return {
+    kind: "source",
+    id: `project.add.${source}`,
+    source,
+    ...(on && { on }),
+  }
+}
+
+/** The machine the branches of `path` add a Project on; none for this
+ * one, and where the menu asked nothing. */
+export function onIn(path: readonly Branch[]): On | undefined {
+  for (const branch of path.toReversed())
+    if (branch.kind === "add" && branch.on) return branch.on
+  return undefined
 }
 
 /** Whether the field is a path, as in "Local folder" and "Locate
@@ -328,7 +407,8 @@ export function settingsLinkOf(route: string): string | undefined {
  * Where `banda menu ROUTE` opens the menu (ADR 0017, decision 7): an
  * empty route at its root, `actions` at its Actions, `views` in the
  * sidebar's view, `project.add` in "Add Project" (`project.add.new`,
- * `project.add.folder` at one of its ways, ADR 0026), `project.locate.<id>`
+ * `project.add.folder` at one of its ways, ADR 0026; `project.add@arc` on
+ * that machine, ADR 0120), `project.locate.<id>`
  * at "Locate folder" for a missing Project, `project.<name>` (or its ID) in
  * a Project, `find.<source>` in a module's source alone, as `find.files.find`
  * in the Project's files. Any other words open it with them typed in. A
@@ -339,7 +419,8 @@ export function settingsLinkOf(route: string): string | undefined {
 export function openingOf(
   route: string,
   projects: readonly ProjectSummary[],
-  sources: readonly { id: string; label: string }[] = []
+  sources: readonly { id: string; label: string }[] = [],
+  machines: readonly On[] = []
 ): Opening {
   const words = route.trim().replace(/^space\./, "project.")
   if (words === "actions") return openingAt("actions")
@@ -354,10 +435,22 @@ export function openingOf(
         label: finds.label,
       },
     ])
-  const adding = /^project\.add(?:\.(new|folder))?$/.exec(words)
+  // `project.add@arc` is on that machine, `project.add@` on this one: a
+  // machine the Window does not list, or reaches none but this, asks as
+  // `project.add` does.
+  const adding = /^project\.add(?:\.(new|folder))?(?:@(.*))?$/.exec(words)
   if (adding) {
     const way = adding[1] as Source | undefined
-    const path = way ? [ADD_BRANCH, sourceBranch(way)] : [ADD_BRANCH]
+    const host = adding[2]
+    const on =
+      host === undefined
+        ? undefined
+        : machines.find((one) => (one.host ?? "") === host && !one.away)
+    const path = [
+      ADD_BRANCH,
+      ...(on ? [onBranch(on)] : []),
+      ...(way ? [sourceBranch(way, on)] : []),
+    ]
     return openingAt("root", path, wordsIn(path))
   }
   // A Project by its name or ID; one whose folder is missing, at
@@ -399,6 +492,8 @@ export type Sources = {
   weight: (id: string) => number
   /** The folders that fit the path typed, once the engine said them. */
   browsed?: Browsing
+  /** The machines "Add Project" asks about (`machinesOn`). */
+  machines?: readonly On[]
 }
 
 /** What the engine said for the path `partial`: while the next path is
@@ -556,13 +651,21 @@ export function menuOf({
     ])
   }
 
-  if (inside?.kind === "add")
+  if (inside?.kind === "add") {
+    const where = inside.on ? [] : (sources.machines ?? [])
     return nonEmpty([
       {
         label: "",
-        rows: fitting(SOURCE_ORDER.map(sourceBranch), actionTexts),
+        rows:
+          where.length > 0
+            ? fitting(where.map(onBranch), (row) => [row.on?.name ?? ""])
+            : fitting(
+                SOURCE_ORDER.map((source) => sourceBranch(source, inside.on)),
+                actionTexts
+              ),
       },
     ])
+  }
   if (inside?.kind === "source" || inside?.kind === "locate")
     return nonEmpty([
       { label: "", rows: addRows(inside, query, sources.browsed) },

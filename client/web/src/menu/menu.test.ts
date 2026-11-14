@@ -15,6 +15,8 @@ import {
   isOwn,
   lookedAt,
   menuOf,
+  machinesOn,
+  onIn,
   openingOf,
   ranked,
   settingsLinkOf,
@@ -176,6 +178,33 @@ const menuFor = (
   inside?: Branch,
   more: Partial<Sources> = {}
 ) => menuOf({ words, at, inside, sources: sourcesFor(words, inside, more) })
+
+// ADR 0120, decision 1: the one door asks where first.
+const machines = machinesOn([
+  {
+    named: { name: "This machine", icon: "desktop" },
+    projects: 2,
+    away: false,
+  },
+  {
+    host: "arc",
+    named: { name: "arc", icon: "server" },
+    projects: 1,
+    away: false,
+  },
+  {
+    host: "devbox",
+    named: { name: "devbox", icon: "server" },
+    projects: 0,
+    away: false,
+  },
+  {
+    host: "mini",
+    named: { name: "mini", icon: "desktop" },
+    projects: 3,
+    away: true,
+  },
+])
 
 const labels = (...args: Parameters<typeof menuFor>) =>
   menuFor(...args).map((group) => [group.label, group.rows.map(nameOf)])
@@ -584,6 +613,49 @@ describe("Add Project (ADR 0026)", () => {
     expect(labels("local", "root", add)).toEqual([["", ["Local folder"]]])
   })
 
+  const onDevbox: Branch = {
+    kind: "add",
+    id: "project.add@devbox",
+    on: machines[2],
+  }
+
+  test("with other machines it asks where first, then lists its ways there", () => {
+    expect(machines.map((one) => [one.name, one.about])).toEqual([
+      ["This machine", "this machine · 2 Projects"],
+      ["arc", "1 Project"],
+      ["devbox", "no Projects yet"],
+      ["mini", "away"],
+    ])
+    expect(labels("", "root", add, { machines })).toEqual([
+      ["", ["on This machine", "on arc", "on devbox", "on mini"]],
+    ])
+    expect(labels("dev", "root", add, { machines })).toEqual([
+      ["", ["on devbox"]],
+    ])
+    expect(labels("", "root", onDevbox, { machines })).toEqual([
+      ["", ["New Project", "Folder on devbox"]],
+    ])
+    // This machine's ways are as they were.
+    const here: Branch = { kind: "add", id: "project.add@", on: machines[0] }
+    expect(labels("", "root", here, { machines })).toEqual([
+      ["", ["New Project", "Local folder"]],
+    ])
+    expect(onIn([add, onDevbox, way("folder")])?.host).toBe("devbox")
+    expect(onIn([add, way("folder")])).toBeUndefined()
+  })
+
+  test("a window that reaches no other machine asks nothing", () => {
+    expect(
+      machinesOn([
+        {
+          named: { name: "This machine", icon: "desktop" },
+          projects: 2,
+          away: false,
+        },
+      ])
+    ).toEqual([])
+  })
+
   test("a new Project is made from the name typed", () => {
     expect(labels("", "root", way("new"))).toEqual([])
     expect(labels(" Work ", "root", way("new"))).toEqual([
@@ -785,6 +857,27 @@ describe("banda menu ROUTE", () => {
       ["project.add", "project.add.new"],
       "",
     ])
+  })
+  test("project.add@arc opens it on that machine, as a door that knows its own", () => {
+    const on = (route: string) => {
+      const { path, words } = openingOf(route, projects, [], machines)
+      return [path.map((branch) => branch.id), words]
+    }
+    expect(on("project.add")).toEqual([["project.add"], ""])
+    expect(on("project.add@arc")).toEqual([
+      ["project.add", "project.add@arc"],
+      "",
+    ])
+    expect(on("project.add@")).toEqual([["project.add", "project.add@"], ""])
+    expect(on("project.add.folder@arc")).toEqual([
+      ["project.add", "project.add@arc", "project.add.folder"],
+      "~/",
+    ])
+    // An away machine, and one the Window does not list, ask where.
+    expect(on("project.add@mini")).toEqual([["project.add"], ""])
+    expect(on("project.add@nope")).toEqual([["project.add"], ""])
+    // A window that reaches no other machine has nothing to name.
+    expect(where("project.add@")).toEqual(["root", ["project.add"], ""])
   })
   test("other words, and a Project there is not, are typed in", () => {
     expect(where(" fix the login ")).toEqual(["root", [], "fix the login"])

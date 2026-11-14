@@ -9,6 +9,8 @@ import {
   useState,
 } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { Named } from "@banda/contract/machines"
+import { cn } from "@banda/ui/lib/utils"
 import type { Bind, Look } from "@banda/contract/look"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { MARK_WORDS } from "@banda/ui/components/banda-mark"
@@ -38,9 +40,11 @@ import {
 import {
   type Here,
   HostsContext,
+  type KeptHosts,
   namedIn,
   type Shown,
   useHere,
+  useHereNamed,
   useHosts,
 } from "@banda/core/react"
 import type { Action, MenuAt, MenuRow, Source } from "@banda/ui/module"
@@ -87,11 +91,15 @@ import {
   isBranch,
   isOwn,
   menuOf,
+  openingOf,
   OPEN,
   type Found,
   type Opening,
   type Own,
-  SOURCES,
+  machinesOn,
+  type On,
+  onIn,
+  sourceWords,
   type Sources,
   wordsIn,
   isPathField,
@@ -114,6 +122,7 @@ import {
   themeNowOf,
   THEMES_ROW,
 } from "./theme"
+import { THIS_MACHINE } from "../machines/words"
 import { notNow } from "../trust/not-now"
 import { Soon, Waits } from "../trust/TrustCard"
 import { ASK, ASK_ABOUT, askedOf, ISOLATED } from "../trust/trust"
@@ -143,8 +152,9 @@ export const BandaMenu = memo(function BandaMenu({
   onClose: () => void
   /** Runs a chosen row, once the menu has closed. */
   onChoose: (row: Exclude<Choice, Branch | Own>) => void
-  /** Hears a Project the menu added, once it has closed (ADR 0026). */
-  onAdded: (project: ProjectSummary) => void
+  /** Hears a Project the menu added, once it has closed (ADR 0026): on
+   * another machine, by its key `host` (ADR 0120, decision 1). */
+  onAdded: (project: ProjectSummary, host?: string) => void
   engine: Engine
   /** The modules the engine runs: the sources of the others find nothing. */
   modules: readonly string[]
@@ -273,9 +283,9 @@ export const BandaMenu = memo(function BandaMenu({
                 onClose()
                 onChoose(row)
               }}
-              onAdded={(project) => {
+              onAdded={(project, host) => {
                 onClose()
-                onAdded(project)
+                onAdded(project, host)
               }}
             />
           )}
@@ -284,6 +294,46 @@ export const BandaMenu = memo(function BandaMenu({
     </>
   )
 })
+
+/** The machines "Add Project" asks about (`machinesOn`): this one, by
+ * its name and its Projects, then the Window's `hosts`, one it does not
+ * reach as away. */
+/** Where `banda menu ROUTE` opens the menu (`openingOf`), with the
+ * Window's machines for a route that names one, as `project.add@arc`. */
+export function openingIn(
+  kept: Pick<KeptHosts, "get" | "hereNamed">,
+  route: string,
+  projects: readonly ProjectSummary[],
+  sources: readonly { id: string; label: string }[]
+): Opening {
+  const machines = route.includes("@")
+    ? addsOn(kept.get(), kept.hereNamed.get(), projects)
+    : []
+  return openingOf(route, projects, sources, machines)
+}
+
+const counted = (projects: readonly ProjectSummary[]) =>
+  projects.filter((one) => !one.archived && !one.scratch).length
+
+export function addsOn(
+  hosts: readonly Shown[],
+  here: Named | undefined,
+  ours: readonly ProjectSummary[]
+): On[] {
+  return machinesOn([
+    {
+      named: here ?? THIS_MACHINE,
+      projects: counted(ours),
+      away: false,
+    },
+    ...hosts.map((host) => ({
+      host: host.name,
+      named: host.named,
+      projects: counted(host.projects),
+      away: host.state.state !== "live",
+    })),
+  ])
+}
 
 /** The other machines whose names fit `query`, as a source's rows under
  * "Machines" (ADR 0095, decision 8): choosing one opens its row in
@@ -372,10 +422,12 @@ function Menu({
   onLooking: (looking: Looking) => void
   escapeRef: React.RefObject<() => boolean>
   onChoose: (row: Exclude<Choice, Branch | Own>) => void
-  onAdded: (project: ProjectSummary) => void
+  onAdded: (project: ProjectSummary, host?: string) => void
 }) {
   const lists = useLists()
   const hosts = useHosts()
+  const kept = useContext(HostsContext)
+  const hereNamed = useHereNamed()
   // New Thread's key in force starts one with the words.
   const ask = useKeyOf()("thread.new")
   const group = useLookSidebar().group
@@ -405,10 +457,23 @@ function Menu({
     [onLooking, entered, only, atRoot, query]
   )
   useEffect(() => () => onLooking(NOWHERE), [onLooking])
-  // The path field's folders, from the engine, as the path is typed.
-  const browsed = useBrowsed(engine, isPathField(inside) ? words : undefined)
-  // The other machines whose names fit the words, at the root.
+  // The machine a Project is added on, and its engine: every step of
+  // adding asks that one (ADR 0120, decision 1). Finding a missing
+  // Project's folder is this machine's.
+  const host = onIn(path)?.host
+  const there = useMemo(
+    () => (host === undefined ? engine : kept.engine(host)),
+    [engine, kept, host]
+  )
+  // The machines "Add Project" asks about, where there are others.
   const machines = useMemo(
+    () => addsOn(hosts, hereNamed, projects),
+    [hereNamed, projects, hosts]
+  )
+  // The path field's folders, from that engine, as the path is typed.
+  const browsed = useBrowsed(there, isPathField(inside) ? words : undefined)
+  // The other machines whose names fit the words, at the root.
+  const machinesNamed = useMemo(
     () => (atRoot && query ? machinesFound(hosts, query) : undefined),
     [atRoot, query, hosts]
   )
@@ -428,9 +493,10 @@ function Menu({
       theme,
       now: laterClock,
       items: itemActionsOf,
-      found: machines ? [...found, machines] : found,
+      found: machinesNamed ? [...found, machinesNamed] : found,
       weight: (id) => weightOf(uses[id], now),
       browsed,
+      machines,
     }),
     [
       lists,
@@ -440,6 +506,7 @@ function Menu({
       theme,
       laterClock,
       found,
+      machinesNamed,
       machines,
       uses,
       now,
@@ -508,7 +575,7 @@ function Menu({
     const folder = lookedAt(how)
     if (folder) {
       const foreign = await lookIn(() =>
-        engine.call("projects.foreign", { folder: folder.folder })
+        there.call("projects.foreign", { folder: folder.folder })
       )
       if (!foreign) return
       if (foreign.foreign && !foreign.project) {
@@ -519,24 +586,39 @@ function Menu({
     }
     const project = await act(() =>
       "name" in how
-        ? engine.command("projects.create", { name: how.name })
+        ? there.command("projects.create", { name: how.name })
         : "locate" in how
-          ? engine.command("projects.locate", {
+          ? there.command("projects.locate", {
               project: how.locate,
               folder: how.folder,
             })
-          : engine.command("projects.add", how)
+          : there.command("projects.add", how)
     )
     if (!project) return
     // Not yet puts its trust off, as Not now on its card in the sidebar.
     if ("create" in how && how.trusted === false) notNow(project.id)
-    onAdded(project)
+    // Another machine's is its own: the Window takes it among that
+    // machine's Projects before its list says so, so the Thread that
+    // opens in it at once goes there (ADR 0120, decision 1), as
+    // `KeptHosts.added` does for this machine; a host's belongs beside
+    // it (#1753).
+    if (host !== undefined)
+      kept.projects(host, [
+        ...(kept.shown(host)?.projects ?? []).filter(
+          (one) => one.id !== project.id
+        ),
+        project,
+      ])
+    onAdded(project, host)
   }
   // The system's folder picker: the folder picked is added at once, as
   // T3 Code does; the field takes the keys back when it is cancelled.
-  const picker = usePickFolder(browsed, (folder) =>
+  // It shows this device's folders, so only this machine's Projects are
+  // picked in it: another machine's path field is the whole road.
+  const picked = usePickFolder(browsed, (folder) =>
     folder ? void add(pathAdding(inside, folder)!) : field.current?.focus()
   )
+  const picker = host === undefined ? picked : undefined
   const own = (row: Own) => {
     setActing(undefined)
     switch (row.kind) {
@@ -564,6 +646,9 @@ function Menu({
   // row runs. Each counts for the order next time, but a folder or a Project
   // to add, which are the Person's own.
   const choose = (row: Choice) => {
+    // A machine the Window does not reach adds nothing, and says so.
+    if (row.kind === "add" && row.on?.away)
+      return setNote(`${row.on.name} is away`)
     if (isBranch(row)) restart([...path, row])
     else if (isOwn(row)) own(row)
     else onChoose(row)
@@ -689,7 +774,7 @@ function Menu({
             setActing(undefined)
           }}
           onKeyDown={onKeyDown}
-          placeholder={placeholderOf(taking, inside, at)}
+          placeholder={placeholderOf(taking, inside, at, machines.length > 0)}
           aria-label="Search"
           role="combobox"
           aria-expanded
@@ -999,6 +1084,30 @@ function RowView({
       )
     }
     case "add":
+      if (row.on)
+        return (
+          <>
+            <MachineIcon
+              icon={row.on.icon}
+              size={14}
+              className="shrink-0 text-muted-foreground"
+            />
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate",
+                row.on.away && "text-muted-foreground"
+              )}
+            >
+              {row.on.name}
+            </span>
+            <span className="shrink-0 text-meta text-muted-foreground">
+              {row.on.about}
+            </span>
+            {!row.on.away && (
+              <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+            )}
+          </>
+        )
       return (
         <>
           <FolderPlusIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -1013,7 +1122,7 @@ function RowView({
           <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 truncate">{branchName(row)}</span>
           <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-            {SOURCES[row.source].about}
+            {sourceWords(row).about}
           </span>
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </>
@@ -1114,13 +1223,15 @@ function Isolated({ cloned }: { cloned: boolean }) {
 function placeholderOf(
   taking: Action<Shell> | undefined,
   inside: Branch | undefined,
-  at: string
+  at: string,
+  asksWhere: boolean
 ): string {
   if (taking) return `Press the keys for “${taking.title}”…`
   if (inside?.kind === "source" && inside.source === "new")
     return "Project name"
   if (isPathField(inside)) return PATH_PLACEHOLDER
   if (inside?.kind === "trust") return inside.how.folder
+  if (inside?.kind === "add" && !inside.on && asksWhere) return "Where?"
   if (inside) return "Search…"
   return at === "actions"
     ? "Search actions…"
