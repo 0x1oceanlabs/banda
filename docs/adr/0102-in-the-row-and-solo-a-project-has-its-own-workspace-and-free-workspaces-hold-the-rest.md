@@ -107,7 +107,9 @@ day.
    on a free workspace, or in the drawer, it changes Project where it
    stands, and its first message never moves it.
 
-4. **The Project's own Group.**
+4. **The Project's own Group.** _Gone with ADR 0134, decision 3: a Pane
+   the Person opens for a Project opens first on its workspace, in no
+   Group._
    - It holds the Panes the Person opened for the Project and not for an
      Agent: a terminal, a dev server, Files, Git. It stands first on the
      Project's workspace, so a pick that brings an Agent to the left

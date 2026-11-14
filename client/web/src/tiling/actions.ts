@@ -261,11 +261,11 @@ const factsNow = () => factsOf(fileNow(TILING_FILE).flow)
 
 /** Moves the focused Pane where `how` puts it, and follows it; one in a
  * Group that `how` sends to another workspace takes its Group, as one
- * window (ADR 0065), but one of the Project's own Group goes alone
- * (`takesGroup`). Onto another Project's workspace, in the row and solo,
- * the engine refuses it (ADR 0102, decision 6), and the window says whose
- * it is and where the Pane can go: it names the Projects by `projectOf`,
- * and those of no Project as `scratch` says (`Placing`). */
+ * window (ADR 0065; `takesGroup`). Onto another Project's workspace, in
+ * the row and solo, the engine refuses it (ADR 0102, decision 6), and the
+ * window says whose it is and where the Pane can go: it names the
+ * Projects by `projectOf`, and those of no Project as `scratch` says
+ * (`Placing`). */
 function moving(
   w: Workspaces,
   how: (w: Workspaces) => Workspaces,
@@ -277,7 +277,7 @@ function moving(
   const next = how(w)
   if (!entry || next === w) return undefined
   const away = current(next).id !== workspace.id
-  const whole = takesGroup(workspace, column) && away
+  const whole = takesGroup(column) && away
   const moves = whole ? columnMoved(next, column.id) : moved(next, entry.id)
   const plan = moves && whole ? { ...moves, want: entry.id } : moves
   return (
@@ -307,7 +307,7 @@ export function targetsOf(
   const workspace = state.list[spot.workspace]
   const column = workspace.columns[spot.column]
   const entry = column.entries[spot.entry].id
-  const whole = takesGroup(workspace, column)
+  const whole = takesGroup(column)
   const refused = refusedTo(keptOf(state), factsNow(), entry, whole)
   return state.list.map((w) => ({
     owner: w.project === undefined ? undefined : projectOf(w.project),

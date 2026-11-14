@@ -604,26 +604,32 @@ fn project_row() -> Tracing {
     t
 }
 
-fn own_group() -> Tracing {
+fn first_in_no_group() -> Tracing {
     let mut t = Tracing::new(
         13,
-        "own-group",
-        "A Project's own Panes open last into its own Group, first on its workspace: the \
-         Group is made at the start when there is none, and goes with its last Pane.",
+        "first-in-no-group",
+        "A Project's own Panes open first on its workspace, each a column in no Group, right \
+         of the columns in no Group at its start (ADR 0134, decision 3).",
     );
     let row = |project: &str| json!({ "place": { "to": "project", "project": project } });
-    let own = |project: &str| json!({ "place": { "to": "own", "project": project } });
-    t.ok("open", and(shows(WORK, "agents.thread", 1), row(WORK)));
-    t.ok("open", and(shows(WORK, "terminal.terminal", 2), own(WORK)));
-    t.ok("open", and(shows(WORK, "terminal.terminal", 3), own(WORK)));
+    let first = |project: &str| json!({ "place": { "to": "start", "project": project } });
+    t.ok("open", and(thread(WORK, 1), row(WORK)));
+    t.ok(
+        "open",
+        and(shows(WORK, "terminal.terminal", 2), first(WORK)),
+    );
+    t.ok(
+        "open",
+        and(shows(WORK, "terminal.terminal", 3), first(WORK)),
+    );
     assert_eq!(t.layout()[0], [vec![2], vec![3], vec![1]]);
-    assert_eq!(t.grouping()[0][..2], [1, 1]);
-    // A Project with no workspace: the bottom one, its own Group on it.
-    t.ok("open", and(shows(HOME, "files.files", 4), own(HOME)));
+    assert_eq!(t.grouping()[0], [0, 0, 1]);
+    // A Project with no workspace: the bottom one.
+    t.ok("open", and(shows(HOME, "files.files", 4), first(HOME)));
     assert_eq!(t.layout()[1], [vec![4]]);
     let four = t.pane(1, 0, 0);
     t.ok("close", json!({ "pane": four }));
-    t.ok("open", and(shows(HOME, "files.files", 5), own(HOME)));
+    t.ok("open", and(shows(HOME, "files.files", 5), first(HOME)));
     assert_eq!(t.layout()[1], [vec![5]]);
     t
 }
@@ -633,12 +639,12 @@ fn arranged() -> Tracing {
         14,
         "arranged",
         "Arranging by Project puts each Group, and each column in none, on its Project's \
-         workspace, and one of no Project on a free one: one with no lead and no Pane an \
-         Agent opened into the own Group, first, a Group just after it in the order they \
-         stood, and one led by a Pane of a kind that `leads` (a Thread) last, as its \
-         lead's Project says, still filling the screen, as one an Agent opened; one \
-         already there stays, but for the Person's own column in none, which joins the \
-         own Group, and with `only` only that Project's move, and none already there.",
+         workspace, and one of no Project on a free one: the Person's own column in none, \
+         with no Pane an Agent opened, first, right of the columns in none at its start, \
+         in the order they stood; any other last, a Group led by a Pane of a kind that \
+         `leads` (a Thread) as its lead's Project says, still filling the screen; one \
+         already there stays, but for the Person's own column in none past the start, \
+         which goes to it, and with `only` only that Project's move, and none already there.",
     );
     t.ok("open", shows(WORK, "terminal.terminal", 1));
     let first = t.list()[0].id.to_string();
@@ -658,14 +664,14 @@ fn arranged() -> Tracing {
     );
     assert_eq!(t.layout()[0], [vec![1], vec![3], vec![4], vec![5]]);
     assert_eq!(t.layout()[1], [vec![2]]);
-    // Two new workspaces in one go, each its own, with its own Group.
+    // Two new workspaces in one go, each its own, in no Group.
     t.ok("arrange", json!({ "projects": projects, "leads": leads }));
     assert_eq!(t.layout()[0], [vec![3]]);
     assert_eq!(t.layout()[2], [vec![1], vec![4]]);
     assert_eq!(t.layout()[3], [vec![5]]);
     assert_eq!(
         t.grouping(),
-        [vec![0], vec![1], vec![2, 2], vec![3], vec![]]
+        [vec![0], vec![0], vec![0, 0], vec![0], vec![]]
     );
     let ids: BTreeSet<_> = t.list().iter().map(|w| w.id).collect();
     assert_eq!(ids.len(), t.list().len());
@@ -689,7 +695,7 @@ fn arranged() -> Tracing {
     assert_eq!(t.layout()[0], [vec![3], vec![7], vec![6], vec![8]]);
     t.ok("arrange", json!({ "projects": projects, "leads": leads }));
     assert_eq!(t.layout()[2], [vec![1], vec![4], vec![8], vec![7], vec![6]]);
-    assert_eq!(t.grouping()[2], [2, 2, 2, 3, 3]);
+    assert_eq!(t.grouping()[2], [0, 0, 0, 1, 1]);
     assert_eq!(t.list()[2].filled, t.list()[2].columns[3].group);
     // Again, nothing moves.
     let before = t.list().clone();
@@ -718,15 +724,15 @@ fn arranged() -> Tracing {
     }]);
     t.ok("take", json!({ "workspaces": window }));
     t.ok("arrange", json!({ "projects": projects, "leads": leads }));
-    // The one in none joins the own Group, the Person's Groups stand just
-    // after it as they stood, and what the Agent opened goes last.
-    let work: Vec<_> = [1, 4, 8, 12, 9, 10, 11, 7, 6, 13, 14]
+    // The one in none goes right of those in none at the start; the
+    // rest last, in the order met.
+    let work: Vec<_> = [1, 4, 8, 12, 7, 6, 13, 14, 9, 10, 11]
         .map(|n| vec![n])
         .into();
     assert_eq!(t.layout()[3], work);
-    assert_eq!(t.grouping()[3], [2, 2, 2, 2, 3, 3, 4, 5, 5, 6, 0]);
-    // A terminal of WORK put in none on WORK's own workspace joins the
-    // own Group too; the browser the Agent opened there stays in none.
+    assert_eq!(t.grouping()[3], [0, 0, 0, 0, 1, 1, 2, 0, 3, 3, 4]);
+    // A terminal of WORK put in none on WORK's own workspace goes to the
+    // start too; the browser the Agent opened there stays where it is.
     let own_row = json!({ "place": {
         "to": "column", "workspace": t.workspace(3), "index": 99,
     } });
@@ -739,11 +745,11 @@ fn arranged() -> Tracing {
     );
     assert_eq!(*t.list(), before);
     t.ok("arrange", json!({ "projects": projects, "leads": leads }));
-    let work: Vec<_> = [1, 4, 8, 12, 15, 9, 10, 11, 7, 6, 13, 14]
+    let work: Vec<_> = [1, 4, 8, 12, 15, 7, 6, 13, 14, 9, 10, 11]
         .map(|n| vec![n])
         .into();
     assert_eq!(t.layout()[3], work);
-    assert_eq!(t.grouping()[3], [2, 2, 2, 2, 2, 3, 3, 4, 5, 5, 6, 0]);
+    assert_eq!(t.grouping()[3], [0, 0, 0, 0, 0, 1, 1, 2, 0, 3, 3, 4]);
     // Again, nothing moves.
     let before = t.list().clone();
     t.ok("arrange", json!({ "projects": projects, "leads": leads }));
@@ -1267,18 +1273,19 @@ fn placed_row() -> Tracing {
     let mut t = Tracing::new(
         16,
         "placed-row",
-        "In the row, a Pane with no place opens by where it is opened from: from the \
-         Project's own Group, last into it; by a click in a Group, into that \
-         Group; on a free workspace, right of the Pane in front; any other, and with \
-         none in front, into its Project's own Group. A Thread goes last on its \
+        "In the row, a Pane with no place opens by where it is opened from: by a click \
+         in a Group, into that Group; on a free workspace or from a column in no Group \
+         on its Project's workspace, right of the Pane in front; from another Project's \
+         workspace, and with none in front, first on its Project's workspace, right of \
+         the columns in no Group at its start. A Thread goes last on its \
          Project's workspace, and so does what is opened for an Agent. A Pane of no \
          Project goes right of the Pane in front, a Thread of none on the top free \
          workspace.",
     );
     t.in_the_flow(Flow::Row);
     let from = |pane: &str| json!({ "from": pane });
-    // With none in front, the Project's own Group, which makes its
-    // workspace; from it, last into it.
+    // With none in front, first on its Project's workspace, which it
+    // makes; from it, right of it.
     let one = t.opened(shows(WORK, "a.a", 1));
     t.ok("open", and(shows(WORK, "a.a", 2), from(&one)));
     // A Thread, last on its Project's workspace; by a click in it, into
@@ -1289,8 +1296,7 @@ fn placed_row() -> Tracing {
         t.layout(),
         [vec![vec![1], vec![2], vec![3], vec![4]], EMPTY]
     );
-    assert_eq!(t.grouping()[0], [1, 1, 2, 2]);
-    assert_eq!(t.list()[0].own, t.list()[0].columns[0].group);
+    assert_eq!(t.grouping()[0], [0, 0, 1, 1]);
     // Another Project's, from a Group, goes home.
     let five = t.opened(and(shows(HOME, "a.a", 5), from(&three)));
     assert_eq!(t.list()[1].project.unwrap().to_string(), HOME);
@@ -1314,9 +1320,9 @@ fn placed_row() -> Tracing {
             EMPTY
         ]
     );
-    assert_eq!(t.grouping()[1..3], [vec![3, 0], vec![4, 4, 0, 0]]);
+    assert_eq!(t.grouping()[1..3], [vec![0, 0], vec![2, 2, 0, 0]]);
     assert_eq!(t.list()[2].project, None);
-    // From a column in no Group on its Project's workspace, the own Group.
+    // From a column in no Group on its Project's workspace, right of it.
     let on_work = json!({ "place": { "to": "project", "project": WORK } });
     let loose = t.opened(and(shows(WORK, "a.a", 11), on_work));
     t.ok("open", and(shows(WORK, "a.a", 12), from(&loose)));
@@ -1332,15 +1338,15 @@ fn placed_row() -> Tracing {
         [
             vec![1],
             vec![2],
-            vec![12],
             vec![15],
             vec![3],
             vec![4],
             vec![11],
+            vec![12],
             vec![13]
         ]
     );
-    assert_eq!(t.grouping()[0], [1, 1, 1, 1, 2, 2, 0, 0]);
+    assert_eq!(t.grouping()[0], [0, 0, 0, 1, 1, 0, 0, 0]);
     assert_eq!(t.layout()[2].last().unwrap(), &[14]);
     // Of no Project with nothing in front: where a Pane with no place goes.
     t.ok("open", none(16));
@@ -1423,7 +1429,7 @@ fn refused_moves() -> Tracing {
         json!({ "to": "beside", "pane": theirs, "side": "right" }),
         json!({ "to": "group", "pane": theirs }),
         json!({ "to": "project", "project": HOME }),
-        json!({ "to": "own", "project": HOME }),
+        json!({ "to": "start", "project": HOME }),
         // A Project with no workspace yet would own the empty one.
         json!({ "to": "project", "project": THIRD }),
     ] {
@@ -1545,7 +1551,7 @@ fn rules() -> Tracing {
     t.ok("open", and(shows(HOME, "p.p", 10), from(&eight)));
     assert_eq!(t.layout()[1], [vec![8], vec![9], vec![10]]);
     // From a workspace another Project owns, the rule gives way: Work's
-    // Pane goes home, into Work's own Group. One of no Project stands
+    // Pane goes home, first on Work's workspace. One of no Project stands
     // where it is opened, as the row lets it.
     t.ok("open", and(shows(WORK, "b.b", 11), from(&eight)));
     assert_eq!(t.layout()[1], [vec![8], vec![9], vec![10]]);
@@ -1597,13 +1603,14 @@ fn clicks_and_keys() -> Tracing {
         "A Thread's Group holds what its Thread opens, and the Person's keys open \
          beside it (ADR 0134): a click in a Thread, or in a Pane in its Group, \
          opens into that Group; a key from either opens as a column of its own \
-         right of the whole Group, in the Flow free and in the row alike. A rule \
+         right of the whole Group, in the Flow free and in the row alike, and a key \
+         from what it opened right of that. A rule \
          that opens into a Group wins over a key.",
     );
     t.led_by_threads();
     let key = |pane: &str| json!({ "from": pane, "via": "key" });
     // Each on a workspace of its own: the Thread's Group numbered `g`.
-    for (at, flow, project, n, g) in [(0, Flow::Free, HOME, 0, 1), (1, Flow::Row, WORK, 10, 3)] {
+    for (at, flow, project, n, g) in [(0, Flow::Free, HOME, 0, 1), (1, Flow::Row, WORK, 10, 2)] {
         t.in_the_flow(flow);
         let on = t.bottom();
         let one = t.opened(and(shows(project, "a.a", n + 1), json!({ "on": on })));
@@ -1613,16 +1620,18 @@ fn clicks_and_keys() -> Tracing {
         t.ok("open", and(shows(project, "a.a", n + 4), clicked(&three)));
         // By a key from either, right of the whole Group, so the last
         // opened stands next to it.
-        t.ok("open", and(shows(project, "a.a", n + 5), key(&two)));
+        let five = t.opened(and(shows(project, "a.a", n + 5), key(&two)));
         t.ok("open", and(shows(project, "a.a", n + 6), key(&three)));
+        // By a key from what a key opened, right of it, in no Group.
+        t.ok("open", and(shows(project, "a.a", n + 8), key(&five)));
         // Left out, as a key.
         t.ok(
             "open",
             and(shows(project, "a.a", n + 7), json!({ "from": two })),
         );
-        let ns = |more: [u32; 7]| more.map(|m| vec![u64::from(n + m)]);
-        assert_eq!(t.layout()[at], ns([1, 2, 3, 4, 7, 6, 5]));
-        assert_eq!(t.grouping()[at][1..], [g, g, g, 0, 0, 0]);
+        let ns = |more: [u32; 8]| more.map(|m| vec![u64::from(n + m)]);
+        assert_eq!(t.layout()[at], ns([1, 2, 3, 4, 7, 6, 5, 8]));
+        assert_eq!(t.grouping()[at][1..], [g, g, g, 0, 0, 0, 0]);
     }
     // A rule that opens into a Group wins over a key.
     t.ruled("g.g", None, Some(Opens::Group));
@@ -1646,7 +1655,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         take_over(),
         ran_before(),
         update(),
-        own_group(),
+        first_in_no_group(),
         arranged(),
         placed_free(),
         placed_row(),
@@ -1689,7 +1698,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         "place beside",
         "place workspace",
         "place project",
-        "place own",
+        "place start",
         "place free",
         "place group",
         "side above",
