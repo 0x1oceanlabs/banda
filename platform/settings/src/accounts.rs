@@ -4,7 +4,7 @@ use banda_harnesses::accounts::{AccountStore, ConnectedAccount, StartRole, Updat
 use banda_kernel::Refusal;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use toml_edit::{InlineTable, Value};
+use toml_edit::{DocumentMut, InlineTable, Item, Value};
 
 pub struct Store {
     settings: crate::Settings,
@@ -15,35 +15,41 @@ impl Store {
         Self { settings, config }
     }
 
-    /// `agents.toml` as it reads, its defaults when it is not there; none
-    /// when it does not read.
-    fn agents(&self) -> Option<banda_agents::sending::AgentsSettings> {
+    /// `agents.toml` as it reads, empty when it is not there; none when
+    /// it does not read, as its own check says.
+    fn agents(&self) -> Option<DocumentMut> {
         let path = self.config.join("agents.toml");
         if !path.exists() {
-            return Some(Default::default());
+            return Some(DocumentMut::new());
         }
         let text = std::fs::read_to_string(&path).ok()?;
-        let mut problems = Vec::new();
-        let settings = banda_look::file::read::<banda_agents::sending::AgentsSettings>(
-            &path,
-            &text,
-            &mut problems,
-        );
-        settings.filter(|_| problems.is_empty())
+        if !self.settings.check_text(&path, &text).is_empty() {
+            return None;
+        }
+        text.parse().ok()
     }
 }
 impl AccountStore for Store {
     fn selection(&self) -> Result<(Option<String>, Option<String>), Refusal> {
-        let settings = self
+        let agents = self
             .agents()
             .ok_or_else(|| Refusal::invalid("Fix agents.toml before removing an Account."))?;
-        let start = settings.start.unwrap_or_default();
-        Ok((start.account, start.fallback))
+        let start = agents.get("start").and_then(Item::as_table_like);
+        let said = |key| Some(start?.get(key)?.as_str()?.to_owned());
+        Ok((said("account"), said("fallback")))
     }
     fn models(&self) -> BTreeMap<String, Vec<String>> {
-        (self.agents())
-            .and_then(|settings| settings.models)
-            .unwrap_or_default()
+        let Some(agents) = self.agents() else {
+            return BTreeMap::new();
+        };
+        let models = agents.get("models").and_then(Item::as_table_like);
+        (models.iter().flat_map(|models| models.iter()))
+            .filter_map(|(harness, menu)| {
+                let menu = menu.as_array()?.iter();
+                let menu = menu.filter_map(|model| Some(model.as_str()?.to_owned()));
+                Some((harness.to_owned(), menu.collect()))
+            })
+            .collect()
     }
     fn set_models(&self, harness: &str, models: &[String]) -> Result<(), Refusal> {
         let key = format!("models.{}", Value::from(harness));

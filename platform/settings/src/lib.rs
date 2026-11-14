@@ -26,7 +26,7 @@ extern crate self as banda_settings;
 #[cfg(test)]
 #[path = "../tests/whole/mod.rs"]
 mod whole;
-pub use person::{chose, chose_renamed, only_the_person, only_the_person_renames};
+pub use person::chose_renamed;
 
 /// What an App, a platform part or the Window's own part hands the
 /// settings.

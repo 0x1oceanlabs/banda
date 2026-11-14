@@ -23,6 +23,8 @@ sha2.workspace = true
 tar.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 toml.workspace = true
+# A key and a value of agents.toml, as the settings' writer reads them.
+toml_edit.workspace = true
 tracing.workspace = true
 dirs.workspace = true
 ts-rs.workspace = true
