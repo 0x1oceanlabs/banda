@@ -26,11 +26,23 @@ const STORAGE: [&str; 3] = [
 /// How long a copy has to say its version.
 const SAYING: Duration = Duration::from_secs(20);
 
+/// How long GitHub, or its storage, has to answer, and to send each next
+/// piece of a file: a network that went quiet fails the look, and the
+/// next one tries again.
+pub const ANSWERS: Duration = Duration::from_secs(30);
+
+/// What `work` answers, when it does within [`ANSWERS`]; `what` did not
+/// answer in time else.
+pub async fn within<T>(what: &str, work: impl Future<Output = T>) -> Result<T, String> {
+    (tokio::time::timeout(ANSWERS, work).await)
+        .map_err(|_| format!("{what} did not answer in {} s", ANSWERS.as_secs()))
+}
+
 /// An answer of `url`, after GitHub's one redirect to its storage.
 pub async fn get(url: &str) -> Result<reqwest::Response, String> {
     let client = banda_kernel::https::client()?;
     let words = |e: reqwest::Error| format!("{url}: {}", banda_kernel::https::cause(&e));
-    let response = client.get(url).send().await.map_err(words)?;
+    let response = within(url, client.get(url).send()).await?.map_err(words)?;
     if !response.status().is_redirection() {
         return Ok(response);
     }
@@ -44,7 +56,9 @@ pub async fn get(url: &str) -> Result<reqwest::Response, String> {
         ));
     }
     let words = |e: reqwest::Error| format!("{to}: {}", banda_kernel::https::cause(&e));
-    client.get(to.clone()).send().await.map_err(words)
+    within(to.as_str(), client.get(to.clone()).send())
+        .await?
+        .map_err(words)
 }
 
 /// Downloads `url`, the file `feed` names, into `into`, telling `share`
@@ -62,7 +76,7 @@ pub async fn download(
     let mut file = std::fs::File::create(into).map_err(|e| format!("{}: {e}", into.display()))?;
     let mut hash = Sha512::new();
     let mut came: u64 = 0;
-    while let Some(piece) = (response.chunk().await)
+    while let Some(piece) = (within(&feed.file, response.chunk()).await?)
         .map_err(|e| format!("{}: {}", feed.file, banda_kernel::https::cause(&e)))?
     {
         came += piece.len() as u64;

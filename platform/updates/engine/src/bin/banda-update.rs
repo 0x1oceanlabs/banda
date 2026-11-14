@@ -153,7 +153,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
     runtime.block_on(async move {
-        let _one = locked(&engine);
+        let _one = banda_updates::guard::lock(&engine);
         let mut changes = updates.watch();
         let said = tokio::spawn(async move {
             while changes.changed().await.is_ok() {
@@ -214,13 +214,4 @@ fn say(state: &UpdateState) {
         let _ = writeln!(out, "{line}");
         let _ = out.flush();
     }
-}
-
-/// Waits for any other `banda-update` on `engine` to finish, and holds it
-/// until this one does.
-fn locked(engine: &std::path::Path) -> Option<std::fs::File> {
-    std::fs::create_dir_all(engine).ok()?;
-    let file = std::fs::File::create(engine.join(".update.lock")).ok()?;
-    file.lock().ok()?;
-    Some(file)
 }

@@ -55,6 +55,9 @@ pub async fn run(serves: Serves) {
     let mut next_look = tokio::time::Instant::now() + serves.first;
     let mut guarded: Option<i64> = None;
     let mut unit: Option<String> = None;
+    // The look that runs, in a task of its own: a download, or a network
+    // gone quiet, never keeps the guard from a move.
+    let mut looking: Option<tokio::task::JoinHandle<()>> = None;
     loop {
         let running = running(&serves.state);
         if let Some(said) = running.as_ref().and_then(|r| r.unit.clone()) {
@@ -68,29 +71,38 @@ pub async fn run(serves: Serves) {
                 Guard::Wait => {}
                 Guard::PutBack => {
                     guarded = Some(moved.at);
-                    put_back(&serves, &moved, unit.as_deref()).await;
+                    put_back(&serves, &moved, unit.as_deref(), version.is_some()).await;
                 }
             }
         }
-        if tokio::time::Instant::now() >= next_look {
+        let free = looking.as_ref().is_none_or(|look| look.is_finished());
+        if free && tokio::time::Instant::now() >= next_look {
             next_look = tokio::time::Instant::now() + EVERY;
             if let Some(version) = version {
-                let updates = updates(&serves, version);
-                // Each change kept as it comes, a download's share too.
-                let mut changes = updates.watch();
-                let engine = serves.engine.clone();
-                let keeping = tokio::spawn(async move {
-                    while changes.changed().await.is_ok() {
-                        guard::keep_state(&engine, &changes.borrow_and_update().clone());
-                    }
-                });
-                let state = updates.look().await;
-                keeping.abort();
-                guard::keep_state(&serves.engine, &state);
+                looking = Some(tokio::spawn(look(serves.clone(), version)));
             }
         }
         tokio::time::sleep(WATCH).await;
     }
+}
+
+/// One look for the engine that runs `version`, each change of it kept
+/// as it comes, a download's share too. It waits for a look or a take
+/// the engine asked (`guard::lock`).
+async fn look(serves: Serves, version: String) {
+    let engine = serves.engine.clone();
+    let _one = tokio::task::spawn_blocking(move || guard::lock(&engine)).await;
+    let updates = updates(&serves, version);
+    let mut changes = updates.watch();
+    let engine = serves.engine.clone();
+    let keeping = tokio::spawn(async move {
+        while changes.changed().await.is_ok() {
+            guard::keep_state(&engine, &changes.borrow_and_update().clone());
+        }
+    });
+    let state = updates.look().await;
+    keeping.abort();
+    guard::keep_state(&serves.engine, &state);
 }
 
 /// The Updates of the engine that runs `version`.
@@ -135,11 +147,25 @@ fn running(state: &Path) -> Option<Running> {
 
 /// Marks the copy `moved` went to bad, and starts the one it came from:
 /// `banda start` of that copy starts the engine's unit or job naming it,
-/// and does nothing where an engine answers already.
-async fn put_back(serves: &Serves, moved: &guard::Moved, unit: Option<&str>) {
+/// and does nothing where an engine answers already. Where none
+/// `answers`, the copy that hangs is stopped first, as `banda stop` stops
+/// an engine that does not answer: its unit or job, else its process.
+async fn put_back(serves: &Serves, moved: &guard::Moved, unit: Option<&str>, answers: bool) {
     tracing::warn!(to = %moved.to, from = %moved.from, "the new engine did not start: Banda goes back");
     if let Err(error) = guard::mark_bad(&serves.engine, &moved.to) {
         tracing::warn!(%error, "the copy that did not start is not marked");
+    }
+    let from = serves.engine.join(&moved.from).join(crate::PROGRAM);
+    let banda = |command: &str| {
+        let mut run = tokio::process::Command::new(&from);
+        run.arg(command)
+            .stdin(std::process::Stdio::null())
+            .kill_on_drop(true);
+        tokio::time::timeout(Duration::from_secs(60), run.status())
+    };
+    if !answers {
+        let stopped = banda("stop").await;
+        tracing::info!(?stopped, "the copy that did not answer was stopped");
     }
     // A unit that gave up after its crashes starts again only once reset.
     if cfg!(target_os = "linux")
@@ -150,15 +176,7 @@ async fn put_back(serves: &Serves, moved: &guard::Moved, unit: Option<&str>) {
             .status()
             .await;
     }
-    let from = serves.engine.join(&moved.from).join(crate::PROGRAM);
-    let started = tokio::time::timeout(
-        Duration::from_secs(60),
-        tokio::process::Command::new(&from)
-            .arg("start")
-            .stdin(std::process::Stdio::null())
-            .status(),
-    )
-    .await;
+    let started = banda("start").await;
     match started {
         Ok(Ok(status)) if status.success() => {
             tracing::info!(version = %moved.from, "the engine runs its copy before again");
