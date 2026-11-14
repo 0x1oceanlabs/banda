@@ -44,7 +44,6 @@ import {
   placed,
   type Placing,
   placingOf,
-  startingHere,
   strayedIn,
 } from "./opening"
 import { hear, look, predict, unseen } from "./unheard"
@@ -1001,7 +1000,7 @@ test("Arrange by Project names every Project its Panes are of, as a Pane opens, 
   })
 })
 
-test("a first Pane started on an emptied Project's workspace goes where the keys put it, in no Group, and on one of no Project there (ADR 0134, decision 3)", () => {
+test("a first Pane started on an empty workspace goes as a key puts it: on an emptied Project's, first there in no Group; on one no Project owns, there (ADR 0134, decisions 3 and 6)", () => {
   const started = (flow: Flow) => {
     const window = windowIn(flow)
     // A's workspace, emptied, and the empty one at the bottom.
@@ -1015,8 +1014,8 @@ test("a first Pane started on an emptied Project's workspace goes where the keys
   }
   const row = started("row")
   expect(row.state.list.map((w) => w.project)).toEqual([A, undefined])
-  // On the Project's, in its Project: asked of the engine, as a key's.
-  const asked = startingHere(row.state, B, terminal(2), placingOf("row", []))
+  // On the Project's: asked of the engine, as a key's.
+  const asked = placed(row.state, A, terminal(2), placingOf("row", []))
   expect(paramsOf(asked)).toEqual({
     project: A,
     kind: "terminal.terminal",
@@ -1025,20 +1024,21 @@ test("a first Pane started on an emptied Project's workspace goes where the keys
     on: row.state.list[0].id,
     via: "key",
   })
-  row.change((w, placing) => startingHere(w, B, terminal(2), placing))
+  row.change((w, placing) => placed(w, A, terminal(2), placing))
   expect(row.layout()).toEqual([[[2]], []])
   expect(row.state.list[0].columns[0].group).toBeUndefined()
-  // On the empty one at the bottom, a column there, in the home Project.
+  // On the empty one at the bottom, A's Thread stays there, though A owns
+  // a workspace, and the window names no place.
   row.change((w) => ({ ...w, current: 1 }))
-  const bottom = row.state.list[1].id
-  const there = startingHere(row.state, B, terminal(3), placingOf("row", []))
-  expect(paramsOf(there)).toMatchObject({
-    project: B,
-    place: { to: "column", workspace: bottom, index: 0 },
-  })
-  // In the Flow free, there too, in its Project.
+  const thread = { kind: "agents.thread", args: { n: 3 } }
+  const there = placed(row.state, A, thread, placingOf("row", []))
+  expect(paramsOf(there)).not.toHaveProperty("place")
+  row.change((w, placing) => placed(w, A, thread, placing))
+  expect(row.layout()).toEqual([[[2]], [[3]], []])
+  expect(row.state.list[1].project).toBeUndefined()
+  // In the Flow free, there too.
   const free = started("free")
-  free.change((w, placing) => startingHere(w, B, terminal(2), placing))
+  free.change((w, placing) => placed(w, A, terminal(2), placing))
   expect(free.layout()).toEqual([[[2]], []])
   expect(free.state.list[0].columns[0].group).toBeUndefined()
 })

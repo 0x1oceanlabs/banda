@@ -1280,7 +1280,8 @@ fn placed_row() -> Tracing {
          the columns in no Group at its start. A Thread goes last on its \
          Project's workspace, and so does what is opened for an Agent. A Pane of no \
          Project goes right of the Pane in front, a Thread of none on the top free \
-         workspace.",
+         workspace. On the empty workspace at the bottom, on screen, what is asked for \
+         with nothing in front opens there.",
     );
     t.in_the_flow(Flow::Row);
     let from = |pane: &str| json!({ "from": pane });
@@ -1351,6 +1352,18 @@ fn placed_row() -> Tracing {
     // Of no Project with nothing in front: where a Pane with no place goes.
     t.ok("open", none(16));
     assert_eq!(t.layout()[1], [vec![5], vec![6], vec![16]]);
+    // On the empty workspace at the bottom, on screen, with nothing in
+    // front, there: a Thread of a Project that owns another, and one of no
+    // Project (ADR 0134, decision 6).
+    let bottom = t.bottom();
+    t.ok("open", and(thread(WORK, 17), json!({ "on": bottom })));
+    let bottom = t.bottom();
+    t.ok(
+        "open",
+        and(of_none(thread(FIFTH, 18)), json!({ "on": bottom })),
+    );
+    assert_eq!(t.layout()[3..], [vec![vec![17]], vec![vec![18]], EMPTY]);
+    assert_eq!(t.list()[3].project, None);
     t
 }
 

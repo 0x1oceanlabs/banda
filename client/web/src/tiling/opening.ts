@@ -10,7 +10,7 @@
  *   gives `placed`, the one way a Pane the engine places opens; `opening`,
  *         at a place its caller named; `openingFrom`, as a tile asks;
  *         `bringing`, beside the Pane in focus; `picking`, to the Pane a
- *         pick names; `startingHere`, a first Pane on an empty workspace
+ *         pick names
  *         `closing` and `closingShown`, which take a Pane away
  *         `focusedIn` and `strayedIn`, what the sidebar list reads of
  *         where the Panes are
@@ -269,25 +269,6 @@ export function openingFrom(
   if (!moved) return opening(workspaces, project, pane, { from, place })
   const said = saidOf(project, pane, placing)
   return asking(workspaces, { project, pane }, { ...said, instead: from })
-}
-
-/**
- * Opens a first Pane on the empty workspace on screen, as its buttons do,
- * in its Project, else in `home`. On a Project's, where the keys would:
- * first there, in no Group, and the next right of it (ADR 0134, decision
- * 3). On one of no Project the buttons name the place: there, which
- * makes it a free one (decision 1).
- */
-export function startingHere(
-  workspaces: Workspaces,
-  home: ProjectId,
-  pane: PaneState,
-  placing: Placing
-): Step {
-  const { project } = current(workspaces)
-  return project === undefined
-    ? opening(workspaces, home, pane, { place: "right", again: true })
-    : placed(workspaces, project, pane, placing, { again: true })
 }
 
 /** What `pane.pick` is asked: a Project, and the Pane to open in it, its

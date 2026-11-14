@@ -144,6 +144,10 @@ pub struct Asked {
 /// where that Pane stands on a workspace another Project owns: a rule
 /// never puts a Pane where the row would refuse it.
 ///
+/// On an empty workspace no Project owns, on screen, what the Person asks
+/// for with no Pane in front opens there; in the row, a Project that owns
+/// no workspace takes it, when it is the bottom one (ADR 0134, decision 6).
+///
 /// Then by how the Person asked, in every Flow (ADR 0134, decisions 1
 /// and 2). A click in a Thread, or in a Pane in a Thread's Group, opens
 /// into that Group. In the row, a Pane whose kind stands on its Project's
@@ -212,6 +216,19 @@ pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Opti
             Opens::Group => return Some(Place::Group { pane: *pane }),
             // Its Project's workspace is the row's to find (`home`).
             Opens::Project => {}
+        }
+    }
+    // On an empty workspace no Project owns, on screen, what the Person
+    // asks for with no Pane in front opens there, and the screen stays
+    // (ADR 0134, decision 6). In the row a Project that owns no workspace
+    // takes it as its own, when it is the bottom one the row gives it.
+    let empty = on.and_then(|on| list.iter().position(|w| w.id == on));
+    let empty = empty.filter(|&w| list[w].project.is_none() && list[w].columns.is_empty());
+    if let (By::Person { .. }, None, Some(w)) = (by, &at, empty) {
+        let owns = list.iter().any(|w| w.project == Some(project));
+        let takes = flow == Flow::Row && !scratch && !owns && w == list.len() - 1;
+        if !takes {
+            return here();
         }
     }
     let homeward = flow == Flow::Row && home;
@@ -716,8 +733,49 @@ mod tests {
         let bottom = list.last().unwrap().id;
         let here = asked(work, Flow::Row, on(bottom));
         assert_eq!(place(&list, &leads(), scratch(here)), there(bottom));
-        // A Project's goes home all the same.
+        // A Project's that owns no workspace takes it, at its start.
         assert_eq!(place(&list, &leads(), here), at_start(work));
+    }
+
+    #[test]
+    fn on_an_empty_free_workspace_on_screen_what_the_person_asks_opens_there() {
+        // Work owns the top workspace, a free one shows a Pane of Home, and
+        // the empty one at the bottom is on screen.
+        let (mut list, work, _) = one_pane(on_its_workspace);
+        let home = ProjectId::new();
+        opened(&mut list, shown(home, "a.a", 2), Some(Place::Free));
+        let [owned, free, bottom] = [0, 1, 2].map(|w| list[w].id);
+        let thread = |on| Asked {
+            home: true,
+            ..asked(work, Flow::Row, (None, Some(on), KEY))
+        };
+        // A Thread there, of a Project or of none, and any other Pane.
+        assert_eq!(place(&list, &leads(), thread(bottom)), there(bottom));
+        assert_eq!(
+            place(&list, &leads(), scratch(thread(bottom))),
+            there(bottom)
+        );
+        let terminal = asked(work, Flow::Row, on(bottom));
+        assert_eq!(place(&list, &leads(), terminal), there(bottom));
+        // A free workspace that holds Panes keeps the row's way.
+        assert_eq!(place(&list, &leads(), thread(free)), on_its_workspace(work));
+        assert_eq!(
+            place(&list, &leads(), scratch(thread(free))),
+            Some(Place::Free)
+        );
+        assert_eq!(
+            place(&list, &leads(), asked(work, Flow::Row, on(free))),
+            at_start(work)
+        );
+        // So does a Project's workspace, emptied.
+        list[0].columns.clear();
+        assert_eq!(
+            place(&list, &leads(), thread(owned)),
+            on_its_workspace(work)
+        );
+        // An Agent's goes as an Agent's.
+        let agents = asked(work, Flow::Row, (None, Some(bottom), FOR_AGENT));
+        assert_eq!(place(&list, &leads(), agents), on_its_workspace(work));
     }
 
     #[test]
