@@ -1478,54 +1478,6 @@ mod tests {
     }
 
     #[test]
-    fn the_selection_s_keys_take_their_keys_in_the_sidebar_s_table() {
-        // Several at once (ADR 0098, decision 15): X and Space check the
-        // card picked, and Ctrl+A, ⌘A on a Mac, every card shown. Each moves,
-        // or goes, as the sidebar's other keys do.
-        let mut manifests = manifests_of(actions());
-        manifests.scopes.push(Scope {
-            id: "sidebar".to_owned(),
-            title: "Sidebar".to_owned(),
-            field: false,
-            mod_held: false,
-        });
-        let declared = |code: &str, primary: bool| Declared {
-            code: code.to_owned(),
-            primary,
-            ..Declared::default()
-        };
-        for (id, keys) in [
-            (
-                "sidebar.select-picked",
-                vec![declared("KeyX", false), declared("Space", false)],
-            ),
-            ("sidebar.select-all", vec![declared("KeyA", true)]),
-        ] {
-            manifests.actions.push(Action {
-                id: id.to_owned(),
-                title: id.to_owned(),
-                section: "Sidebar".to_owned(),
-                keys,
-                family: None,
-                unlisted: false,
-                scope: Some("sidebar".to_owned()),
-                args: None,
-                runs_as_person: None,
-            });
-        }
-        let actions = in_force(&manifests, &Keys::default(), &mut Vec::new());
-        assert_eq!(texts(&actions, "sidebar.select-picked"), ["X", "Space"]);
-        assert_eq!(texts(&actions, "sidebar.select-all"), ["Ctrl+A"]);
-        let mut problems = Vec::new();
-        let text = "[binds.sidebar]\n\"Space\" = \"none\"\n\"C\" = \"sidebar.select-picked\"\n\"Shift+A\" = \"sidebar.select-all\"\n";
-        let (_, keys) = read_keys(Path::new("keys.toml"), text, &mut problems).unwrap();
-        let actions = in_force(&manifests, &keys, &mut problems);
-        assert!(problems.is_empty(), "{problems:?}");
-        assert_eq!(texts(&actions, "sidebar.select-picked"), ["X", "C"]);
-        assert_eq!(texts(&actions, "sidebar.select-all"), ["Ctrl+A", "Shift+A"]);
-    }
-
-    #[test]
     fn a_declared_key_gives_its_action_what_it_says() {
         let open = Action {
             id: "launcher.open".to_owned(),

@@ -10,7 +10,6 @@ import { focusedTile } from "@banda/ui/pane"
 import { useLaterClock, useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { Dismiss } from "./open"
-import { NO_CHECKS, type Checks } from "./pick"
 import { PickList, useSidebarKeys } from "./PickList"
 import { regionsOf } from "./regions"
 import { SectionView } from "./SectionView"
@@ -100,8 +99,8 @@ export function SmallInbox({
           return setOpen(true)
         }
         const { reason, event } = details
-        // Esc the list took, as to clear what is checked, or one pressed
-        // in a popup of a card's, is not the small inbox's.
+        // Esc the list took, or one pressed in a popup of a card's, is
+        // not the small inbox's.
         if (
           reason === "escape-key" &&
           (event.defaultPrevented ||
@@ -188,8 +187,8 @@ const same = <T,>(value: T) => value
  * research): the sidebar's Inbox with Your turn alone, in one-line cards,
  * in the same `listbox` in the scope `sidebar`, so the same keys work
  * (`useSidebarKeys`), but no tabs and no `1`–`4`. It takes the
- * focus as it is drawn, on the first card; the sidebar's own Esc clears
- * what is checked, then closes it (`onEsc`). It says nothing of Someday,
+ * focus as it is drawn, on the first card; the sidebar's own Esc closes
+ * it (`onEsc`). It says nothing of Someday,
  * which the sidebar tells once a week. After it, "7 at work ›".
  */
 function SmallList({
@@ -220,21 +219,18 @@ function SmallList({
   const projects = useMemo(() => [...menuProjects], [menuProjects])
   const workspaces = useTiled(same)
   const isCurrent = useMemo(() => focusedIn(workspaces), [workspaces])
-  const [checks, setChecks] = useState<Checks>(NO_CHECKS)
   const [someday] = useState(Date.now)
   const view = {
     tab: "inbox" as const,
     more: false,
     folded: NONE,
     someday,
-    checks,
   }
   const ordering = useOrdered(projects, settings, view)
   const { aside, ...keys } = useSidebarKeys(
     ordering,
     {
       ...view,
-      setChecks,
       show: NOTHING,
       toggle: NOTHING,
       toggleMore: NOTHING,

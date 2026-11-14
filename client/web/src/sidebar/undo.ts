@@ -6,8 +6,8 @@
  * time starting again, and its Undo takes all of them back. The window
  * keeps the last 20 acts for 10 minutes, and `Ctrl+Z` in the sidebar
  * takes back the newest, then the one before (spec §2.7, S7c); there is
- * no redo. An act on several cards at once is one act (S10b): one Undo
- * takes it all back, and its toast says what it left, still selected.
+ * no redo. "Archive N done" is one act (ADR 0098, decision 15): one Undo
+ * takes it all back, and its toast says what it left.
  * What is put back is the Thread's mark and its Later, never its Panes:
  * one brought back from the Archive opens none (#1069).
  */
@@ -115,7 +115,7 @@ function runSteps(run: Run, done: Undoable): void {
 }
 
 /** The toast, telling of `archives`, and of what the last act left, as
- * "1 asks you, still selected"; none takes it away. */
+ * "1 not reached (mac is away)"; none takes it away. */
 function tell(run: Run, archives: readonly Undoable[], left?: string): void {
   told = archives
   if (archives.length === 0) {

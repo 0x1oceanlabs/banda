@@ -58,24 +58,19 @@ export function firstAct(
  * lines are a card's in Your turn: its mark and title; "Project" and its
  * folder; its two acts. It is an option of the list (decision 13), which
  * keys pick, with no focus of its own: Enter does its first act; `S`,
- * `Z`, `U` and `X` do nothing, and Ctrl+A leaves it out, as they check
- * Threads alone (decision 15); Shift+F10 opens the Project's menu, as a
- * right click does. Its buttons, as a card's acts, are no Tab stop, and hidden
+ * `Z` and `U` do nothing, as they act on Threads alone; Shift+F10 opens
+ * the Project's menu, as a right click does. Its buttons, as a card's acts, are no Tab stop, and hidden
  * from a screen reader, which hears the card and has its keys.
  */
 export function ProjectCard({
   call,
   stop,
   picked,
-  checking = false,
 }: {
   call: ProjectCall
   /** Its key as a stop of the pick. */
   stop: string
   picked: boolean
-  /** The list is in check mode (decision 15), where a Project's card is
-   * never checked. */
-  checking?: boolean
 }) {
   const run = useRun()
   const open = useOpen()
@@ -89,7 +84,7 @@ export function ProjectCard({
   return (
     <ProjectMenu project={project} asks={asks}>
       <div
-        {...pickProps(stop, picked, checking ? false : undefined)}
+        {...pickProps(stop, picked)}
         {...{ [PROJECT_CARD]: project.id }}
         data-asks={asks}
         data-card=""

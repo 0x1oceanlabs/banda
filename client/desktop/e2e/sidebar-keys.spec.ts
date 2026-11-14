@@ -10,12 +10,9 @@
  * back to its card; S on a card that asks or works says why in a toast,
  * and the pick stays; the region `#sb-said` tells of a call and of inbox
  * zero (S7c), and the refusal and the Undo, dark and light, as
- * `sidebar-s7c-*.png`. Several at once (S10b): Shift+↓, X, Ctrl+A,
- * Ctrl+click and Shift+click check cards, S, Z and U act on them all as
- * one act, one Undo takes it back, and Esc, ✕ or a tab switch clears;
- * "Archive N done" on Your turn's head leaves what asks, failed or woke;
- * the bar, the head and the picker for three, dark and light, as
- * `sidebar-s10b-*.png`.
+ * `sidebar-s7c-*.png`. "Archive N done" on Your turn's head (S10b) leaves
+ * what asks, failed or woke, one act that one Undo takes back; the head,
+ * dark and light, as `sidebar-s10b-*.png`.
  *
  * Threads start from outside the Window, as `banda call` starts them: one
  * whose first message says "wait" works until the test ends, any other is
@@ -232,9 +229,9 @@ test("Esc goes out one layer a press: the picker, the title's field, the sidebar
   await expect(list).toBeFocused()
   await expect(sidebar).toBeVisible()
 
-  // 3, check mode, comes with its step (S10b); 4, the search, went with
-  // the sidebar's own (Roma, 2026-11-12). 6, docked: back to the Pane in
-  // focus, the sidebar stays.
+  // 3, check mode, and 4, the search, went with the sidebar's own (Roma,
+  // 2026-11-12 and 2026-11-14). 6, docked: back to the Pane in focus, the
+  // sidebar stays.
   await page.keyboard.press("Escape")
   await focusIs(page, "pane")
   await expect(sidebar).toBeVisible()
@@ -467,7 +464,7 @@ test("Undo by its key, S S Ctrl+Z, brings back the second card and the pick with
   await page.keyboard.press("Tab")
   await expect(list).toBeFocused()
   await expect(list).toHaveAccessibleDescription(
-    "S archives, Z puts off, U marks unread, X selects. Shift+F10 for more."
+    "S archives, Z puts off, U marks unread. Shift+F10 for more."
   )
   await picked(page, list, "please ask first")
 
@@ -589,122 +586,6 @@ test("a refusal's toast, and the Undo after Ctrl+Z, dark and light (ADR 0098, S7
   }
 })
 
-/** The selection's bar. */
-const barOf = (sidebar: Locator) =>
-  sidebar.getByRole("toolbar", { name: /selected$/ })
-
-/** The titles of the cards checked in `list`, top down. */
-const checkedIn = (list: Locator) =>
-  list
-    .locator("[data-card][data-checked]")
-    .evaluateAll((cards) =>
-      cards.map((card) => card.getAttribute("aria-label")!.split(",")[0])
-    )
-
-test("Shift+↓ ↓ checks three, S archives them all, one Ctrl+Z brings them back; X, Ctrl+A, Ctrl+click and Shift+click check, and Esc, ✕ and a tab switch clear (ADR 0098, S10b)", async () => {
-  test.setTimeout(240_000)
-  window = await startWindow()
-  const { page } = window
-  await firstThread(page)
-  const titles = [
-    "call one",
-    "call two",
-    "call three",
-    "call four",
-    "call five",
-  ]
-  for (const text of titles) await send(window, text)
-  const sidebar = sidebarOf(page)
-  const list = sidebar.getByRole("listbox")
-  const tab = (name: string) => tabOf(sidebar, name)
-  const bar = barOf(sidebar)
-  const said = page.locator("#sb-said")
-  await expect(list.locator("[data-card]")).toHaveCount(5)
-  await expect(bar).toBeHidden()
-  await leaveSidebar(page)
-
-  // Shift+↓ ↓: three checked, a check in each mark's place, the pick on
-  // the third, and the bar over the foot; the rest are not selected.
-  await tab("Inbox").focus()
-  await page.keyboard.press("Tab")
-  await picked(page, list, "call one")
-  await expect(list).toHaveAttribute("aria-multiselectable", "true")
-  await page.keyboard.press("Shift+ArrowDown")
-  await page.keyboard.press("Shift+ArrowDown")
-  await expect
-    .poll(() => checkedIn(list))
-    .toEqual(["call one", "call two", "call three"])
-  await expect(bar).toBeVisible()
-  await expect(bar).toHaveAccessibleName("3 selected")
-  await expect(cardOf(list, "call three")).toHaveAttribute("data-picked", "")
-  await expect(cardOf(list, "call four")).toHaveAttribute(
-    "aria-selected",
-    "false"
-  )
-  await expect(cardOf(list, "call one").locator("[data-check]")).toBeVisible()
-  await expect(said).toHaveText("3 selected")
-
-  // S archives all three, as one act: the pick goes on to the fourth,
-  // the bar goes, and the list keeps the focus.
-  await page.keyboard.press("s")
-  await expect(tab("Archive")).toHaveAccessibleName("Archive, 3")
-  for (const title of titles.slice(0, 3))
-    await expect(cardOf(list, title)).toHaveCount(0)
-  await expect(toastOf(page, "Archived 3")).toBeVisible()
-  await expect(bar).toBeHidden()
-  await picked(page, list, "call four")
-  expect(await focusOf(page)).toBe("list")
-
-  // One Ctrl+Z brings all three back, and the pick with the first.
-  await page.keyboard.press("Control+z")
-  await expect(tab("Archive")).toHaveAccessibleName("Archive")
-  for (const title of titles.slice(0, 3))
-    await expect(cardOf(list, title)).toBeVisible()
-  await picked(page, list, "call one")
-  expect(await focusOf(page)).toBe("list")
-
-  // X checks the pick and Space leaves it out; Ctrl+A checks every card;
-  // Esc clears, said, and the focus stays on the list.
-  await page.keyboard.press("x")
-  await expect.poll(() => checkedIn(list)).toEqual(["call one"])
-  await page.keyboard.press("Space")
-  await expect(bar).toBeHidden()
-  await page.keyboard.press("Control+a")
-  await expect.poll(() => checkedIn(list)).toEqual(titles)
-  await expect(bar).toHaveAccessibleName("5 selected")
-  await page.keyboard.press("Escape")
-  await expect(bar).toBeHidden()
-  await focusIs(page, "list")
-  await expect(said).toHaveText("Selection cleared")
-
-  // Ctrl+click checks a card and opens nothing; Shift+click checks the
-  // range from it. Tab goes into the bar, End to ✕, which clears, and the
-  // focus goes back to the list.
-  await cardOf(list, "call two").click({ modifiers: ["ControlOrMeta"] })
-  await cardOf(list, "call four").click({ modifiers: ["Shift"] })
-  await expect
-    .poll(() => checkedIn(list))
-    .toEqual(["call two", "call three", "call four"])
-  await focusIs(page, "list")
-  await picked(page, list, "call four")
-  await page.keyboard.press("Tab")
-  await expect(bar.getByRole("button", { name: "Archive" })).toBeFocused()
-  await page.keyboard.press("End")
-  const clear = bar.getByRole("button", { name: "Clear the selection" })
-  await expect(clear).toBeFocused()
-  await page.keyboard.press("Enter")
-  await expect(bar).toBeHidden()
-  await focusIs(page, "list")
-
-  // A tab switch clears it too.
-  await page.keyboard.press("x")
-  await expect(bar).toBeVisible()
-  await page.keyboard.press("4")
-  await page.keyboard.press("1")
-  await expect(bar).toBeHidden()
-  await expect.poll(() => checkedIn(list)).toEqual([])
-})
-
 test("Archive 3 done, on Your turn's head under the pointer, archives the cards that are done and leaves what asks, failed and woke; its toast's Undo brings them back (ADR 0098, S10b)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
@@ -764,7 +645,7 @@ test("Archive 3 done, on Your turn's head under the pointer, archives the cards 
   for (const title of done) await expect(cardOf(list, title)).toBeVisible()
 })
 
-test("check mode with its bar, Archive 3 done under the pointer, and the Later picker for 3 Threads, dark and light (ADR 0098, S10b)", async () => {
+test("Archive 3 done under the pointer, dark and light (ADR 0098, S10b)", async () => {
   test.setTimeout(300_000)
   window = await startWindow()
   const { page } = window
@@ -780,8 +661,6 @@ test("check mode with its bar, Archive 3 done under the pointer, and the Later p
   await send(window, "wait for the build")
   const sidebar = sidebarOf(page)
   const list = sidebar.getByRole("listbox")
-  const tab = (name: string) => tabOf(sidebar, name)
-  const bar = barOf(sidebar)
   await expect(list.locator("[data-card]")).toHaveCount(5)
   await leaveSidebar(page)
   // The calls' toast of the three done goes first, out of the shots.
@@ -796,39 +675,6 @@ test("check mode with its bar, Archive 3 done under the pointer, and the Later p
     await sidebar.screenshot({
       path: `test-results/sidebar-s10b-done-${mode}.png`,
     })
-
-    // Check mode: the three done, by Shift+↓ from the first of them.
-    await tab("Inbox").focus()
-    await page.keyboard.press("Tab")
-    await page.keyboard.press("Home")
-    await page.keyboard.press("ArrowDown")
-    await page.keyboard.press("Shift+ArrowDown")
-    await page.keyboard.press("Shift+ArrowDown")
-    await expect(bar).toHaveAccessibleName("3 selected")
     await leaveSidebar(page)
-    await sidebar.screenshot({
-      path: `test-results/sidebar-s10b-checks-${mode}.png`,
-    })
-
-    // Z: one picker for all three.
-    await page.keyboard.press("z")
-    const picker = pickerOf(page)
-    await expect(picker).toContainText("Later · 3 Threads")
-    await page.waitForTimeout(250)
-    await page.screenshot({
-      path: `test-results/sidebar-s10b-later-${mode}.png`,
-      animations: "disabled",
-    })
-    // Esc closes the picker, then clears the selection.
-    await page.keyboard.press("Escape")
-    await expect(picker).toBeHidden()
-    await expect(bar).toBeVisible()
-    await page.keyboard.press("Escape")
-    await expect(bar).toBeHidden()
-    await focusIs(page, "list")
-    // The next Esc gives the focus back to the Pane: the next look starts
-    // as this one did, with no ring.
-    await page.keyboard.press("Escape")
-    await expect.poll(() => focusOf(page)).not.toBe("list")
   }
 })

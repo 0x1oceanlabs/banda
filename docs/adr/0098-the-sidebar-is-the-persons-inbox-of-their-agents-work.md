@@ -191,6 +191,13 @@ From the audit (`2-code.md`):
       Unread and ✕. `S` `Z` `U` act on all of them; `Esc` clears. One
       Later time serves them all.
 
+    _Amended 2026-11-14 by Roma ("make it simpler"): the keys and the
+    pointer act on one card at a time, the one picked. There is no
+    selection of several cards: no `Ctrl`+click, `Shift`+click,
+    `Shift+↑↓` or `Ctrl+A`, no checks in the marks' place, no bar at the
+    foot, and `Esc` clears nothing. **Archive N done** on Your turn's
+    header stays, one act that its toast undoes._
+
 ### Projects
 
 16. **A Project has no list of its own in the sidebar.** What one does

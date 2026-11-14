@@ -57,11 +57,6 @@ export function zeroSaid(zero: Zero, now: number): string {
   ])
 }
 
-/** How many cards are checked: "3 selected", or "Selection cleared". */
-export function checkedSaid(count: number): string {
-  return count > 0 ? `${count} selected` : "Selection cleared"
-}
-
 /** A tab shown by its key: "Later, 5 Threads". */
 export function tabSaid(tab: Tab, count: number): string {
   const many = count === 1 ? "1 Thread" : `${count || "no"} Threads`

@@ -6,11 +6,10 @@ test("the list's hint names the keys in force, and leaves out one unbound (spec 
     "sidebar.archive-picked": "S",
     "sidebar.later-picked": "Z",
     "sidebar.unread-picked": "U",
-    "sidebar.select-picked": "X",
     "sidebar.menu-picked": "Shift+F10",
   }
   expect(hintOf((id) => banda[id])).toBe(
-    "S archives, Z puts off, U marks unread, X selects. Shift+F10 for more."
+    "S archives, Z puts off, U marks unread. Shift+F10 for more."
   )
   // Archive moved to E, and Unread with no key.
   const moved: Record<string, string> = {

@@ -5,10 +5,9 @@
  * one that sleeps, or Someday, with no time (ADR 0098, decision 12); ↑ ↓
  * and Enter pick. Its first line follows where the Thread stands, so Z
  * then Enter does what is most likely. A Thread that asks may be put off
- * too: it waits with its question (decision 11). Several Threads take one
- * time (decision 15): Wake now only if all of them sleep, When it's done
- * only if all of them work. It is the sidebar list's, and what is picked,
- * each Thread's App does, by its item actions (ADR 0087, decision 12).
+ * too: it waits with its question (decision 11). It is the sidebar
+ * list's, and what is picked, the Thread's App does, by its item actions
+ * (ADR 0087, decision 12).
  */
 import type { ProjectId } from "@banda/contract"
 import { works } from "@banda/ui/components/banda-mark"
@@ -40,12 +39,11 @@ import { type Preset, presets, whenOf } from "../calls/later-time"
 /** A Thread whose Later is being picked. */
 export type LaterThread = { project: ProjectId; listed: Listed }
 
-/** The Threads whose Later is being picked, one or several, what the
- * picker stands by, and what is told as something is picked: the
- * sidebar's cards it was opened for hear that their Person put them off
- * (ADR 0098, decision 6). */
+/** The Thread whose Later is being picked, what the picker stands by,
+ * and what is told as something is picked: the sidebar's card it was
+ * opened for hears that its Person put it off (ADR 0098, decision 6). */
 export type LaterTarget = {
-  targets: readonly LaterThread[]
+  thread: LaterThread
   anchor?: Element
   onPicked?: () => void
 }
@@ -62,10 +60,9 @@ const back: { to: Element | null; outside: boolean } = {
   outside: false,
 }
 
-/** Opens the picker for its Threads, by a row where `anchor` is given;
- * none, or no Thread, closes it. */
+/** Opens the picker for its Thread, by a row where `anchor` is given;
+ * none closes it. */
 export function pickLater(target: LaterTarget | undefined): void {
-  if (target?.targets.length === 0) target = undefined
   if (target && !picking.get()) {
     back.to = document.activeElement
     back.outside = false
@@ -108,8 +105,8 @@ const ICONS: Readonly<Record<NonNullable<Choice["icon"]>, ReactNode>> = {
 
 /** What the picker reads its lines from. */
 type Reading = {
-  /** The Threads it picks for, one or several. */
-  targets: readonly Listed[]
+  /** The Thread it picks for. */
+  listed: Listed
   now: number
   /** What the field reads as a time; none while it reads none. */
   typed?: number
@@ -128,19 +125,16 @@ function sleepsTill(listed: Listed, now: number) {
 }
 
 /**
- * The picker's lines for its `targets` at `now`, in order: what was
- * typed; then what their state makes likeliest, so Enter alone picks it:
- * Wake now where all of them sleep, the limit's reset for one held by it,
- * the end of their turn where all of them work; then the presets; and
- * last, set apart, Someday. What they all already sleep until is not
- * offered again.
+ * The picker's lines for its Thread at `now`, in order: what was typed;
+ * then what its state makes likeliest, so Enter alone picks it: Wake now
+ * where it sleeps, the limit's reset where it is held by it, the end of
+ * its turn where it works; then the presets; and last, set apart,
+ * Someday. What it already sleeps until is not offered again.
  */
 export function choicesOf(reading: Reading): Choice[] {
-  const { targets, now, typed, resets } = reading
-  const sleeping = targets.every((one) => asleep(one, now))
-  const tills = new Set(targets.map((one) => sleepsTill(one, now)))
-  // What they all sleep until now, if it has no time: not offered again.
-  const [already] = tills.size === 1 ? tills : []
+  const { listed, now, typed, resets } = reading
+  // What it sleeps until now, if it has no time: not offered again.
+  const already = sleepsTill(listed, now)
   const choices: Choice[] = []
   if (typed !== undefined)
     choices.push({
@@ -149,7 +143,7 @@ export function choicesOf(reading: Reading): Choice[] {
       picks: { until: typed },
       icon: "typed",
     })
-  if (sleeping)
+  if (asleep(listed, now))
     choices.push({ label: "Wake now", note: "", picks: "wake", icon: "wake" })
   if (resets !== undefined && resets > now)
     choices.push({
@@ -158,7 +152,7 @@ export function choicesOf(reading: Reading): Choice[] {
       picks: { until: resets, resume: true },
       icon: "limit",
     })
-  if (targets.every((one) => works(one.mark)) && already !== "done")
+  if (works(listed.mark) && already !== "done")
     choices.push({
       label: "When it's done",
       note: "the turn ends",
@@ -193,13 +187,13 @@ const TOP = {
     }),
 }
 
-/** The picker, open for the Threads `pickLater` asked for: what is picked
- * runs each one's App's Later, or its wake, by the Window's `run`. */
+/** The picker, open for the Thread `pickLater` asked for: what is picked
+ * runs its App's Later, or its wake, by the Window's `run`. */
 export function LaterPicker() {
   const run = useRun()
   const target = useStore(picking, now)
   const onClose = () => pickLater(undefined)
-  // Its App's, by what each does: the picker names none of its actions.
+  // Its App's, by what it does: the picker names none of its actions.
   const onLater = (
     { project, listed }: LaterThread,
     picked: Exclude<Picked, "wake">
@@ -235,15 +229,12 @@ export function LaterPicker() {
           className="w-72 gap-0 p-1.5"
         >
           <Picking
-            key={target.targets
-              .map(({ project, listed }) => `${project}:${listed.id}`)
-              .join(" ")}
-            targets={target.targets.map((one) => one.listed)}
+            key={`${target.thread.project}:${target.thread.listed.id}`}
+            listed={target.thread.listed}
             onPick={(picked) => {
               target.onPicked?.()
-              for (const one of target.targets)
-                if (picked === "wake") onWake(one)
-                else onLater(one, picked)
+              if (picked === "wake") onWake(target.thread)
+              else onLater(target.thread, picked)
               onClose()
             }}
           />
@@ -262,14 +253,14 @@ export function passedAt({ picks }: Choice, now: number): number | undefined {
     : undefined
 }
 
-/** The picker's lines, for one Thread or several. What is picked goes
+/** The picker's lines, for its Thread. What is picked goes
  * back by one prop, not by a Later's and a wake's: the sidebar list takes
  * no Thread's verb as a prop (ADR 0087, B4e). */
 function Picking({
-  targets,
+  listed,
   onPick,
 }: {
-  targets: readonly Listed[]
+  listed: Listed
   onPick: (picked: Picked) => void
 }) {
   const id = useId()
@@ -286,9 +277,7 @@ function Picking({
   const typed = text.trim() ? whenOf(text, now) : undefined
   // A Thread its usage limit holds will offer the reset first once the
   // list says when (`limitUntil`, E1b): `resets` is left out till then.
-  const choices = choicesOf({ targets, now, typed, presets: listedPresets })
-  const [one] = targets
-  const asking = targets.filter((each) => each.mark === "asking").length
+  const choices = choicesOf({ listed, now, typed, presets: listedPresets })
   // The icons' column, only where the list's own lines have one, so the
   // words start at the field's edge else; a time being typed moves none.
   const iconed = choices.some((one) => one.icon && one.icon !== "typed")
@@ -306,20 +295,11 @@ function Picking({
   return (
     <>
       <div className="truncate px-1.5 pt-0.5 pb-1.5 text-meta text-muted-foreground">
-        Later ·{" "}
-        <span className="text-foreground/80">
-          {targets.length === 1 && one
-            ? one.title
-            : `${targets.length} Threads`}
-        </span>
+        Later · <span className="text-foreground/80">{listed.title}</span>
       </div>
-      {asking > 0 && (
+      {listed.mark === "asking" && (
         <p className="px-1.5 pb-1.5 text-meta text-muted-foreground">
-          {targets.length === 1
-            ? "It waits with its question"
-            : asking === targets.length
-              ? "They wait with their questions"
-              : "Those that ask wait with their questions"}
+          It waits with its question
         </p>
       )}
       <Input

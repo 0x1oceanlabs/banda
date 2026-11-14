@@ -115,14 +115,6 @@ const LISTED: Listed[] = [
   },
   {
     rule: "design.4",
-    why: "Stays: forced colours, where the system's own say what is checked, as no theme's colour reaches there: the sidebar's checked cards.",
-    cases: [
-      "client/ui/src/styles/globals.css: Highlight",
-      "client/ui/src/styles/globals.css: HighlightText",
-    ],
-  },
-  {
-    rule: "design.4",
     why: "Stays: the Agent's pointer over a web page, outlined in white to read on any page.",
     cases: ["apps/browser/pane/src/BrowserPane.tsx: white"],
   },

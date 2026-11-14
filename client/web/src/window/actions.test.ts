@@ -188,12 +188,11 @@ test("the sidebar's keys are its scope's, none held with a mod (ADR 0098, decisi
       expect([key.alt, key.ctrl, key.super, key.mod]).toEqual(
         Array(4).fill(undefined)
       )
-  // Undo holds Ctrl, ⌘ on a Mac, as a field's own does, and so do Select
-  // all, Ctrl+A, and Delete's Ctrl+Backspace, ⌘⌫ (§2.7); no other.
+  // Undo holds Ctrl, ⌘ on a Mac, as a field's own does, and so does
+  // Delete's Ctrl+Backspace, ⌘⌫ (§2.7); no other.
   expect(
     keys.filter(({ keys: bound = [] }) => bound.some((key) => key.primary))
   ).toEqual([
-    expect.objectContaining({ id: "sidebar.select-all" }),
     expect.objectContaining({ id: "sidebar.undo" }),
     expect.objectContaining({ id: "sidebar.delete-picked" }),
   ])
@@ -207,15 +206,6 @@ test("the sidebar's keys are its scope's, none held with a mod (ADR 0098, decisi
   expect(keysOf("sidebar.delete-picked")).toEqual([
     { code: "Delete" },
     { code: "Backspace", primary: true },
-  ])
-  // Several at once (decision 15): X or Space checks the card picked,
-  // Ctrl+A every card shown.
-  expect(keysOf("sidebar.select-picked")).toEqual([
-    { code: "KeyX" },
-    { code: "Space" },
-  ])
-  expect(keysOf("sidebar.select-all")).toEqual([
-    { code: "KeyA", primary: true },
   ])
 })
 
