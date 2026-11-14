@@ -20,6 +20,7 @@ export type { Servers } from "./generated/terminal/Servers"
 export type { StartedBy } from "./generated/terminal/StartedBy"
 export type { Writing } from "./generated/terminal/Writing"
 export type { CursorStyle } from "./generated/terminal/CursorStyle"
+export type { Echo } from "./generated/terminal/Echo"
 
 /** How the terminal writes, as `banda look` gives it with no
  * `terminal.toml`: the look's font and size, ligatures, a blinking block. */
@@ -27,6 +28,7 @@ export const DEFAULT_WRITING: Writing = {
   font: null,
   size: null,
   ligatures: true,
+  echo: "auto",
   cursor: "block",
   blink: true,
 }

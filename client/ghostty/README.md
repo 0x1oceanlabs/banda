@@ -73,7 +73,12 @@ Import paths, so the files find each other here, and the tests import
   cursor's, it draws as T3's did. A canvas whose context was lost and
   restored draws every row again (`src/renderer.test.ts`;
   `e2e/terminal-pixels.spec.ts` compares a build's pixels with main's)
-  (ADR 0088, step P4).
+  (ADR 0088, step P4);
+- the surface draws letters ahead of the machine (`setAhead`, #1242):
+  `src/ahead.ts` puts them into a frame's snapshot as cells after the
+  cursor, underlined, so the renderer draws them as any others and the
+  terminal's own state never has them; the renderer draws their
+  underline fainter (`GhosttySnapshot.ahead`).
 
 T3's tests of its own terminal drawer are not brought: they test T3's
 transport, not the adapter. `tools/pixel-fuzz/run.mjs` fuzzes the

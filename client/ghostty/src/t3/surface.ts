@@ -22,6 +22,7 @@ import {
   type GhosttyCellMetrics,
 } from "./renderer";
 import symbolsFontUrl from "./fonts/SymbolsNerdFontMono-Regular.woff2?url";
+import { withAhead } from "../ahead";
 import { isMonospaceFamily } from "./lib/shared";
 import { observeResize } from "./lib/observeResize";
 
@@ -618,6 +619,8 @@ export class GhosttyTerminalSurface {
   private compositionInputToSuppress: string | null = null;
   private compositionSuppressionTimer: number | null = null;
   private cursorOn = true;
+  /** Banda: the letters drawn ahead of the machine (#1242). */
+  private ahead = "";
   /** Banda: what the canvas shows, so a frame draws only what changed (ADR 0088, step P4). */
   private readonly renderer = new GhosttyRenderer();
   private forceFullRender = true;
@@ -844,6 +847,15 @@ export class GhosttyTerminalSurface {
         : () => this.cancelSynchronizedRenderTimer(),
     );
     this.synchronizeMouseTrackingState();
+    this.cursorOn = true;
+    this.requestRender();
+  }
+
+  /** Banda: the letters to draw after the cursor, ahead of the machine
+   * (#1242); "" for none. */
+  setAhead(text: string): void {
+    if (this.disposed || text === this.ahead) return;
+    this.ahead = text;
     this.cursorOn = true;
     this.requestRender();
   }
@@ -2160,7 +2172,8 @@ export class GhosttyTerminalSurface {
     this.refreshHoveredLink();
     this.renderer.render({
       context: this.context,
-      snapshot: this.snapshot,
+      // Banda: with the letters drawn ahead of the machine (#1242).
+      snapshot: withAhead(this.snapshot, this.ahead),
       metrics: this.metrics,
       fontSize: this.fontSize,
       fontFamily: this.fontFamily,

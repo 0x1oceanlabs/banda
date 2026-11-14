@@ -536,7 +536,7 @@ mod classes {
         ),
         (
             "terminal.toml",
-            &[(Device, &["font", "size", "ligatures", "cursor"])],
+            &[(Device, &["font", "size", "ligatures", "echo", "cursor"])],
         ),
         (
             "harnesses.toml",
