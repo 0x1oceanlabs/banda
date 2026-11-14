@@ -69,7 +69,7 @@ import {
 import { MenuRow, useMenuProjects } from "../titles/ThreadMenu"
 import { actsOf } from "./acts"
 import type { Row } from "./rows"
-import { ACT_LOOK } from "./CardView"
+import { ACT_LOOK } from "./cards/ThreadCard"
 import { refused } from "./refusals"
 import { type Does, keyId } from "./keys"
 import { useOpen } from "./open"

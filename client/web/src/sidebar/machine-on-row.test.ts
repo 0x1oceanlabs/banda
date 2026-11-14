@@ -5,7 +5,7 @@ import { thisNamed } from "@banda/core"
 import type { Stand } from "@banda/ui/status"
 import { expect, test } from "vitest"
 import type { Row } from "./rows"
-import { cardOf } from "./card"
+import { cardOf } from "./cards/model"
 import { machineOnRow, type OnRow } from "./machine-on-row"
 
 const arc: Named = { name: "arc", icon: "server" }
