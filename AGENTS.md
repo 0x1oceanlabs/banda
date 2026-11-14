@@ -48,6 +48,47 @@ UNIX composition + deep modules + explicit contracts.
 - The decisions: [`docs/adr/`](docs/adr/). A change that contradicts an ADR
   needs a new ADR first.
 
+## What is in play
+
+Banda is built by one Person and many Agents, on tracks:
+[the three tracks](docs/research/2026-11-13-three-tracks.md) say which,
+in what order and where they meet, and
+[the roadmap](docs/research/2026-11-08-roadmap-in-slices.md) what each
+slice is.
+
+- A session builds a slice of its track, or the task Roma gave it. A new
+  feature outside the tracks is Roma's call first.
+- What you notice outside your slice becomes an issue, not a PR: a bug, a
+  rule held only in words, a part worth rewriting. Two things you fix at
+  once, in a PR of their own: a red `main`, and a few lines in the files
+  you are changing anyway.
+- A slice is done when it was tried, not when it merged. The PR says what
+  was tried and where, and what was not: a system, a machine, a real
+  Harness. What only Roma can try, it lists for Roma.
+
+## Beside other sessions
+
+Other sessions change this repository while you do, some sixty PRs a
+day, and you cannot count on reaching one. The repository is where
+sessions meet:
+
+- **Before you start,** fetch `main` and look for an open PR on the files
+  or the thing you will change: `gh pr list --search "<word>"`. If one
+  is there, build on it, wait for it or take another slice. Never write
+  the second version of a thing.
+- **Keep a PR small and short-lived,** and rebase it onto `main` before
+  it opens. A branch a day old meets a `main` sixty PRs on.
+- **In another track's code,** change only what your slice needs and say
+  so in the PR. More than that is an issue for that track.
+- **In a file many touch** (`client/desktop/src/main.ts`,
+  `kernel/src/api.rs`, a test's list), change your lines where they
+  are: no move, no reformat, no reorder.
+- **A test you did not write fails:** read why before you change it. It
+  may hold a rule your change broke. If `main` is red from a merge that
+  is not yours, fix it in a PR of its own that names that commit.
+- **A PR that waits for Roma** says so in its first line, with what it
+  waits for, and is not armed to merge itself.
+
 ## Borders are held by checks
 
 Who may import, name or call whom is held by a test, not by this page:
@@ -256,7 +297,17 @@ page
 - Tests are `@effect/vitest` beside the code (`src/*.test.ts`): a fake
   layer, or `TestClock` for time.
 
-## Research
+## Where things are written
 
-`docs/research/` keeps dated evidence with its source and limits. It is
-not a decision; ADRs are.
+Write the least that the next session must read
+([#1800](https://github.com/0x1oceanlabs/banda/issues/1800)).
+
+- **An ADR** is for a decision that is hard to undo or that binds more
+  than one part: a protocol, a format kept on disk, a border, a right. A
+  step of work, a look or an order of work is no ADR.
+- **A PR** says what changed and why, what was tried and what was not.
+- **An issue** holds a plan, and what was found and not done.
+- **`docs/architecture.md`** follows the code: a change to the shape
+  changes it in the same PR.
+- **`docs/research/`** keeps dated evidence with its source and limits.
+  It is not a decision; ADRs are.
