@@ -120,11 +120,12 @@ PR.
 - **The sidebar** lists every Thread of every Project, arranged as the
   Person's keys say (ADR 0008, as ADR 0098 amends it): grouped by Project
   or not at all; Your turn oldest or newest first; Open and the Working
-  shelf in the Inbox or not; every card of three lines.
+  shelf in the Inbox or not; cards of three, two or one lines, the same
+  everywhere.
   `order.ts` is the one order, from the rows of `rows.ts`, laid out by
   `inbox.ts`. `banda look` resolves the keys from `sidebar.toml`
-  (`platform/look/src/sidebar.rs`; a file that still names a preset, a
-  card's lines or `group = "machine"` reads as one list of three-line
+  (`platform/look/src/sidebar.rs`; a file that still names a preset,
+  `card = "auto"` or `group = "machine"` reads as one list of three-line
   cards, and is told so), and the view menu writes them into the file, keeping the Person's other keys and
   comments. The sidebar
   knows nothing of Threads: each module's Watch reports a `Listed` per

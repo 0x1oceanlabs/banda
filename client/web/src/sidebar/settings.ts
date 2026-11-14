@@ -8,7 +8,7 @@ import type { GroupBy, Sidebar } from "@banda/contract/sidebar"
 /** What the list needs of the sidebar: its keys, not where they came from. */
 export type Settings = Pick<
   Sidebar,
-  "group" | "inbox" | "sort" | "projects" | "machines"
+  "group" | "card" | "inbox" | "sort" | "projects" | "machines"
 >
 
 /** Each way to group the list, in the view menu's words. */

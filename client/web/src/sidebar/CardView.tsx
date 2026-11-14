@@ -93,8 +93,8 @@ export const ACT_LOOK: Readonly<
 }
 
 /**
- * A sidebar card (ADR 0098, decision 8), drawn from its model
- * (`card.ts`): three lines, each a left and a right, lines 2 and 3
+ * A sidebar card (ADR 0098, decisions 8 and 9), drawn from its model
+ * (`card.ts`): three, two or one lines, each a left and a right, lines 2 and 3
  * under the title, past the mark. A child under its parent starts with ↳,
  * and its lines go in by as much (decision 24). Colour is only on a
  * call's mark and time. Its times are drawn again as each minute begins,
@@ -136,6 +136,7 @@ export function Card({
   const onOpen = useOpenRow(row)
   const now = useMinute()
   const spoken = spokenOf(card, now)
+  const one = card.lines.length === 1
   // One being named has none.
   const shown = field ? NO_ACTS : acts
   // A card with no acts around it is its row itself, as the list's glance
@@ -159,7 +160,7 @@ export function Card({
         card.away && "opacity-55",
         // It stays while the pointer is on an act.
         HOVER_FILL,
-        "py-1.5",
+        one ? "py-1" : "py-1.5",
         // The open Thread's card: a fill, with no shadow and no border.
         current && "bg-foreground/8 before:hidden"
       )}
@@ -187,7 +188,10 @@ export function Card({
         <span
           aria-hidden
           data-acts=""
-          className="absolute top-1.5 right-2 flex items-center gap-0.5"
+          className={cn(
+            "absolute right-2 flex items-center gap-0.5",
+            one ? "top-1" : "top-1.5"
+          )}
         >
           {shown.map(({ act, key, note, run }) => {
             const { icon: Icon, name } = ACT_LOOK[act]
@@ -266,14 +270,15 @@ function CardLines({
   )
   // A child under its parent: ↳ first, its lines in by as much.
   const under = card.child?.under === true
+  const three = card.lines.length === 3
   return card.lines.map((line, index) => {
     const first = index === 0
-    // #1160's mark: at the start of line 3's right, never at line 1's
-    // right, where the acts show.
-    const strayed = card.strayed && index === 2
-    const right = (strayed || line.right.length > 0) && (
+    // #1160's mark: at the start of line 3's right; with fewer lines,
+    // right after the title; never at line 1's right, where the acts show.
+    const strayed = card.strayed && index === (three ? 2 : 0)
+    const right = ((strayed && three) || line.right.length > 0) && (
       <>
-        {strayed && <Strayed />}
+        {strayed && three && <Strayed />}
         {line.right.map(slot)}
       </>
     )
@@ -291,6 +296,7 @@ function CardLines({
       >
         {first && under && <ChildArrow className="w-2.5" />}
         {line.left.map(slot)}
+        {strayed && !three && <Strayed />}
         {room ? (
           <span className="ml-auto grid shrink-0 items-center justify-items-end">
             <span
