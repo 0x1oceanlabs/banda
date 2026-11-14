@@ -248,10 +248,10 @@
      read; the Mark keeps --woke. */
   --woke-text: color-mix(in oklab, var(--woke) 60%, black);
   /* How the sidebar's list moves (ADR 0098, S5c), by the design kit's
-     names: what is quick (a hover coming in, a row going, a ghost's
-     crossfade), a hover going, what comes (a row, a dim), and what is
-     slow (inbox zero's words, a machine away and back). What comes eases
-     in, what goes eases out; only opacity moves (ADR 0088, decision 2). */
+     names: what is quick (a hover coming in), a hover going, what comes
+     (a row, a dim), and what is slow (a machine away and back). What
+     comes eases in, what goes eases out; only opacity moves (ADR 0088,
+     decision 2). */
   --dur-fast: 120ms;
   --dur-out: 80ms;
   --dur: 200ms;

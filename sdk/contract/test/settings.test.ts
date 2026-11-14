@@ -53,10 +53,10 @@ test("the sidebar's view is a choice of groups and of a card's lines, and switch
   expect(values("group")).toEqual(["none", "project", "machine"])
   expect(values("card")).toEqual(["auto", 3, 2, 1])
   expect(values("inbox.order")).toEqual(["oldest", "newest"])
-  for (const key of ["inbox.open", "inbox.working", "hold.still"])
+  for (const key of ["inbox.open", "inbox.working"])
     expect(control(key)).toEqual({ kind: "switch" })
   // What ADR 0098 put out of use is no row.
-  for (const gone of ["group.by", "row.lines", "projects.list"])
+  for (const gone of ["group.by", "row.lines", "projects.list", "hold.still"])
     expect(control(gone)).toBeUndefined()
 })
 

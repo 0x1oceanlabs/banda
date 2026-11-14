@@ -12,7 +12,6 @@
  *           (`useOrderNow`, `byOrder`, `placeIn`); the logo's words
  *   takes   its keys' scope and list, which the Window registers; a tab
  *           to show; a width kept; a key of `sidebar.toml` to write
- *   holds   its list still while a part outside it is open (`useHoldWhile`)
  *
  * What takes no part of the page comes first, then the counts, whose code
  * reaches neither the registry nor the Window's actions: both name these
@@ -26,7 +25,6 @@ export { byOrder, placeIn, useOrderNow } from "./order"
 export { countsWidget } from "./Counts"
 export { logoName, logoWords } from "./count"
 export { writeSidebar } from "./write-setting"
-export { useHoldWhile } from "./useHold"
 export { SmallInbox, useInboxCount } from "./SmallInbox"
 export { LaterPicker, pickLater } from "./LaterPicker"
 export { SaidRegion } from "./SaidRegion"

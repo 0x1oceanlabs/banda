@@ -4,14 +4,13 @@
  * grey with "+ N more", Later by day, the Archive, inbox zero in words and
  * each tab empty. Each state is screenshot in the dark and the light, on
  * glass and on a solid desk, at 1440×900, as `sidebar-s5b-*.png`. And the
- * list holding still under the pointer (ADR 0098, S5c): what comes waits,
- * what leaves stays dimmed in its slot, and both land as the pointer
- * leaves, screenshot as a strip of three frames, `sidebar-s5c-*.png`.
+ * list's order kept under the pointer (ADR 0098, decision 6, as amended
+ * 2026-11-14): what comes waits for the pointer to leave, and what left
+ * goes at once.
  * And a card's acts under the pointer (ADR 0098, S7a): Archive at once,
- * a ghost line in its slot until the pointer leaves and the toast that
- * takes it back, Later's picker at the card, an asking card's Later
- * alone; each place's card at rest and under the pointer, the ghost line
- * and the toast, as `sidebar-s7a-*.png`. And a card's menu (ADR 0098,
+ * with the toast that takes it back, Later's picker at the card, an
+ * asking card's Later alone; each place's card at rest and under the
+ * pointer, and the toast, as `sidebar-s7a-*.png`. And a card's menu (ADR 0098,
  * S10a): a right click opens it at the pointer, Shift+F10 and the Menu
  * key at the card picked; Delete… is the Archive's alone and asks first,
  * Cancel in focus; the menu on a done, a working and an archived card and
@@ -57,19 +56,14 @@ test.afterEach(async () => {
 const idOf = (window: Window, title: string) => threadNamed(window, title)?.id
 
 /** Waits until the Person's Threads are Your turn's head and `titles`, in
- * that order, with nothing between, as the window draws them, and the
- * batch that drew them is over. The engine says a Thread is done before
- * the window's list has it there: the list may draw it Open first, before
- * its turn begins, then Working, a batch each. What a batch takes away,
- * as the hairline above Open, the Working head or inbox zero, fades in its
- * slot for a moment, and a slot that closes once the pointer is on the
- * list moves the cards under it, which the hold never stops. */
+ * that order, with nothing between, as the window draws them. The engine
+ * says a Thread is done before the window's list has it there: the list
+ * may draw it Open first, before its turn begins, then Working. */
 async function landed(sidebar: Locator, titles: string[]) {
   await expect(placeOf(sidebar, "Threads")).toHaveText([
     /^Your turn/,
     ...titles.map((title) => new RegExp(title)),
   ])
-  await expect(sidebar.locator("[data-going]")).toHaveCount(0)
 }
 
 /** The colour `element`'s text is drawn in. */
@@ -133,7 +127,7 @@ async function wide(window: Window) {
 }
 
 /** The window as it is now, in each look, as `sidebar-s5b-<name>-…`. The
- * pointer is away from the list, which holds still under it. */
+ * pointer is away from the list, which keeps its order under it. */
 async function shots(window: Window, name: string) {
   const { page, dir } = window
   const html = page.locator("html")
@@ -399,136 +393,45 @@ test("inbox zero says how many work and when the next wakes, once a week how man
   await expect(someday).toBeHidden()
 })
 
-test("a call that comes while the pointer is on the list waits until the pointer leaves, and no pill counts it (ADR 0098, S5c)", async () => {
+test("under the pointer the list keeps its order: a call that comes waits, a card that left goes at once, and off the list the new order shows; no pill counts it (ADR 0098, decision 6)", async () => {
   test.setTimeout(180_000)
   window = await startWindow()
   const { page } = window
   await firstThread(page)
   await wide(window)
-  await send(window, "call one")
-  await send(window, "call two")
-  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const rows = sidebar.getByRole("tabpanel").locator("[data-row]")
-  const come = rows.filter({ hasText: "call three" })
-  const pill = sidebar.getByText(/\d+ updates?/)
-  await landed(sidebar, ["call one", "call two"])
-
-  // The pointer rests on the list: the call that comes waits, though the
-  // Inbox's tab counts it at once, and no card moves.
-  await rows.first().hover()
-  const held = await topsOf(rows)
-  await send(window, "call three")
-  await expect(
-    sidebar.getByRole("tab", { name: /^Inbox/ })
-  ).toHaveAccessibleName("Inbox, 3")
-  await page.waitForTimeout(1_000)
-  await expect(come).toHaveCount(0)
-  expect(await topsOf(rows)).toEqual(held)
-  await expect(pill).toHaveCount(0)
-
-  // Away, it comes in the next batch, as silently.
-  await leaveSidebar(page)
-  await expect(come).toHaveCount(1)
-  await expect(rows).toHaveCount(3)
-  await expect(pill).toHaveCount(0)
-})
-
-/** `frames`, screenshots of one height, side by side, 8 px apart, into
- * `path`: drawn on a canvas in the page, from their bytes. */
-async function strip(page: Page, frames: Buffer[], path: string) {
-  const drawn = await page.evaluate(
-    async (shots) => {
-      const images = await Promise.all(
-        shots.map((shot) =>
-          createImageBitmap(
-            new Blob([Uint8Array.from(atob(shot), (c) => c.charCodeAt(0))], {
-              type: "image/png",
-            })
-          )
-        )
-      )
-      const gap = 8
-      const canvas = document.createElement("canvas")
-      canvas.width =
-        images.reduce((sum, image) => sum + image.width, 0) +
-        gap * (images.length - 1)
-      canvas.height = Math.max(...images.map((image) => image.height))
-      const context = canvas.getContext("2d")!
-      let x = 0
-      for (const image of images) {
-        context.drawImage(image, x, 0)
-        x += image.width + gap
-      }
-      return canvas.toDataURL("image/png").split(",")[1]!
-    },
-    frames.map((frame) => frame.toString("base64"))
-  )
-  writeFileSync(path, Buffer.from(drawn, "base64"))
-}
-
-test("a Thread archived elsewhere while the list holds stays in its slot, dimmed and saying Archived, and goes as the pointer leaves; in the dark and the light, as a strip of three frames (ADR 0098, S5c)", async () => {
-  test.setTimeout(240_000)
-  window = await startWindow()
-  const { page, dir } = window
-  await firstThread(page)
-  await wide(window)
-  const calls = ["call one", "call two", "call three", "call four"]
+  const calls = ["call one", "call two", "call three"]
   for (const text of calls) await send(window, text)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   const rows = sidebar.getByRole("tabpanel").locator("[data-row]")
-  const archive = sidebar.getByRole("tab", { name: /^Archive/ })
-  const html = page.locator("html")
+  const titled = (title: string) => rows.filter({ hasText: title })
+  const pill = sidebar.getByText(/\d+ updates?/)
   await landed(sidebar, calls)
-  // The fades played ten times slower as the hold lets go, for the strip's
-  // middle frame to catch one on its way.
-  const cdp = await page.context().newCDPSession(page)
-  await cdp.send("Animation.enable")
-  const looks = [
-    ["dark", "call two"],
-    ["light", "call three"],
-  ] as const
-  for (const [i, [mode, title]] of looks.entries()) {
-    writeFileSync(join(dir, "config/look.toml"), `mode = "${mode}"\n${GLASS}`)
-    if (mode === "dark") await expect(html).toHaveClass(/\bdark\b/)
-    else await expect(html).not.toHaveClass(/\bdark\b/)
-    await page.waitForTimeout(250)
-    const box = (await sidebar.boundingBox())!
-    const frame = () => page.screenshot({ clip: box })
 
-    // Held: archived on another machine, it stays in its slot, at half,
-    // saying where it went, with no action of its own; no card moves.
-    await rows.first().hover()
-    const held = await topsOf(rows)
-    call(window, "agents.archive", { thread: idOf(window, title) })
-    await expect(archive).toHaveAccessibleName(`Archive, ${i + 1}`)
-    const gone = rows.filter({ hasText: title })
-    await expect(gone).toContainText("Archived")
-    await expect
-      .poll(() =>
-        gone.evaluate(
-          (one) =>
-            getComputedStyle(one.closest("[data-key]")!.firstElementChild!)
-              .opacity
-        )
-      )
-      .toBe("0.5")
-    await expect(gone.locator("[data-act]")).toHaveCount(0)
-    expect(await topsOf(rows)).toEqual(held)
-    const frames = [await frame()]
+  // The pointer rests on the list: the call that comes waits, though the
+  // Inbox's tab counts it at once, and no card moves.
+  await titled("call three").hover()
+  const held = await topsOf(rows)
+  await send(window, "call four")
+  await expect(
+    sidebar.getByRole("tab", { name: /^Inbox/ })
+  ).toHaveAccessibleName("Inbox, 4")
+  await page.waitForTimeout(1_000)
+  await expect(titled("call four")).toHaveCount(0)
+  expect(await topsOf(rows)).toEqual(held)
+  await expect(pill).toHaveCount(0)
 
-    // Let go: it fades out where it stood, and the rows below close up.
-    await cdp.send("Animation.setPlaybackRate", { playbackRate: 0.1 })
-    await leaveSidebar(page)
-    await page.waitForTimeout(600)
-    frames.push(await frame())
-    await cdp.send("Animation.setPlaybackRate", { playbackRate: 1 })
-    await expect(gone).toHaveCount(0)
-    await expect(rows).toHaveCount(3 - i)
-    await page.waitForTimeout(400)
-    frames.push(await frame())
-    await page.screenshot({ path: `test-results/sidebar-s5c-${mode}.png` })
-    await strip(page, frames, `test-results/sidebar-s5c-${mode}-strip.png`)
-  }
+  // Archived on another machine, a card goes at once, with no word in its
+  // place; the rest keep their order, and the call still waits.
+  call(window, "agents.archive", { thread: idOf(window, "call one") })
+  await expect(titled("call one")).toHaveCount(0)
+  await expect(rows).toHaveText([/call two/, /call three/])
+  await expect(sidebar.getByText("Archived", { exact: true })).toHaveCount(0)
+  await expect(titled("call four")).toHaveCount(0)
+
+  // Away, the list is drawn as it is, as silently.
+  await leaveSidebar(page)
+  await expect(rows).toHaveText([/call two/, /call three/, /call four/])
+  await expect(pill).toHaveCount(0)
 })
 
 /** The window in `mode`, on its glass, with no motion, so what the
@@ -564,8 +467,7 @@ async function cardShot(page: Page, row: Locator, path: string) {
   })
 }
 
-/** The cards of `scope` whose title is `title`, as the list draws them,
- * a ghost's too. */
+/** The cards of `scope` whose title is `title`, as the list draws them. */
 const rowsNamed = (scope: Locator, title: string) =>
   scope.locator("[data-row]").filter({ hasText: title })
 
@@ -574,7 +476,7 @@ const rowsNamed = (scope: Locator, title: string) =>
 const actOf = (scope: Locator, title: string, name: string) =>
   rowsNamed(scope, title).locator(`[data-acts] [aria-label="${name}"]`)
 
-test("a card's acts: Archive acts at once, its ghost line holds the slot until the pointer leaves, and Archived · Undo brings it back; Later opens the picker at the card, whose ghost's Undo wakes it; an asking card offers Later alone (ADR 0098, S7a)", async () => {
+test("a card's acts: Archive acts at once, the card goes, and Archived · Undo brings it back where it was; Later opens the picker at the card, which goes once a time is picked; an asking card offers Later alone (ADR 0098, S7a)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
   const { page } = window
@@ -614,32 +516,22 @@ test("a card's acts: Archive acts at once, its ghost line holds the slot until t
   await expect(two.locator("[data-acts-time]")).toHaveCSS("opacity", "0")
   const held = await topsOf(rows)
 
-  // Archive acts at once: the Archive's tab counts it, a ghost line stands
-  // in its slot, and the toast says so, with Undo. No card moves while the
-  // pointer stays on the list.
+  // Archive acts at once: the Archive's tab counts it, the card goes,
+  // under the pointer too, and the toast says so, with Undo, which brings
+  // it back where it was.
   await archive.click()
   await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
-  const ghost = panel.locator("[data-key] > p").filter({ hasText: /^Archived/ })
-  await expect(ghost).toHaveText("Archived·Undo")
-  await expect(ghost.getByRole("button", { name: "Undo" })).toBeVisible()
+  await expect(rowsNamed(panel, "call two")).toHaveCount(0)
+  await expect(rows).toHaveCount(3)
   const toast = toastsOf(page)
     .getByRole("listitem")
     .filter({ hasText: "Archived" })
   await expect(toast).toBeVisible()
-  await expect(toast.getByRole("button", { name: "Undo" })).toBeVisible()
-  await rowsNamed(panel, "call three").hover()
-  await page.waitForTimeout(500)
-  expect(await topsOf(rows)).toEqual(held)
-  await expect(rowsNamed(panel, "call two")).toHaveCount(1)
-
-  // The pointer leaves: the slot closes. The toast's Undo brings it back.
-  await leaveSidebar(page)
-  await expect(rowsNamed(panel, "call two")).toHaveCount(0)
-  await expect(rows).toHaveCount(3)
   await toast.getByRole("button", { name: "Undo" }).click()
   await expect(tab("Archive")).toHaveAccessibleName("Archive")
   await expect(rowsNamed(panel, "call two")).toHaveCount(1)
-  await expect(ghost).toHaveCount(0)
+  await leaveSidebar(page)
+  expect(await topsOf(rows)).toEqual(held)
 
   // Later opens the picker at the card: beside it, level with its top.
   const one = rowsNamed(panel, "call one")
@@ -651,22 +543,16 @@ test("a card's acts: Archive acts at once, its ghost line holds the slot until t
   const box = (await picker.boundingBox())!
   expect(box.x).toBeGreaterThanOrEqual(card.x + card.width)
   expect(Math.abs(box.y - card.y)).toBeLessThanOrEqual(8)
-  // Picked, its ghost line says till when; the ghost's Undo wakes it, and
-  // it is back in its slot at once.
+  // Picked, the card goes to Later at once.
   const field = picker.getByRole("textbox", { name: "When it comes back" })
   await field.fill("2h")
   await field.press("Enter")
   await expect(tab("Later")).toHaveAccessibleName("Later, 1")
-  const put = panel.locator("[data-key] > p").filter({ hasText: /^Later · / })
-  await expect(put).toHaveText(/^Later · (\S+ )?\d+:\d\d·Undo$/)
-  await put.getByRole("button", { name: "Undo" }).click()
-  await expect(tab("Later")).toHaveAccessibleName("Later")
-  await expect(put).toHaveCount(0)
-  await expect(rowsNamed(panel, "call one")).toHaveCount(1)
-  expect(await topsOf(rows)).toEqual(held)
+  await expect(rowsNamed(panel, "call one")).toHaveCount(0)
+  await expect(rows).toHaveCount(3)
 })
 
-test("each place's card at rest and under the pointer, a ghost line and the toast, dark and light (ADR 0098, S7a)", async () => {
+test("each place's card at rest and under the pointer, and the toast, dark and light (ADR 0098, S7a)", async () => {
   test.setTimeout(300_000)
   window = await startWindow()
   const { page } = window
@@ -733,7 +619,7 @@ test("each place's card at rest and under the pointer, a ghost line and the toas
     await leaveSidebar(page)
   }
 
-  // A ghost line and the toast, each look its own card archived.
+  // The toast, each look its own card archived.
   for (const [mode, title] of [
     ["dark", "Bench the window tests"],
     ["light", "Review the sidebar spec"],
@@ -743,19 +629,14 @@ test("each place's card at rest and under the pointer, a ghost line and the toas
     const row = rowsNamed(panel, title)
     await row.hover()
     await actOf(panel, title, "Archive").click()
-    const ghost = panel
-      .locator("[data-key] > p")
-      .filter({ hasText: /^Archived/ })
-    await expect(ghost).toBeVisible()
+    await expect(row).toHaveCount(0)
     await expect(
       toastsOf(page).getByRole("listitem").filter({ hasText: "Archived" })
     ).toBeVisible()
-    await cardShot(page, ghost, `test-results/sidebar-s7a-ghost-${mode}.png`)
     await page.screenshot({
       path: `test-results/sidebar-s7a-toast-${mode}.png`,
     })
     await leaveSidebar(page)
-    await expect(ghost).toHaveCount(0)
     await toastsOf(page).getByRole("button", { name: "Undo" }).click()
     await expect(rowsNamed(panel, title)).toHaveCount(1)
   }
@@ -789,7 +670,7 @@ test("a card's menu: a right click opens it at the pointer, Shift+F10 and the Me
   await expect(tab("Archive")).toHaveAccessibleName("Archive, 2")
   await landed(sidebar, ["Bench the window tests", "Review the sidebar spec"])
 
-  // A right click: the menu at the pointer, the list holding still; no
+  // A right click: the menu at the pointer; no
   // Delete… outside the Archive.
   const bench = cardOf(list, "Bench the window tests")
   const at = (await bench.boundingBox())!

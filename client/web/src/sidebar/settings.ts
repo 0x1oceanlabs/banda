@@ -9,14 +9,7 @@ import type { GroupBy, Sidebar } from "@banda/contract/sidebar"
 /** What the list needs of the sidebar: its keys, not where they came from. */
 export type Settings = Pick<
   Sidebar,
-  | "preset"
-  | "group"
-  | "card"
-  | "inbox"
-  | "hold"
-  | "sort"
-  | "projects"
-  | "machines"
+  "preset" | "group" | "card" | "inbox" | "sort" | "projects" | "machines"
 >
 
 /** What Banda's presets are, in a few words, for Settings' preset row. */

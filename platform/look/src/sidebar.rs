@@ -184,9 +184,6 @@ pub struct SidebarSettings {
     /// What the Inbox shows, and in what order.
     #[serde(default)]
     pub inbox: InboxSettings,
-    /// How the list keeps still.
-    #[serde(default)]
-    pub hold: HoldSettings,
     /// Their order in a section.
     #[serde(default)]
     pub sort: SortSettings,
@@ -214,14 +211,6 @@ pub struct InboxSettings {
     pub open: Option<bool>,
     /// The Working shelf in the Inbox, under Open.
     pub working: Option<bool>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct HoldSettings {
-    /// The order keeps still under the pointer: what is new takes its
-    /// place when the pointer leaves.
-    pub still: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -291,7 +280,6 @@ pub struct Sidebar {
     pub group: GroupBy,
     pub card: Card,
     pub inbox: Inbox,
-    pub hold: Hold,
     pub sort: Sort,
     pub projects: Projects,
     pub bar: BarCounts,
@@ -309,14 +297,6 @@ pub struct Inbox {
     pub open: bool,
     /// The Working shelf shows, under Open.
     pub working: bool,
-}
-
-/// How the list keeps still (ADR 0098, decision 6).
-#[derive(Clone, Debug, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "sidebar/")]
-pub struct Hold {
-    /// The order keeps still under the pointer.
-    pub still: bool,
 }
 
 /// How the window names the machines (ADR 0095): with no other machine
@@ -400,8 +380,9 @@ const RENAMED: &[Renamed] = &[
 /// What ADR 0098 put out of use: the presets' sections and rows, the
 /// list of Projects (decisions 7, 9 and 16), and a Project's New Thread,
 /// as the sidebar starts no Thread (decision 19, as Roma amended it on
-/// 2026-11-12). A file that still says them is told so, and the rest of
-/// it holds.
+/// 2026-11-12), and `[hold]`, as the order always keeps still under the
+/// pointer (decision 6, as Roma amended it on 2026-11-14). A file that
+/// still says them is told so, and the rest of it holds.
 const RETIRED: &[Retired] = &[
     Retired {
         at: "group",
@@ -412,6 +393,11 @@ const RETIRED: &[Retired] = &[
         at: "row",
         table: true,
         says: "[row] is no longer used: card = \"auto\", 3, 2 or 1 says a card's lines",
+    },
+    Retired {
+        at: "hold",
+        table: true,
+        says: "[hold] is no longer used: the list's order keeps still under the pointer",
     },
     Retired {
         at: "projects.list",
@@ -450,9 +436,6 @@ impl SidebarSettings {
                 open: self.inbox.open.or(under.inbox.open),
                 working: self.inbox.working.or(under.inbox.working),
             },
-            hold: HoldSettings {
-                still: self.hold.still.or(under.hold.still),
-            },
             sort: SortSettings {
                 by: self.sort.by.or(under.sort.by),
             },
@@ -488,7 +471,6 @@ impl SidebarSettings {
                 open: Some(true),
                 working: Some(true),
             },
-            hold: HoldSettings { still: Some(true) },
             sort: SortSettings {
                 by: Some(SortBy::Attention),
             },
@@ -530,9 +512,6 @@ impl SidebarSettings {
                 order: all.inbox.order.unwrap_or(InboxOrder::Oldest),
                 open: all.inbox.open.unwrap_or(true),
                 working: all.inbox.working.unwrap_or(true),
-            },
-            hold: Hold {
-                still: all.hold.still.unwrap_or(true),
             },
             sort: Sort {
                 by: all.sort.by.unwrap_or(SortBy::Attention),
@@ -788,7 +767,6 @@ mod tests {
                 working: true
             }
         );
-        assert!(sidebar.hold.still);
         assert_eq!(sidebar.bar.show, BarShow::Closed);
         assert_eq!(
             sidebar.bar.counts,
@@ -831,8 +809,7 @@ mod tests {
     fn the_view_s_keys_are_the_person_s_to_change() {
         let (sidebar, problems) = with(
             "group = \"machine\"\ncard = 1\n\
-             [inbox]\norder = \"newest\"\nopen = false\nworking = false\n\
-             [hold]\nstill = false\n",
+             [inbox]\norder = \"newest\"\nopen = false\nworking = false\n",
         );
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.group, GroupBy::Machine);
@@ -845,7 +822,6 @@ mod tests {
                 working: false
             }
         );
-        assert!(!sidebar.hold.still);
     }
 
     #[test]
@@ -1050,8 +1026,7 @@ mod tests {
         assert_eq!(
             keys(&schema),
             [
-                "bar", "card", "group", "hold", "inbox", "later", "machines", "preset", "projects",
-                "sort"
+                "bar", "card", "group", "inbox", "later", "machines", "preset", "projects", "sort"
             ]
         );
         assert_eq!(schema["properties"]["group"]["$ref"], "#/$defs/GroupBy");
@@ -1059,7 +1034,6 @@ mod tests {
         assert_eq!(def("Card")["enum"], serde_json::json!(["auto", 3, 2, 1]));
         assert_eq!(keys(def("InboxSettings")), ["open", "order", "working"]);
         assert_eq!(consts("InboxOrder"), ["oldest", "newest"]);
-        assert_eq!(keys(def("HoldSettings")), ["still"]);
         assert_eq!(keys(def("ProjectsSettings")), ["order", "rollup"]);
     }
 

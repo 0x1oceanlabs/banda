@@ -16,9 +16,6 @@ preset = "inbox"
 # open = true                        # Open: Threads seen, with no turn running
 # working = true                     # the Working shelf
 
-# [hold]
-# still = true                       # the order keeps still under the pointer
-
 # [sort]
 # by = "attention"                   # "attention", "changed" or "title"
 

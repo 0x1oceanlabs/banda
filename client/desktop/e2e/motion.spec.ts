@@ -68,7 +68,6 @@ import {
   textOf,
   threadNamed,
   toastsOf,
-  topsOf,
   type Window,
 } from "./window"
 
@@ -430,10 +429,10 @@ test("how the Tiling moves, against motion-budget.json", async () => {
 
   // The sidebar list as an Agent's day moves it (ADR 0098, S5c): ten
   // Threads at work; six that call come while the pointer is away; one,
-  // open in a Pane, archived by its key; and the hold let go with eight
-  // changes in it, four done, two archived on another machine and two
-  // come. Each batch moves by opacity alone, played by element.animate
-  // with no frame loop of the list's own.
+  // open in a Pane, archived by its key; and eight changes under the
+  // pointer, four done, two archived on another machine and two come,
+  // which wait for it to leave. A row that comes fades in, by CSS, and
+  // the list has no motion of its own besides.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   const rows = sidebar.getByRole("tabpanel").locator("[data-row]")
   const row = (title: string) => rows.filter({ hasText: title })
@@ -447,14 +446,13 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   await measure("sidebar", async () => {
     for (let i = 1; i <= 6; i++) await send(window, `call ${i}`)
     await expect(rows.filter({ hasText: /call \d/ })).toHaveCount(6)
-    // By its key, the Person's own act: its slot closes at once.
+    // By its key: its card goes at once.
     await inWindow("Alt+KeyS")
     await expect(opened).toBeHidden()
     await expect(row("read me")).toHaveCount(0)
-    // Held, with the pointer on the list: no card moves while the eight
-    // changes come.
+    // With the pointer on the list, its order stays while the eight
+    // changes come: what left goes at once, and what comes waits.
     await rows.first().hover()
-    const held = await topsOf(rows)
     for (let i = 1; i <= 4; i++)
       call(window, "agents.send", {
         thread: threadNamed(window, `wait ${i}`)!.id,
@@ -473,13 +471,11 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     await expect(
       sidebar.getByRole("tab", { name: /^Archive/ })
     ).toHaveAccessibleName("Archive, 3")
-    await expect(row("call 1")).toContainText("Archived")
-    expect(await topsOf(rows), "sidebar: the cards' places, held").toEqual(held)
+    await expect(rows.filter({ hasText: /call [12]/ })).toHaveCount(0)
     expect(await row("call 7").count(), "sidebar: a call come, held").toBe(0)
-    // Let go: what waited lands in one batch.
+    // The pointer leaves: what waited is drawn.
     await leaveSidebar(page)
     await expect(row("call 7")).toHaveCount(1)
-    await expect(rows.filter({ hasText: /call [12]/ })).toHaveCount(0)
     await page.waitForTimeout(800)
   })
   // A hard gate, whatever the budget file's mode: the list reads no layout
@@ -493,21 +489,8 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     phases.sidebar.counted.sidebarReads,
     "sidebar: its layout read in a frame"
   ).toBe(0)
-  // What the list's arithmetic says it stands, as it is drawn: a px apart
-  // at most, on a screen of 1.6 too, as each kind's height is read to the
-  // fraction.
-  const [planned, drawn] = await sidebar
-    .locator("[data-height]")
-    .evaluate((list) => [
-      Number(list.getAttribute("data-height")),
-      list.getBoundingClientRect().height,
-    ])
-  expect(
-    Math.abs(planned - drawn),
-    `sidebar: the heights planned, ${planned}, and drawn, ${drawn}`
-  ).toBeLessThanOrEqual(1)
-  // Once the batch is over, the list plays nothing of its own and keeps no
-  // card on its way out, whatever the Marks do: the Threads that work and
+  // Once its rows have come, the list plays nothing of its own, whatever
+  // the Marks do: the Threads that work and
   // call still tell their news, so the window asks for no frame but
   // theirs; a cut text's fade is no motion either, its timeline being the
   // text's own scroll, which stands still (ADR 0098, S6b). The toasts
@@ -518,8 +501,7 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     timeout: 30_000,
   })
   await measureStill("settled")
-  const list = sidebar.locator("[data-height]")
-  await expect(list.locator("[data-going]")).toHaveCount(0)
+  const list = sidebar.getByRole("tabpanel")
   const own = await list.evaluate(
     (one) =>
       one.getAnimations({ subtree: true }).filter((animation) => {

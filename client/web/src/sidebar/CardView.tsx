@@ -51,9 +51,9 @@ import {
 import { awayShort } from "../machines/words"
 import { CardTime } from "./CardStatus"
 import { dueOf, useClock, useWakeAt } from "./clock"
-import { keyOf } from "./hold"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
+import { keyOf } from "./rows"
 import { PickContext, pickProps } from "./usePick"
 
 const NO_HARNESSES: readonly EmblemOf[] = []
@@ -143,11 +143,11 @@ export function Card({
   const now = useCardClock(card)
   const spoken = spokenOf(card, now)
   const one = card.lines.length === 1
-  // One that left, or one being named, has none.
-  const shown = card.gone || field ? NO_ACTS : acts
+  // One being named has none.
+  const shown = field ? NO_ACTS : acts
   // A card with no acts around it is its row itself, as the list's glance
   // finds it (`glanceAt`).
-  const bare = Boolean(field) || (shown.length === 0 && !card.gone)
+  const bare = shown.length === 0
   const drawn = (
     <div
       data-row={bare ? "" : undefined}
@@ -157,7 +157,6 @@ export function Card({
       aria-description={field ? undefined : spoken.description || undefined}
       data-tone={card.tone}
       data-card=""
-      data-went={card.gone ? "" : undefined}
       data-away={card.away ? "" : undefined}
       className={cn(
         "relative isolate flex w-full min-w-0 flex-col gap-0.5 rounded-control px-2 text-left",
@@ -294,20 +293,12 @@ export function CardLines({
     // #1160's mark: at the start of line 3's right, else right after the
     // title, never at line 1's right, where the acts show.
     const strayed = card.strayed && index === (three ? 2 : 0)
-    // Where a card that left went takes line 1's right.
-    const right =
-      first && card.gone
-        ? card.gone.words && (
-            <span className="shrink-0 text-meta text-muted-foreground">
-              {card.gone.words}
-            </span>
-          )
-        : (strayed || line.right.length > 0) && (
-            <>
-              {strayed && three && <Strayed />}
-              {line.right.map(slot)}
-            </>
-          )
+    const right = (strayed || line.right.length > 0) && (
+      <>
+        {strayed && three && <Strayed />}
+        {line.right.map(slot)}
+      </>
+    )
     // The acts and line 1's right share one cell, which keeps the acts'
     // room while they show: the time hides there, and the title's fade
     // ends before them (`globals.css`).

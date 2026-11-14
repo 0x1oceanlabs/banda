@@ -499,7 +499,7 @@ mod classes {
             &[(
                 Shared,
                 &[
-                    "preset", "group", "card", "inbox", "hold", "sort", "projects", "bar", "later",
+                    "preset", "group", "card", "inbox", "sort", "projects", "bar", "later",
                     "machines",
                 ],
             )],

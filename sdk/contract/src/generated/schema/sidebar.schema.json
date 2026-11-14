@@ -24,11 +24,6 @@
       "$ref": "#/$defs/InboxSettings",
       "x-class": "shared"
     },
-    "hold": {
-      "description": "How the list keeps still.",
-      "$ref": "#/$defs/HoldSettings",
-      "x-class": "shared"
-    },
     "sort": {
       "description": "Their order in a section.",
       "$ref": "#/$defs/SortSettings",
@@ -118,16 +113,6 @@
           "const": "newest"
         }
       ]
-    },
-    "HoldSettings": {
-      "type": "object",
-      "properties": {
-        "still": {
-          "description": "The order keeps still under the pointer: what is new takes its\nplace when the pointer leaves.",
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
     },
     "SortSettings": {
       "type": "object",

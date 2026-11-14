@@ -74,7 +74,6 @@ import { refused } from "./refusals"
 import { type Does, keyId } from "./keys"
 import { useOpen } from "./open"
 import { useActs, useDoing } from "./useActs"
-import { HoldingContext, useHoldWhile } from "./useHold"
 
 /** A row of the card's menu, by what it does. */
 export type Entry =
@@ -215,8 +214,7 @@ export type Deleting = { row?: Row; ask: (row: Row | undefined) => void }
 
 /**
  * The card `children` with its menu around it: a right click opens it
- * where the pointer is, and `openCardMenu` at the card. Open, it holds
- * the list still (ADR 0098, decision 6).
+ * where the pointer is, and `openCardMenu` at the card.
  */
 export function CardMenu({
   row,
@@ -225,11 +223,9 @@ export function CardMenu({
   row: Row
   children: ReactElement
 }) {
-  const [shown, setShown] = useState(false)
-  useHoldWhile(shown)
   const card = useRef<HTMLDivElement>(null)
   return (
-    <ContextMenu onOpenChange={setShown}>
+    <ContextMenu>
       <ContextMenuTrigger ref={card}>{children}</ContextMenuTrigger>
       <ContextMenuContent aria-label="Thread menu" className="min-w-60">
         <Entries row={row} card={card} />
@@ -252,8 +248,7 @@ function Entries({
   const open = useOpen()
   const run = useRun()
   const doing = useDoing()
-  const holding = useContext(HoldingContext)
-  const actOn = useActs(holding)
+  const actOn = useActs()
   const ask = useContext(AskDelete)
   const projects = movesTo(useMenuProjects(), row.project.id)
   const there = machinesTo(useMachines())
@@ -308,10 +303,7 @@ function Entries({
                 {projects.map((to) => (
                   <DropdownMenuItem
                     key={to.id}
-                    onClick={() => {
-                      holding?.act(row)
-                      doing(row, "move", { to: to.id })
-                    }}
+                    onClick={() => doing(row, "move", { to: to.id })}
                   >
                     <ProjectSign project={to} size={14} />
                     <span className="truncate">{projectLabel(to)}</span>
@@ -388,10 +380,7 @@ export function openCardMenu(card: Element): void {
 /**
  * Asks whether to delete `row`'s Thread for good (ADR 0098, decision 14):
  * "Delete “Title”?", Cancel the default. Delete asks its App to, on its
- * host; the card leaves the Archive at once, as the Person's own act.
- * While it asks, the list holds still; closed, the focus goes back where
- * it was, the list. It stands outside the list, so the pointer on it is
- * not on the list, and the list lets go as the dialog closes.
+ * host. Closed, the focus goes back where it was, the list.
  */
 export function DeleteDialog({
   deleting: { row, ask },
@@ -399,8 +388,6 @@ export function DeleteDialog({
   deleting: Deleting
 }) {
   const doing = useDoing()
-  const holding = useContext(HoldingContext)
-  useHoldWhile(row !== undefined)
   // Its words stay as it fades out.
   const [said, setSaid] = useState(row)
   if (row && row !== said) setSaid(row)
@@ -432,9 +419,7 @@ export function DeleteDialog({
             variant="destructive"
             onClick={() => {
               ask(undefined)
-              if (!row) return
-              holding?.act(row)
-              doing(row, "delete")
+              if (row) doing(row, "delete")
             }}
           >
             Delete

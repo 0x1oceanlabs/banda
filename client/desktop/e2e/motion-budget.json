@@ -216,7 +216,7 @@
       "measure": "sidebar.ticks.sidebarReadsPerSecond",
       "gate": "hard",
       "budget": 0,
-      "note": "no layout of the sidebar's read in a frame: its list moves by element.animate, by opacity, with no frame loop of its own (ADR 0098, S5c); the Tiling's and the pages' reads as the archived Thread's Pane closes are theirs"
+      "note": "no layout of the sidebar's read in a frame: its list has no frame loop of its own, and a row that comes fades in by CSS (ADR 0098, decision 6); the Tiling's and the pages' reads as the archived Thread's Pane closes are theirs"
     },
     {
       "measure": "sidebar.ticks.readsPerSecond",
@@ -234,7 +234,7 @@
       "measure": "sidebar.moving.layouts",
       "gate": "hard",
       "budget": 0.2,
-      "note": "each batch lays out once, in the commit that adds and takes rows; the frames of its fades lay out none"
+      "note": "a change lays out once, in the commit that adds and takes rows; the frames of a fade lay out none"
     },
     {
       "measure": "sidebar.moving.mainMs.p95",

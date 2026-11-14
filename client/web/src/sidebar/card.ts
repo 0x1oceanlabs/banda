@@ -25,7 +25,6 @@ import {
   STAND_WORDS,
 } from "@banda/ui/status"
 import type { Row } from "./rows"
-import { type Went, wentWords } from "./hold"
 import type { Child } from "./inbox"
 import type { OnRow } from "./machine-on-row"
 
@@ -110,8 +109,9 @@ export type Line = { left: Slot[]; right: Slot[] }
 export type CardModel = {
   /** Where its Thread stands now, which its words say. */
   stand: Stand
-  /** The place it is drawn in, whose lines it keeps while the list holds
-   * (decision 6), even as its Thread stands elsewhere. */
+  /** The place it is drawn in, whose lines it keeps while the pointer
+   * keeps the list's order (decision 6), even as its Thread stands
+   * elsewhere. */
   place: Stand
   title: string
   /** One to three. */
@@ -128,10 +128,6 @@ export type CardModel = {
    * of what its turn does (ADR 0103, decision 32): "3 sub-agents at
    * work", "Waiting on Explore". */
   subagents?: string
-  /** It left the tab while the list held: where it went, shown in its
-   * time's place (nothing where its Mark says it), and as a screen reader
-   * hears it. */
-  gone?: { words: string; said: string }
   /** The Window last heard its machine at `since`, while it does not
    * reach it, away or stopped: its time stands as it was then. */
   away?: { since: number; machine?: string; stopped?: true }
@@ -172,8 +168,6 @@ export type CardOf = {
   away?: number
   /** That machine is stopped, not away. */
   stopped?: boolean
-  /** Where it went, if it left the tab while the list held. */
-  went?: Went
   strayed?: boolean
   /** Its parent, when another Agent started it (`inbox.ts`). */
   child?: Child
@@ -209,8 +203,7 @@ export function callWordOf(listed: Listed, now: number): Word | undefined {
 
 /** The card of `input`. */
 export function cardOf(input: CardOf): CardModel {
-  const { row, place, at, now, view, machine, away, stopped, went, strayed } =
-    input
+  const { row, place, at, now, view, machine, away, stopped, strayed } = input
   const { child } = input
   const { listed, stand } = row
   const { look } = lookOf(listed, now)
@@ -278,14 +271,6 @@ export function cardOf(input: CardOf): CardModel {
     time: timeOf(row, at, tone),
     ...(does ? { does } : {}),
     ...(subagents ? { subagents } : {}),
-    ...(went
-      ? {
-          gone: {
-            words: wentWords(went, now) ?? "",
-            said: wentSaid(went, now),
-          },
-        }
-      : {}),
     ...(away === undefined
       ? {}
       : {
@@ -540,8 +525,8 @@ const STAND_SAID: Readonly<Record<Stand, string>> = {
  * description, what its Agent does at work, on a card of one line too, as
  * its Mark shows it there, then what its other lines say, each `·` a full
  * stop, ✓ "passed" and ✗ "failed"; then that it strayed from its
- * Project's workspace, who started it if another Agent did, that its
- * machine is away, and where it went if it left the tab.
+ * Project's workspace, who started it if another Agent did, and that its
+ * machine is away.
  */
 export function spokenOf(card: CardModel, now: number): Spoken {
   const word = card.tone
@@ -561,7 +546,6 @@ export function spokenOf(card: CardModel, now: number): Spoken {
     said.push(
       `${card.away.machine ?? "Its machine"} is ${card.away.stopped ? "stopped" : "away"}, ${agoSaid(card.away.since, now)}`
     )
-  if (card.gone) said.push(card.gone.said)
   return { name, description: sentences(said) }
 }
 
@@ -615,16 +599,6 @@ function slotSaid(slot: Slot, now: number): string[] {
     case "works":
       return []
   }
-}
-
-/** Where a card that left the tab went, as a screen reader hears it
- * (§2.8): "moved to Archive", "moved to Later, wakes at 18:30". */
-export function wentSaid(went: Went, now: number): string {
-  if (went.to === "deleted") return "Deleted"
-  const moved = `Moved to ${STAND_WORDS[went.to]}`
-  if (went.to !== "later") return moved
-  if (went.until !== undefined) return `${moved}, ${wakesSaid(went.until, now)}`
-  return went.someday ? `${moved}, someday` : `${moved}, until it's done`
 }
 
 const MONTH_DAY = new Intl.DateTimeFormat("en-US", {

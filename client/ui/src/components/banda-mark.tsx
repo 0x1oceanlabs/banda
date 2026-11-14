@@ -1102,9 +1102,8 @@ function seenNow(): IntersectionObserver | undefined {
  * its pose then, and when. A Thread's mark drawn again soon after is that
  * mark moved, not drawn for the first time, so a look that changed as it
  * moved is news. The keyed list keeps a card's node as it changes part,
- * but a card is drawn afresh as `ThreadRow` changes its root, as one that
- * leaves the tab while the list holds does, and the Banda menu and a
- * Pane's header draw theirs anew.
+ * but a card is drawn afresh as `ThreadRow` changes its root, and the
+ * Banda menu and a Pane's header draw theirs anew.
  */
 const gone = new Map<string, { look: Shown; pose: Pose; at: number }>()
 /** Seconds a mark that went is the one drawn again. */

@@ -96,6 +96,13 @@ From the audit (`2-code.md`):
 6. **The order holds still under the pointer,** silently: a card never
    moves from under a click; what is new takes its place when the pointer
    leaves. The "↑ N updates" pill goes.
+
+   _Amended 2026-11-14 by Roma ("remove it", "in general make it
+   simpler"): the list is drawn as it is. Only the pointer over the list
+   keeps its order: a card that left the tab goes at once, and a new one
+   waits for the pointer to leave. There is no ghost line and no dimmed
+   card, no hold by a key, a popup or check mode, and no motion of the
+   list's own but a fade in._
 7. **One view, grouped or not.** The three presets go. The view menu's
    **Group by: None, Project, Machine** arranges the list, and
    `sidebar.toml` keeps it as `group = "none" | "project" | "machine"`.

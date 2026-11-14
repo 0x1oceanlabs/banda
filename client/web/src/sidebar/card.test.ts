@@ -115,7 +115,7 @@ describe("density (ADR 0098, decision 9)", () => {
   })
 
   test("a card keeps the lines of the place it is drawn in, wherever its Thread stands now", () => {
-    // Seen while the list held: open now, still in Your turn's slot.
+    // Seen under the pointer: open now, still in Your turn's slot.
     const held = card(row("open", { mark: "idle", calls: undefined }), {
       place: "turn",
     })
@@ -774,45 +774,12 @@ describe("spokenOf (spec §2.8)", () => {
     expect(spokenOf(stopped, NOW).description).toBe(
       "Working. arc. arc is stopped, 12 minutes"
     )
-    const gone = (went: NonNullable<CardOf["went"]>) =>
-      spokenOf(
-        card(row("archived", { mark: "rest", archived: true }), {
-          place: "open",
-          went,
-        }),
-        NOW
-      ).description
-    expect(gone({ to: "archived", from: "open" })).toBe("Moved to Archive")
-    expect(
-      gone({
-        to: "later",
-        from: "turn",
-        until: new Date(2026, 10, 10, 18, 30).getTime(),
-      })
-    ).toBe("Moved to Later, wakes at 18:30")
-    expect(gone({ to: "deleted", from: "open" })).toBe("Deleted")
     const strayed = card(row("open", { mark: "idle", calls: undefined }), {
       strayed: true,
     })
     expect(spokenOf(strayed, NOW).description).toBe(
       "Away from its Project's workspace"
     )
-  })
-
-  test("one that left shows where it went in its time's place, short; nothing where its Mark says it", () => {
-    const left = (went: NonNullable<CardOf["went"]>) =>
-      card(row("open", { mark: "idle", calls: undefined }), {
-        place: "later",
-        went,
-      }).gone
-    expect(left({ to: "archived", from: "open" })).toEqual({
-      words: "Archived",
-      said: "Moved to Archive",
-    })
-    expect(left({ to: "turn", from: "working" })).toEqual({
-      words: "",
-      said: "Moved to Your turn",
-    })
   })
 })
 

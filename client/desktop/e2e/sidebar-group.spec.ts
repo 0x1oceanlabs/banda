@@ -257,7 +257,7 @@ test("the view menu in the sidebar's foot writes group = machine into sidebar.to
     "aria-checked",
     "true"
   )
-  await expect(menu.getByRole("switch")).toHaveCount(3)
+  await expect(menu.getByRole("switch")).toHaveCount(2)
   await shots(window, "view-menu")
   await expect(menu).toBeVisible()
 

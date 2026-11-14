@@ -2,7 +2,6 @@
 import type { BarCounts } from "./BarCounts";
 import type { Card } from "./Card";
 import type { GroupBy } from "./GroupBy";
-import type { Hold } from "./Hold";
 import type { Inbox } from "./Inbox";
 import type { Later } from "./Later";
 import type { Machines } from "./Machines";
@@ -26,4 +25,4 @@ preset: string,
 /**
  * Every preset there is: Banda's, then the Person's.
  */
-presets: Array<Preset>, group: GroupBy, card: Card, inbox: Inbox, hold: Hold, sort: Sort, projects: Projects, bar: BarCounts, later: Later, machines: Machines, };
+presets: Array<Preset>, group: GroupBy, card: Card, inbox: Inbox, sort: Sort, projects: Projects, bar: BarCounts, later: Later, machines: Machines, };

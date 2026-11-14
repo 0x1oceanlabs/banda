@@ -56,7 +56,7 @@ export const CHOICES: readonly Choice[] = [
   },
 ]
 
-/** The view's switches, each a key of `sidebar.toml` (decisions 3 and 6). */
+/** The view's switches, each a key of `sidebar.toml` (decision 3). */
 export const SWITCHES: readonly {
   label: string
   key: string
@@ -72,17 +72,12 @@ export const SWITCHES: readonly {
     key: "inbox.working",
     on: (sidebar) => sidebar.inbox.working,
   },
-  {
-    label: "Keep order under the pointer",
-    key: "hold.still",
-    on: (sidebar) => sidebar.hold.still,
-  },
 ]
 
 /**
  * The sidebar's view menu, in its foot (ADR 0098, decisions 7 and 21): how
  * the list is grouped, how many lines a card has, Your turn's order, and
- * what the Inbox shows and keeps still, each written into `sidebar.toml`
+ * what the Inbox shows, each written into `sidebar.toml`
  * by the settings, whose look brings the list back so; and the file
  * itself, in the Person's editor.
  */
