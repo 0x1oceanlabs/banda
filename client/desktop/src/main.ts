@@ -20,7 +20,7 @@
  * engine says is newest (`@banda/updates-desktop`, ADR 0119), writes
  * what the system says of itself for the theme (os-window/system.ts), and
  * opens its windows (os-window/windows.ts), made of what the look says
- * (os-window/material.ts).
+ * (os-window/material.ts), a Pane's own over them (os-window/popped.ts).
  * It reaches the engines of the machines in `hosts.toml` over ssh, and
  * hands the page their addresses too; it adds, takes out, tests and stops
  * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
@@ -47,11 +47,6 @@ import {
   tellPage,
   text,
 } from "@banda/desktop-kit"
-import {
-  type PoppedAsk as PoppedAskValue,
-  poppedOf,
-  poppedRoute,
-} from "@banda/core"
 import { type Acts, actsAnswers, runOwn } from "./acts"
 import { BRIDGE } from "./bridge"
 import { openDoor } from "./door"
@@ -95,37 +90,11 @@ import { clipboardAnswers } from "./device/clipboard"
 import { filesAnswers } from "./device/files"
 import { pickAnswers } from "./device/pick"
 import { frameAnswers, lookAnswers, Material } from "./os-window/material"
+import { Popped, poppedAnswers } from "./os-window/popped"
 import { Windows } from "./os-window/windows"
-import {
-  appScheme,
-  DEV_PAGE,
-  fromPage,
-  PAGE,
-  pageLayer,
-} from "./os-window/page"
+import { appScheme, DEV_PAGE, fromPage, pageLayer } from "./os-window/page"
 import { systemLayer, thisSystem } from "./os-window/system"
 import { NODE_FOLDER, PROGRAM, Program, whereOf } from "./program"
-
-/** What a Pane in its own window asks of the window (`PoppedAsk`). */
-const PoppedAsk = Schema.Union([
-  Schema.Struct({
-    open: Schema.Struct({
-      project: Schema.String,
-      pane: Schema.Struct({
-        kind: Schema.String,
-        args: Schema.Record(Schema.String, Schema.MutableJson),
-      }),
-      from: Schema.String,
-      place: Schema.optional(Schema.Literals(["right", "below", "instead"])),
-    }),
-  }),
-  Schema.Struct({
-    run: Schema.Struct({
-      action: Schema.String,
-      args: Schema.optional(Schema.Record(Schema.String, Schema.MutableJson)),
-    }),
-  }),
-]) satisfies Schema.Decoder<PoppedAskValue>
 
 /**
  * For tests only: how many ms late the page hears what the engine says,
@@ -262,7 +231,7 @@ const runtime = ManagedRuntime.make(
           followDock,
           showDock: () => dockTo(true),
           opened: (contents) => runtime.runSync(modules.opened(contents)),
-          closePopped,
+          closePopped: () => popped?.closeAll(),
         }).pipe(
           Layer.provideMerge(Material.layer()),
           Layer.provideMerge(
@@ -280,6 +249,8 @@ const runtime = ManagedRuntime.make(
       )
     ),
     Layer.merge(reaching(configFolder(app.getPath("appData")), installScript)),
+    // The Panes' own windows, over the windows (os-window/popped.ts).
+    (services) => Popped.layer.pipe(Layer.provideMerge(services)),
     // Over them all, what answers `app://`: the page, and the hosts beside
     // it, the modules' too (os-window/page.ts).
     (services) =>
@@ -309,8 +280,8 @@ const keepProblem = watchProblems(
 /** Banda's windows (os-window/windows.ts), once main's runtime has built
  * them (`ready`): none is open before, so what asks before finds none. */
 let windows: Windows["Service"] | null = null
-/** The Panes in windows of their own, by their IDs (ADR 0025, decision 9). */
-const popped = new Map<string, BrowserWindow>()
+/** The Panes' own windows (os-window/popped.ts), built with them. */
+let popped: Popped["Service"] | null = null
 
 /** How long the window waits for its look, so it opens in its colours. */
 const LOOK_WAIT = 300
@@ -344,7 +315,7 @@ async function ready(): Promise<void> {
       hosts.changes.pipe(
         Stream.runForEach((now) =>
           Effect.sync(() => {
-            for (const shown of [windows?.main(), ...popped.values()])
+            for (const shown of [windows?.main(), ...(popped?.windows() ?? [])])
               tellPage(shown?.webContents, BRIDGE.hosts.listen, now)
           })
         )
@@ -503,38 +474,15 @@ async function ready(): Promise<void> {
     // The page's answers to the actions it was asked to run (acts.ts).
     act: actsAnswers,
     // Panes in windows of their own (ADR 0025, decision 9): the window
-    // pops them out; what they ask goes to it.
-    popped: {
-      open: [
-        Schema.Tuple([Schema.String, Schema.Number, Schema.Number]),
-        ([pane, width, height], event) =>
-          Effect.sync(() => {
-            if (event.sender === windows?.main()?.webContents)
-              popOut(pane, width, height)
-          }),
-      ],
-      close: [text, ([pane]) => Effect.sync(() => popped.get(pane)?.close())],
-      current: [none, () => Effect.succeed([...popped.keys()])],
-      ask: [
-        Schema.Tuple([PoppedAsk]),
-        ([asked], event) =>
-          Effect.sync(() => {
-            const from = BrowserWindow.fromWebContents(event.sender)
-            if (!from || ![...popped.values()].includes(from)) return
-            tellPage(
-              windows?.inFront()?.webContents,
-              BRIDGE.popped.asked,
-              asked
-            )
-          }),
-      ],
-    },
+    // pops them out; what they ask goes to it (os-window/popped.ts).
+    popped: poppedAnswers,
   })
   const first = await runtime.runPromise(firstLook(LOOK_WAIT))
   if (first) nativeTheme.themeSource = first.mode
   // The runtime is built, and its windows with it.
   const built = runtime.runSync(Windows.use(Effect.succeed))
   windows = built
+  popped = runtime.runSync(Popped.use(Effect.succeed))
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
   if (hasMenuBar(process.platform)) showMenuBar()
   runtime.runSync(built.open(!hidden))
@@ -723,52 +671,6 @@ function dockTo(wanted: boolean): Promise<void> | null {
     case null:
       return null
   }
-}
-
-/**
- * Opens Pane `pane` in a window of its own, `width` by `height`, the page
- * at `#pane/<id>` drawing it alone; or brings its window to the front.
- * The window keeps the Pane's place; closing this one brings it back.
- */
-function popOut(pane: string, width: number, height: number): void {
-  const route = poppedRoute(pane)
-  if (!windows || poppedOf(route) !== pane) return
-  const shown = popped.get(pane)
-  if (shown) {
-    windows.inFront(shown)
-    return
-  }
-  const size = (at: number, least: number) =>
-    Math.max(least, Math.min(Math.round(at) || least, 4096))
-  const opened = runtime.runSync(
-    windows.page({
-      width: size(width, 480),
-      height: size(height, 360),
-      minWidth: 320,
-      minHeight: 240,
-      title: "Banda",
-    })
-  )
-  void opened.loadURL(`${PAGE}${route}`)
-  opened.on("closed", () => {
-    popped.delete(pane)
-    tellPopped()
-  })
-  popped.set(pane, opened)
-  tellPopped()
-}
-
-/** Tells the window which Panes are in windows of their own. */
-function tellPopped(): void {
-  tellPage(windows?.main()?.webContents, BRIDGE.popped.listen, [
-    ...popped.keys(),
-  ])
-}
-
-/** Closes the Panes' own windows, back to their places: they are the main
- * window's, and go as it hides or closes (os-window/windows.ts). */
-function closePopped(): void {
-  for (const one of popped.values()) one.close()
 }
 
 /** The app menu, with its Quit (⌘Q); File's Close Window (⌘W); Edit; and
