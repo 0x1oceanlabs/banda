@@ -47,8 +47,8 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
-import { expect, type Page } from "@playwright/test"
-import { read, startWindow } from "./window"
+import { expect, type Locator, type Page } from "@playwright/test"
+import { read, startWindow, toastsOf } from "./window"
 
 const repository = resolve(import.meta.dirname, "../../..")
 const program = join(repository, "target/debug/banda")
@@ -163,6 +163,9 @@ const read = (name) => {
     return undefined
   }
 }
+// A port of arc's the Person opened here (\`pages\`), not the engine's:
+// it is carried as late, and counted and named nowhere.
+const page = (read("pages") ?? "").split(" ").includes(to)
 let latency = Number(read("latency") ?? 0)
 let hole = read("blackhole") !== undefined
 // What it applies, for a test to wait for rather than for its poll.
@@ -317,13 +320,14 @@ if (hole) {
           host: "127.0.0.1",
           allowHalfOpen: true,
         })
-        asked(socket)
+        if (!page) asked(socket)
         carry(socket, there)
         carry(there, socket)
       })
-      .listen(Number(from), "127.0.0.1", () =>
-        fs.writeFileSync(path.join(__dirname, "forward.port"), from + " " + to)
-      )
+      .listen(Number(from), "127.0.0.1", () => {
+        if (!page)
+          fs.writeFileSync(path.join(__dirname, "forward.port"), from + " " + to)
+      })
   }, latency * ${HANDSHAKE})
 }
 `
@@ -369,6 +373,9 @@ export type Arc = {
   /** The forward's port on this machine's loopback, and the engine's it
    * carries to there, once it listens. */
   ports: () => { from: number; to: number }
+  /** Says `port` is one of arc's own pages, as a dev server's: a forward
+   * to it is the Person's, not the engine's. 3000 is one from the start. */
+  serves: (port: number) => void
   close: () => void
 }
 
@@ -544,6 +551,11 @@ export function newArc({ latency = 0, account = false } = {}): Arc {
         .map(Number)
       return { from: from!, to: to! }
     },
+    serves: (port) =>
+      writeFileSync(
+        at("bin/pages"),
+        `${read(at("bin/pages")) ?? ""} ${port}`.trim()
+      ),
     close: () => {
       try {
         execFileSync(program, ["stop", "--force"], { env, stdio: "ignore" })
@@ -554,6 +566,7 @@ export function newArc({ latency = 0, account = false } = {}): Arc {
     },
   }
   arc.latency(latency)
+  arc.serves(3000)
   return arc
 }
 
@@ -590,6 +603,28 @@ export const withArc = (
     env: { PATH: `${arc.bin}:${process.env.PATH}` },
     dir,
   })
+
+/**
+ * The toast of a click on arc's own `localhost:<port>`, once its forward
+ * listens here (ADR 0120, decision 2), and the port it has here: arc's
+ * own where that is free on this computer, else the next free one, as
+ * where a test's arc is this computer and its server holds the port.
+ */
+export async function openedFromArc(
+  page: Page,
+  port: number
+): Promise<{ toast: Locator; here: number }> {
+  const toast = toastsOf(page)
+    .getByRole("listitem")
+    .filter({
+      hasText: new RegExp(
+        `localhost:${port} opens from arc|${port} is taken on this .+: opens as localhost:\\d+`
+      ),
+    })
+  await expect(toast).toBeVisible()
+  const moved = /opens as localhost:(\d+)/.exec((await toast.textContent())!)
+  return { toast, here: moved ? Number(moved[1]) : port }
+}
 
 /** Where the pictures for the Person go, when they asked for them. */
 export const SHOTS = process.env.BANDA_E2E_SHOTS

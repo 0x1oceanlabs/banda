@@ -401,6 +401,13 @@ built yet (ADR 0101, decision 3). Seen marks are not among them: they are
 the Thread's (ADR 0096).
 _Avoid_: Person document; replica.
 
+**Forward**:
+A port of another machine opened on this device's loopback, over ssh.
+Banda keeps one to each machine's engine, and opens one more to a port
+there when the Person clicks a link to that machine's own computer, as
+`localhost:3000` (ADR 0120, decision 2).
+_Avoid_: tunnel, proxy.
+
 **Machine file**:
 A settings file that says what one machine has: its Harnesses, its name,
 its sharing. It is read and written through that machine's engine and

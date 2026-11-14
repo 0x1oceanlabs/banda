@@ -124,6 +124,18 @@ page is one part of. A change to main changes this page in the same PR.
   runs one effect (`serve` in `@banda/desktop-kit`, ADR 0020). A module
   brings its part of the table and of main; `client/desktop/src/modules.ts`
   is the one file in main that names one.
+- **A port of another machine opens here on the Person's click.** A web
+  address of another machine's own computer, as `localhost:3000` in an
+  arc reply, a terminal or a file, opens through a forward of that port
+  (ADR 0120, decision 2): the window's `link.open` asks the device's
+  `forward_port` (`hostForward` on the bridge), and main runs one more
+  `ssh -N -L` to that machine, by the engine's forward's own arguments,
+  loopback to loopback (`client/desktop/src/forward.ts`). It takes the
+  same port here when that is free, so a page that names its own address
+  works unchanged, else the next free one, and a toast says which. The
+  forward lasts while that machine is live, and a click while it is away
+  says so at once. A device with no `forward_port`, as a web page, says
+  whose the address is and offers it to copy.
 
 ## Checks
 

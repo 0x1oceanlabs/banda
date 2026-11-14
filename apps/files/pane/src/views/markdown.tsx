@@ -14,10 +14,8 @@ import { MarkdownLinks } from "@banda/ui/components/markdown-link"
 import { MarkdownMedia } from "@banda/ui/components/markdown-media"
 import { MarkdownTasks, type Tick } from "@banda/ui/components/markdown-task"
 import { InHeader } from "@banda/ui/components/pane-header"
-import { toast } from "@banda/ui/components/sonner"
 import { useFileMint } from "@banda/ui/hooks/use-file-url"
-import { copyText } from "@banda/ui/lib/clipboard"
-import { linkHint, openOutside } from "@banda/ui/lib/links"
+import { linkHint } from "@banda/ui/lib/links"
 import type { PreviewProps } from "@banda/ui/module"
 import type { Engine } from "@banda/contract"
 import { CodeIcon, FileWarningIcon } from "lucide-react"
@@ -175,26 +173,17 @@ export function MarkdownIn({
     [mint, file, pictures]
   )
   // Banda's browser runs on this machine alone, so a link in another
-  // machine's file opens in this device's browser, and an address of that
-  // machine's own says whose it is (ADR 0106, decision 3).
+  // machine's file opens in this device's browser, an address of that
+  // machine's own as the window opens it (ADR 0106, decision 3; ADR 0120,
+  // decision 2).
   const { host, shown } = usePlaced(project, undefined)
   const machine = host && (shown?.named.name ?? host)
   const open = useCallback(
     (address: string, outside: boolean) => {
-      if (!machine && !outside) {
-        run?.("browser.open", { address, project })
-        return
-      }
-      const refused = machine ? linkRefused(address, machine) : undefined
-      if (!refused) return openOutside(address)
-      toast.warning(refused.why, {
-        id: `link ${address}`,
-        description: refused.offer.about,
-        action: {
-          label: "Copy",
-          onClick: () => copyText(refused.offer.copy),
-        },
-      })
+      // The window weighs the rest: this device's browser, and an address
+      // of that machine's own through a forward, or whose it is.
+      if (!machine && !outside) run?.("browser.open", { address, project })
+      else run?.("link.open", { url: address })
     },
     [run, project, machine]
   )

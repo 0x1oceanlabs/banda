@@ -97,6 +97,7 @@ import { listApp, listedImage, listShortcut } from "./entry"
 import { hasMenuBar } from "./menubar"
 import { Status, statusLayer } from "./status"
 import { menuBar } from "./tray"
+import { forwardAnswer, reaching } from "./forward"
 import { Hosts, terminalArgs } from "./hosts"
 import { problemsAnswers, startLog, watchProblems } from "./problems"
 import { revive } from "./revive"
@@ -329,11 +330,7 @@ const runtime = ManagedRuntime.make(
         Window.layer(() => window)
       )
     ),
-    Layer.merge(
-      Hosts.layer(join(configFolder(app.getPath("appData")), "hosts.toml"), {
-        install: installScript,
-      })
-    ),
+    Layer.merge(reaching(configFolder(app.getPath("appData")), installScript)),
     // A packed Banda that cannot run a copy of its own says why.
     Layer.provide(
       Program.layer(where, (why) =>
@@ -571,6 +568,7 @@ async function ready(): Promise<void> {
       Schema.Tuple([Schema.String, Schema.Boolean]),
       ([name, force]) => Hosts.use((hosts) => hosts.stop(name, force)),
     ],
+    hostForward: forwardAnswer,
     sshSuggestions: [none, () => Hosts.use((hosts) => hosts.suggestions)],
     look: {
       current: [
