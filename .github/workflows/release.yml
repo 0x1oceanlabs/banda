@@ -2,18 +2,20 @@
 # `ci` is green on it. Each packs the AppImage with scripts/package.sh on
 # GitHub's Ubuntu runner, as `ci` runs (ci/README.md), and publishes it with
 # scripts/release.mjs, beside dev-linux.yml
-# (dev-mac.yml for the Mac), the update file Banda Dev reads (ADR 0041; its
-# name, ADR 0092 decision 12). The Mac's zip is packed on GitHub's Apple
-# silicon runner at the same time and added to the release once it is out
-# (decision 6), so Linux never waits for the Mac.
+# (dev-mac.yml for the Mac, dev.yml for Windows), the update file Banda Dev
+# reads (ADR 0041; its name, ADR 0092 decision 12). The Mac's zip is packed
+# on GitHub's Apple silicon runner at the same time, and Windows' installer
+# on its Windows runner, and each is added to the release once it is out
+# (decision 6; ADR 0090, step 6), so Linux never waits for either.
 #
 # No Stable is built here, and a tag pushed by hand ships nothing (ADR 0092,
 # step 2): nothing here starts on a tag, and a run by hand publishes
 # nothing.
 # Banda will be promoted from a Dev once a day (its step 6).
 #
-# A PR that changes how Banda is packed packs both, publishing nothing, as
-# a run by hand does on any branch, to try a Mac build:
+# A PR that changes how Banda is packed packs all three, publishing
+# nothing, as a run by hand does on any branch, to try a Mac or Windows
+# build:
 #
 #   gh workflow run release --ref <branch>
 #   gh run download <run id>
@@ -32,6 +34,7 @@ on:
       - scripts/engine.mjs
       - scripts/install.sh
       - client/desktop/electron-builder.config.mjs
+      - client/desktop/installer.nsh
       - client/desktop/src/channel.ts
       - client/desktop/src/program.ts
       - client/desktop/src/packed.test.ts
@@ -227,6 +230,87 @@ jobs:
             client/desktop/dist/*-engine-mac-*.tar.gz
             client/desktop/dist/*-mac.yml
           retention-days: 3
+
+  # Banda Dev's installer for Windows x64, per user and unsigned (ADR 0090,
+  # step 6), packed beside the Mac's: added to the release once it is out,
+  # so Linux never waits for Windows either. release-windows.yml installs,
+  # reinstalls and uninstalls one, for a PR that changes the installer.
+  windows:
+    name: pack (Windows)
+    needs: which
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.which.outputs.commit }}
+          persist-credentials: false
+      # The Node ci/Dockerfile pins, to build with, and package.json's pnpm.
+      # The app carries a Node of its own (scripts/node.mjs).
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          package-manager-cache: false
+      - run: npm install --global --silent "$(node -p 'require("./package.json").packageManager')"
+      - run: rustup toolchain install
+      # The cache release-windows.yml reads too; only a Dev's run saves it.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-release
+          save-if: ${{ needs.which.outputs.publish == 'true' }}
+      - name: pack
+        env:
+          BANDA_VERSION: ${{ needs.which.outputs.version }}
+        run: scripts/package.sh ${{ needs.which.outputs.channel }}
+      # Banda Dev's is dev.yml (ADR 0092, decision 12), named, as dist/
+      # holds electron-builder's builder-debug.yml too.
+      - name: the update file is there
+        env:
+          CHANNEL: ${{ needs.which.outputs.channel }}
+        run: |
+          feed=$([[ $CHANNEL == dev ]] && echo dev || echo latest)
+          mkdir windows
+          cp client/desktop/dist/*-x64.exe client/desktop/dist/*-x64.exe.blockmap \
+            client/desktop/dist/$feed.yml windows/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banda-windows-${{ github.run_number }}
+          path: windows/
+          if-no-files-found: error
+          retention-days: 3
+
+  windows-publish:
+    name: publish (Windows)
+    needs: [which, linux, windows]
+    if: needs.which.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.which.outputs.commit }}
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          package-manager-cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: banda-windows-${{ github.run_number }}
+          path: ${{ runner.temp }}/windows
+      - name: add the installer to the release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WINDOWS: ${{ runner.temp }}/windows
+        run: node scripts/release.mjs add ${{ needs.which.outputs.version }} "$WINDOWS"/*
 
   # Only for a release, never a PR's code: it holds the tap's key.
   mac-publish:

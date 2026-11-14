@@ -1,14 +1,14 @@
-# Banda Dev's installer for Windows, built by hand (ADR 0090, step 5): x64,
-# per user, unsigned, with scripts/package.sh on GitHub's windows-2025
-# runner. It publishes nothing: each run keeps the installer, to try on a
+# Banda Dev's installer for Windows, tried (ADR 0090, step 5): x64, per
+# user, unsigned, with scripts/package.sh on GitHub's windows-2025 runner.
+# Each Dev's installer is packed and published by release.yml (step 6);
+# this one publishes nothing: each run keeps the installer, to try on a
 # Windows machine, and writes how long it took to its summary.
 #
 #   gh workflow run release-windows --ref <branch>
 #   gh run download <run id>
 #
 # A PR that changes how the installer is built builds one too, as a run by
-# hand only works once this file is on main. Step 6 runs it after every Dev
-# and adds its files to the release.
+# hand only works once this file is on main.
 #
 # Before it keeps the installer, the run installs it, installs it again over
 # a program running from its folder, and uninstalls it: it stops only what
