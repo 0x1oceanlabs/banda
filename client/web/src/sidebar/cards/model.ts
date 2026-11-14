@@ -2,7 +2,7 @@
  * A sidebar card as one model (ADR 0098, decisions 8, 9 and 27): from a
  * Thread, the place it is drawn in and how the list is viewed, its three,
  * two or one lines, each a left and a right; the colour of its call; how quiet it
- * is; and its time. `CardView.tsx` only draws it, and `spokenOf`
+ * is; and its time. `ThreadCard.tsx` draws it, through `Card.tsx`, and `spokenOf`
  * says it to a screen reader. Pure, with no clock of its own: a time is a
  * moment and a kind, put into words as it is drawn, against the minute
  * the cards are drawn as of (`useMinute`).
@@ -25,9 +25,9 @@ import {
   type Stand,
   STAND_WORDS,
 } from "@banda/ui/status"
-import type { Row } from "./rows"
-import type { Child } from "./inbox"
-import type { OnRow } from "./machine-on-row"
+import type { Row } from "../rows"
+import type { Child } from "../inbox"
+import type { OnRow } from "../machine-on-row"
 
 /** How the list is viewed, as its cards take it: grouped by Project
  * (decision 7), a group's header names the Project its cards then leave

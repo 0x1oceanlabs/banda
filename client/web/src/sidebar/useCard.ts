@@ -9,7 +9,7 @@ import {
   useThisNamed,
 } from "@banda/core/react"
 import { seenNamed } from "@banda/ui/hooks/use-status"
-import { type CardModel, cardOf, type CardOf } from "./card"
+import { type CardModel, cardOf, type CardOf } from "./cards/model"
 import { machineOnRow } from "./machine-on-row"
 
 /** What of a card its machine says, as the Window's hosts show it. */

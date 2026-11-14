@@ -9,9 +9,9 @@ import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
-import type { Row } from "./rows"
-import { Card, type CardAct } from "./CardView"
-import { cardOf, type CardOf } from "./card"
+import type { Row } from "../rows"
+import { type CardAct, ThreadCard } from "./ThreadCard"
+import { cardOf, type CardOf } from "./model"
 
 // The title reads the window's naming store, which a page's render has
 // none of.
@@ -74,7 +74,7 @@ const cardElement = (
   current = false,
   acts?: readonly CardAct[]
 ) => (
-  <Card
+  <ThreadCard
     card={cardOf({
       row,
       place: row.stand,
@@ -340,7 +340,7 @@ test('a card\'s text fades where it does not fit, never with "…"; the title is
   expect(html).not.toContain("data-base-ui-tooltip-trigger")
   const tipped = renderToStaticMarkup(
     <CutTips edge="aside">
-      <Card
+      <ThreadCard
         card={cardOf({
           row: rowOf("turn"),
           place: "turn",

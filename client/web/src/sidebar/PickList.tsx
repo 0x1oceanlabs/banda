@@ -30,7 +30,7 @@ import {
   tabOf,
 } from "./keys"
 import type { Ordered } from "./order"
-import { firstAct } from "./ProjectCard"
+import { firstAct } from "./cards/ProjectCard"
 import { useAskedTab } from "./showing"
 import { PANEL, tabId } from "./Tabs"
 import { useActs, useDoing } from "./useActs"
