@@ -82,6 +82,8 @@ export default {
     target: [{ target: "nsis", arch: ["x64"] }],
     extraResources: [
       { from: "../../target/release/banda.exe", to: "banda.exe" },
+      // The updater, which looks for the window's app (ADR 0090, step 6).
+      { from: "../../target/release/banda-update.exe", to: "banda-update.exe" },
       { from: "../../target/release/banda.pdb", to: "banda.pdb" },
       { from: "../../target/node/win-${arch}/node.exe", to: "node/node.exe" },
     ],

@@ -325,7 +325,9 @@ impl Updates {
         if let Some(manager) = managed(banda.program.as_deref()) {
             return Some(format!("{manager} updates Banda here"));
         }
-        if feed::system().is_none() {
+        // On Windows the app brings the engine, and the window takes the
+        // app: the looks only say the newest (ADR 0090, step 6).
+        if feed::system().is_none() && !cfg!(windows) {
             return Some("Banda packs no engine alone for this system yet".to_owned());
         }
         if self.0.lacks {
@@ -451,7 +453,11 @@ impl Updates {
         release: &Release,
         version: &str,
     ) -> Result<Result<(String, Feed), String>, String> {
-        let (os, arch) = feed::system().ok_or("no engine for this system")?;
+        let Some((os, arch)) = feed::system() else {
+            return Ok(Err(format!(
+                "{version} has no engine alone for this system"
+            )));
+        };
         let feed_name = feed::feed_name(which, os);
         let Some(asset) = release.file(&feed_name) else {
             tracing::info!(%version, "no {feed_name} in its release yet");

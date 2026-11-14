@@ -410,3 +410,42 @@ it("looks for nothing with BANDA_UPDATES=off, for trials and CI", () => {
   expect(updater.checkForUpdates).not.toHaveBeenCalled()
   expect(engine.check).not.toHaveBeenCalled()
 })
+
+it("reads again a minute later while the release lacks this system's files, as Windows' come after Linux's", () => {
+  const update = updates(mine, engine, vi.fn())
+  update.heard(looked())
+  expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+  const missing = Object.assign(new Error("0.1.0-dev.421 has no dev.yml yet"), {
+    code: "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND",
+  })
+  events.emit("error", missing)
+  // One read waits at a time, however many errors come.
+  events.emit("error", missing)
+  vi.advanceTimersByTime(60_000)
+  expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
+  for (let i = 0; i < 20; i++) {
+    events.emit("error", missing)
+    vi.advanceTimersByTime(60_000)
+  }
+  // At most fifteen, then the engine's next look.
+  expect(updater.checkForUpdates).toHaveBeenCalledTimes(16)
+  expect(update.current()).toMatchObject({ state: "none" })
+})
+
+it("on Windows, installs as an AppImage does, and the installer starts the new Banda (ADR 0090, step 6)", async () => {
+  vi.stubEnv("APPIMAGE", "")
+  const platform = Object.getOwnPropertyDescriptor(process, "platform")!
+  Object.defineProperty(process, "platform", { value: "win32" })
+  try {
+    listed = undefined
+    const leaving = vi.fn()
+    const update = ready(leaving)
+    expect(quitInstalls()).toBe(true)
+    update.restart()
+    expect(await restarted()).toBe(true)
+    expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true)
+    expect(leaving).toHaveBeenCalled()
+  } finally {
+    Object.defineProperty(process, "platform", platform)
+  }
+})

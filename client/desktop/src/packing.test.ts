@@ -63,13 +63,14 @@ test("the app carries the harnesses' host package's adapters beside its engine",
   expect(carried).toContain(`pub const NODE_FOLDER: &str = "${NODE_FOLDER}";`)
 })
 
-test("each system's app carries its own engine, and Windows' its line tables and Node", async () => {
+test("each system's app carries its own engine, and Windows' its updater, line tables and Node", async () => {
   const { linux, mac, win } = await config()
   const engine = { from: "../../target/release/banda", to: "banda" }
   expect(linux.extraResources).toContainEqual(engine)
   expect(mac.extraResources).toContainEqual(engine)
   expect(win.extraResources).toEqual([
     { from: "../../target/release/banda.exe", to: "banda.exe" },
+    { from: "../../target/release/banda-update.exe", to: "banda-update.exe" },
     { from: "../../target/release/banda.pdb", to: "banda.pdb" },
     // Where scripts/node.mjs downloads it to, for each arch.
     {

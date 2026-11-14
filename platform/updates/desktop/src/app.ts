@@ -8,7 +8,8 @@
  * for its app (releases.ts) with electron-updater, downloads it at once,
  * and installs it on Restart, or when Banda quits, if a look at most an
  * hour old still offered it (ADR 0041, decision 2; ADR 0092, decision
- * 12). An AppImage updates so. On macOS, where an app signed ad hoc
+ * 12). An AppImage updates so, and an installed Windows Banda, whose
+ * installer runs as it quits and starts it again (ADR 0090, step 6). On macOS, where an app signed ad hoc
  * cannot swap itself, brew takes it while Banda runs, and installs it on
  * Restart, or by itself once no window shows (ADR 0121); a Banda brew
  * did not install only says that a version is out, with the brew command
@@ -51,13 +52,15 @@ import { startAfter } from "./after"
 import { type Brew, brewOf } from "./brew"
 import { isAbove, sourceOf, versionInName, type Which } from "./releases"
 
-/** How long after a Mac's files are found missing it reads again. */
+/** How long after a Mac's or Windows' files are found missing it reads
+ * again. */
 const RETRY = 60_000
 /** How old the last look may be for a quit to install what it offered:
  * an hour, as the engine looks hourly, and a minute for it to come back. */
 const FRESH = 3_600_000 + RETRY
-/** How many looks a minute apart wait for a Mac's files, which come
- * within ten minutes of the release: a pack that failed sends none. */
+/** How many looks a minute apart wait for a Mac's or Windows' files,
+ * which come within ten minutes or so of the release: a pack that failed
+ * sends none. */
 const RETRIES = 15
 /** How often a Mac's Banda with a version ready looks whether a window
  * shows: two looks with none, and it restarts into it. */
@@ -122,6 +125,7 @@ export function updates(
 ): Updates {
   const image = process.env.APPIMAGE
   const brew = process.platform === "darwin" && app.isPackaged
+  const windows = process.platform === "win32" && app.isPackaged
   // On Linux only an AppImage: Banda from the AUR has no APPIMAGE, and
   // its `package-type` (scripts/aur.mjs) would turn electron-updater to
   // `sudo pacman -U`.
@@ -129,7 +133,7 @@ export function updates(
   const looks =
     which !== undefined &&
     process.env.BANDA_UPDATES !== "off" &&
-    Boolean(image || brew)
+    Boolean(image || brew || windows)
   const known: Known = {
     name: mine.name,
     have: app.getVersion(),
@@ -169,7 +173,7 @@ export function updates(
   // The Banda this one restarted from left what it was (ADR 0072,
   // decision 4).
   const left = leftBehind(have)
-  if (!image) {
+  if (!image && !windows) {
     const brewed = brewUpdates(mine, known, looking, tell, {
       brew: brewOf(mine.folder, process.execPath),
       leaving,
@@ -199,6 +203,10 @@ export function updates(
   // as it quits, nor deletes its file.
   let restarting = false
   let looked: number | undefined
+  /** The read a minute later that waits for this system's files, and
+   * how many have waited for them. */
+  let retry: ReturnType<typeof setTimeout> | undefined
+  let tries = 0
   /** The version the last look offered, `have` when none, and when it
    * came back: a quit or a restart installs only that one (ADR 0092,
    * decision 12). */
@@ -229,13 +237,14 @@ export function updates(
   // download, and the newer one's takes its place.
   autoUpdater.on("update-available", (info: UpdateInfo) => {
     if (restarting) return
+    tries = 0
     offered = { version: info.version, at: Date.now() }
     if (now.state === "ready" && now.version === info.version) {
       if (confirms) restart()
       return
     }
     // An AppImage Banda cannot replace downloads nothing.
-    const unwritable = cannotWrite(image)
+    const unwritable = image && cannotWrite(image)
     if (unwritable) {
       fail(`${unwritable}, so ${info.version} cannot install`)
       return
@@ -282,6 +291,7 @@ export function updates(
   // withdrawn, and goes (ADR 0092, decision 10).
   autoUpdater.on("update-not-available", (info: UpdateInfo) => {
     if (restarting) return
+    tries = 0
     looked = Date.now()
     offered = { version: info.version, at: looked }
     if (now.state === "ready")
@@ -290,6 +300,19 @@ export function updates(
   })
   autoUpdater.on("error", (error: Error & { code?: string }) => {
     console.warn("Banda could not update itself:", error.message)
+    // A release out before its files for this system, as Windows' come
+    // after Linux's: read again in a minute, RETRIES times at most.
+    if (
+      error.code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND" &&
+      retry === undefined &&
+      tries < RETRIES
+    ) {
+      tries += 1
+      retry = setTimeout(() => {
+        retry = undefined
+        read()
+      }, RETRY)
+    }
     if (needsPerson(error)) fail(error.message)
     else if (confirms && now.state === "ready") {
       // No look says the version ready is still out, so no restart into
@@ -357,9 +380,10 @@ export function updates(
     restarting = true
     leaving()
     leave({ from: have, to: ready.version, notes: ready.notes })
-    // Installed by the time it returns; the app quits right after.
-    autoUpdater.quitAndInstall(true, false)
-    startAfterImage(installed)
+    // An AppImage is installed by the time it returns, and the new one
+    // starts once this one is gone; Windows' installer starts it itself.
+    autoUpdater.quitAndInstall(true, !installed)
+    if (installed) startAfterImage(installed)
   }
   return {
     current: () => now,
