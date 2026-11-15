@@ -332,10 +332,10 @@ repository), with an adversarial check.
   button are as tall as a finger is wide (44 and 36 points, two lengths
   of the theme); what is written in is 16px, under which Safari zooms the
   page in on a tap; the page reaches the whole screen
-  (`viewport-fit=cover`) and keeps clear of its notch and home bar. Where
-  the pointer is a finger, on a phone or not, the composer keeps Stop
-  beside Send while something is written, as there may be no key to stop
-  with. Not yet: how many Threads call, at the way back, which the
+  (`viewport-fit=cover`) and keeps clear of its notch and home bar. The
+  composer keeps its one button, as on the desktop: Stop while the Agent
+  works and nothing is written, Send once something is (Roma, 2026-11-15;
+  a second button, tried in this PR, was taken out). Not yet: how many Threads call, at the way back, which the
   sidebar's door has no word for.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
