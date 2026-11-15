@@ -234,7 +234,7 @@ export function routeAct(
  * whether a file of a Project is one of this computer's, its path here
  * if it is. Thin in stage 2: a Pane asks it, never where it is.
  */
-export type Device = {
+export type PaneDevice = {
   has: (cap: Cap) => boolean
   local: (file: ProjectFile) => DeviceFile | undefined
   /**
@@ -255,7 +255,7 @@ export type Device = {
 }
 
 /** The words for a file on another machine than where it is held
- * (`Device.across`), by the two machines' names. */
+ * (`PaneDevice.across`), by the two machines' names. */
 const fileIsOn = (its: string, held: string) =>
   `That file is on ${its}, not on ${held}`
 
@@ -269,7 +269,7 @@ export function deviceFor(
   hosts: Hosts,
   has: (cap: Cap) => boolean,
   device = "this machine"
-): Device {
+): PaneDevice {
   return {
     has,
     local: (file) => {
@@ -287,7 +287,7 @@ export function deviceFor(
   }
 }
 
-/** `Device.across`, for what names no Pane's device, as the window's own
+/** `PaneDevice.across`, for what names no Pane's device, as the window's own
  * `file.attach`: `device` names this computer. */
 export function fileAcross(
   hosts: Hosts,

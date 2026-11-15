@@ -32,11 +32,14 @@ PR.
   `window/top/` (ADR 0110, step 3). The Window reaches the desktop only
   through the device's desktop adapter, `boot/desktop.ts`, by
   `boot/index.ts`; at last the adapter is the only reader of
-  `window.banda` (ADR 0089, decisions 2 and 11). What every client shares is `client/core` (`@banda/core`,
+  `window.banda` (ADR 0089, decisions 2 and 11). The port itself is
+  written once, `Device` in `client/core/src/device.ts`, and the
+  adapter's `device` is the one object that satisfies it, a browser's
+  parts in it. What every client shares is `client/core` (`@banda/core`,
   and `@banda/core/react` for what reads it from React): Here and the
   store the Window keeps it in, the store read by selector, what an
   action runs with, the words the page and the desktop say to each
-  other, and the machines the Window reaches (`KeptHosts`, with the
+  other with the device port's interface, and the machines the Window reaches (`KeptHosts`, with the
   machines a new Thread starts on), which take the names this device
   remembers from the Window. This machine is one of them, with the
   same rule while its engine is out of reach (ADR 0124). It has no DOM, reads no device and names
@@ -256,7 +259,7 @@ PR.
   `window.banda` only in `boot/desktop.ts`, and what else in the page reads
   it, its own code, the core's, `@banda/ui`'s and the modules' Pane parts,
   the test lists by file, a list that only falls (ADR 0089, decisions 2 and
-  11). The core imports only itself, the contract and, in its bindings,
+  11); only the adapter's `device` satisfies the port. The core imports only itself, the contract and, in its bindings,
   React, reads no device, names no App and keeps no state at a module's top
   level but the constants listed; only the Window makes and gives the hosts
   and gives the machines; the desktop imports nothing of the page, which

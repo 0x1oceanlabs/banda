@@ -23,7 +23,7 @@ export type ProjectFile = {
  * scope's ID. */
 export type MachineFile = { readonly machine: ProjectId; readonly path: string }
 
-/** A path on this computer's disk, from `Device.local`. */
+/** A path on this computer's disk, from `PaneDevice.local`. */
 export type DeviceFile = string & { readonly [deviceFile_]: true }
 
 /**
@@ -36,7 +36,7 @@ export function projectFile(project: ProjectId, path: string): ProjectFile {
   return { project, path } as ProjectFile
 }
 
-/** `path` as one of this computer's files, as `Device.local` found it. */
+/** `path` as one of this computer's files, as `PaneDevice.local` found it. */
 export function deviceFile(path: string): DeviceFile {
   return path as DeviceFile
 }

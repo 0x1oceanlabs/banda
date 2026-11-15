@@ -7,6 +7,7 @@ export {
   type ActAnswer,
   type ActAsk,
   type Cap,
+  type Device,
   type HostEntry,
   type HostState,
   type HostTest,
@@ -80,7 +81,7 @@ export { openProjects, shownProjects } from "./projects"
 export type { EngineAt } from "./device"
 export {
   type Act,
-  type Device,
+  type PaneDevice,
   deviceFor,
   fileAcross,
   type From,

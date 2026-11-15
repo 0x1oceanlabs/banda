@@ -15,6 +15,7 @@ import type {
   ActAnswer,
   ActAsk,
   Cap,
+  Device,
   HostEntry,
   HostState,
   HostTest,
@@ -314,7 +315,7 @@ export const device = {
    * desktop all of the list; a page of its own what a browser does, the
    * clipboard, telling and sounds. */
   has: (cap: Cap): boolean => desktop() !== undefined || IN_A_BROWSER.has(cap),
-}
+} satisfies Device
 
 /** What a page of its own can do, with no desktop. */
 const IN_A_BROWSER: ReadonlySet<Cap> = new Set(["clipboard", "notify", "sound"])
