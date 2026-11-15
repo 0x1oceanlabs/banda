@@ -508,6 +508,198 @@ async fn an_agent_moves_nothing_out_of_its_project_nor_into_it_from_outside() {
     assert!(world.has("b.txt"));
 }
 
+/// A file's bytes as the window carries them from another machine: each
+/// piece to `files.take_piece`, as copy `job`.
+async fn carry(world: &World, job: &str, bytes: &[u8]) {
+    for (n, piece) in bytes.chunks(PIECE).enumerate() {
+        let at = n * PIECE;
+        world
+            .command("files.take_piece", piece_of(job, at, piece))
+            .await
+            .unwrap();
+    }
+}
+
+/// The most bytes of a piece (ADR 0120, decision 4).
+const PIECE: usize = 512 * 1024;
+
+fn piece_of(job: &str, at: usize, piece: &[u8]) -> Value {
+    use base64::Engine as _;
+    let data = base64::engine::general_purpose::STANDARD.encode(piece);
+    json!({ "job": job, "at": at, "data": data })
+}
+
+async fn placed(world: &World, params: Value) -> Job {
+    world.job("files.place", params).await
+}
+
+/// Why `files.place` refused.
+async fn unplaced(world: &World, params: Value) -> Refusal {
+    world
+        .heard("files.place", params)
+        .await
+        .expect_err("it went")
+}
+
+#[tokio::test]
+async fn a_file_from_another_machine_comes_in_pieces_and_is_placed_whole() {
+    let world = World::new().await;
+    std::fs::create_dir(world.folder.join("src")).unwrap();
+    // More than one piece, and the last one short.
+    let bytes: Vec<u8> = (0..PIECE + 7).map(|n| (n % 251) as u8).collect();
+    carry(&world, "job-1", &bytes).await;
+    // The last piece sent again, as a window that heard no answer sends
+    // it, is kept once; a piece that is not the next one is refused.
+    let (last, again) = (piece_of("job-1", bytes.len(), b"!"), CommandId::new());
+    for _ in 0..2 {
+        (world
+            .command_as(again, "files.take_piece", last.clone())
+            .await)
+            .unwrap();
+    }
+    let bytes = [bytes, b"!".to_vec()].concat();
+    let late = piece_of("job-1", PIECE + 9, b"x");
+    let refusal = refused(world.command("files.take_piece", late).await);
+    assert_eq!(refusal.code, Code::Conflict);
+    let big = piece_of("job-1", bytes.len(), &vec![0; PIECE + 1]);
+    let refusal = refused(world.command("files.take_piece", big).await);
+    assert_eq!(refusal.code, Code::Invalid);
+    assert!(!world.has("src/big.bin"), "nothing is there before place");
+
+    let ask = json!({ "job": "job-1", "into": "src", "name": "big.bin", "size": bytes.len() });
+    let Job::Done(done) = placed(&world, ask.clone()).await else {
+        panic!("it asked");
+    };
+    assert_eq!(done.paths, [world.path("src/big.bin")]);
+    assert_eq!(
+        std::fs::read(world.folder.join("src/big.bin")).unwrap(),
+        bytes
+    );
+    // It came as a copy: its undo sends it to the Trash.
+    assert_eq!(
+        done.undo,
+        [Step::Trash {
+            paths: vec![world.path("src/big.bin")]
+        }]
+    );
+    // Its pieces went with it: the job holds nothing to place again.
+    let refusal = unplaced(&world, ask).await;
+    assert_eq!(refusal.code, Code::Conflict);
+}
+
+#[tokio::test]
+async fn a_file_that_did_not_come_whole_is_not_placed() {
+    let world = World::new().await;
+    carry(&world, "short", b"half of").await;
+    let ask = json!({ "job": "short", "into": "", "name": "notes.md", "size": 14 });
+    let refusal = unplaced(&world, ask.clone()).await;
+    assert_eq!(refusal.code, Code::Conflict);
+    assert_eq!(
+        refusal.message,
+        "notes.md did not come whole: copy it again."
+    );
+    assert!(!world.has("notes.md"));
+    // Carried again, it is the file as it is now: a first piece begins
+    // the copy anew, whatever was kept.
+    carry(&world, "short", b"other").await;
+    carry(&world, "short", b"half of it all").await;
+    assert!(matches!(placed(&world, ask).await, Job::Done(_)));
+    assert_eq!(world.text("notes.md"), "half of it all");
+
+    // A file of no bytes has no piece, and is placed.
+    let ask = json!({ "job": "none", "into": "", "name": ".gitkeep", "size": 0 });
+    assert!(matches!(placed(&world, ask).await, Job::Done(_)));
+    assert_eq!(world.text(".gitkeep"), "");
+
+    // A cancel takes the pieces away.
+    carry(&world, "gone", b"abc").await;
+    world
+        .command("files.cancel", json!({ "job": "gone" }))
+        .await
+        .unwrap();
+    let ask = json!({ "job": "gone", "into": "", "name": "abc.txt", "size": 3 });
+    let refusal = unplaced(&world, ask).await;
+    assert_eq!(refusal.code, Code::Conflict);
+    assert!(!world.has("abc.txt"));
+
+    // A job's name is no path, and a file's name neither.
+    for job in ["../x", "a/b", ""] {
+        let refusal = refused(
+            world
+                .command("files.take_piece", piece_of(job, 0, b"x"))
+                .await,
+        );
+        assert_eq!(refusal.code, Code::Invalid, "{job:?}");
+    }
+    carry(&world, "named", b"x").await;
+    let ask = json!({ "job": "named", "into": "", "name": "../x.txt", "size": 1 });
+    let refusal = unplaced(&world, ask).await;
+    assert_eq!(refusal.code, Code::Invalid);
+    let ask = json!({ "job": "named", "into": ".git", "name": "config", "size": 1 });
+    let refusal = unplaced(&world, ask).await;
+    assert_eq!(refusal.code, Code::Forbidden);
+    let ask = json!({ "job": "named", "into": "nowhere", "name": "x.txt", "size": 1 });
+    let refusal = unplaced(&world, ask).await;
+    assert_eq!(refusal.code, Code::NotFound);
+}
+
+#[tokio::test]
+async fn a_file_placed_where_its_name_is_taken_asks_keeps_both_or_skips() {
+    let world = World::new().await;
+    world.write("a.txt", "here");
+    carry(&world, "taken", b"from arc").await;
+    let ask = |taken: &str| json!({ "job": "taken", "into": "", "name": "a.txt", "size": 8, "taken": taken });
+    // Asked to ask, it says the name is taken and does nothing.
+    let unsaid = json!({ "job": "taken", "into": "", "name": "a.txt", "size": 8 });
+    let Job::Clashes { clashes } = placed(&world, unsaid).await else {
+        panic!("it did not ask");
+    };
+    assert_eq!(clashes.len(), 1);
+    assert_eq!(clashes[0].name, "a.txt");
+    assert_eq!(world.text("a.txt"), "here");
+    // Its pieces wait for the answer.
+    let Job::Done(done) = placed(&world, ask("keep-both")).await else {
+        panic!("it asked again");
+    };
+    assert_eq!(done.paths, [world.path("a 2.txt")]);
+    assert_eq!(world.text("a.txt"), "here");
+    assert_eq!(world.text("a 2.txt"), "from arc");
+
+    carry(&world, "taken", b"from arc").await;
+    let Job::Done(done) = placed(&world, ask("skip")).await else {
+        panic!("it asked");
+    };
+    assert_eq!(done.skipped, ["a.txt"]);
+    assert!(done.paths.is_empty() && done.undo.is_empty());
+    assert_eq!(world.text("a.txt"), "here");
+    // Skipped, its pieces went.
+    let refusal = unplaced(&world, ask("replace")).await;
+    assert_eq!(refusal.code, Code::Conflict);
+}
+
+#[tokio::test]
+async fn only_a_person_carries_a_file_from_another_machine() {
+    let world = World::new().await;
+    let piece = piece_of("job", 0, b"x");
+    let refusal = refused(
+        world
+            .command_as_agent("files.take_piece", piece.clone())
+            .await,
+    );
+    assert_eq!(refusal.code, Code::Forbidden);
+    world.command("files.take_piece", piece).await.unwrap();
+    let ask = json!({ "job": "job", "into": "", "name": "x.txt", "size": 1 });
+    let refusal = (world.stream_as_agent("files.place", ask.clone()).await).expect_err("it went");
+    assert_eq!(refusal.code, Code::Forbidden);
+    // Nor does an Agent's cancel take the Person's pieces away.
+    world
+        .command_as_agent("files.cancel", json!({ "job": "job" }))
+        .await
+        .unwrap();
+    assert!(matches!(placed(&world, ask).await, Job::Done(_)));
+    assert_eq!(world.text("x.txt"), "x");
+}
+
 #[tokio::test]
 async fn nothing_in_git_nor_in_bandas_settings_is_made_renamed_moved_or_trashed() {
     let world = World::new().await;
@@ -727,6 +919,7 @@ fn the_trash_is_tried_in_a_throwaway_home() {
         "trash_sends_to_the_trash_and_puts_back_as_undone",
         "trash_deletes_for_good_only_there_and_an_agent_sees_its_own",
         "trash_takes_what_a_replace_replaced_and_undone_it_comes_back",
+        "trash_takes_what_a_file_from_another_machine_replaced",
         "trash_takes_what_an_agents_replace_replaced_though_its_move_is_kept_to_its_project",
     ] {
         assert!(said.contains(&format!("test {test} ... ok")), "{said}");
@@ -742,6 +935,30 @@ const TRASH_HOME: &str = "BANDA_FILES_TEST_TRASH";
 #[cfg(all(unix, not(target_os = "macos")))]
 fn throwaway() -> bool {
     std::env::var_os(TRASH_HOME).is_some()
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[tokio::test]
+#[ignore = "run by the_trash_is_tried_in_a_throwaway_home"]
+async fn trash_takes_what_a_file_from_another_machine_replaced() {
+    if !throwaway() {
+        return;
+    }
+    let world = World::new().await;
+    world.write("a.txt", "here");
+    carry(&world, "over", b"from arc").await;
+    let ask = json!({ "job": "over", "into": "", "name": "a.txt", "size": 8, "taken": "replace" });
+    let Job::Done(done) = placed(&world, ask).await else {
+        panic!("it asked");
+    };
+    assert_eq!(world.text("a.txt"), "from arc");
+    // Undone, the copy goes to the Trash and what it replaced comes back.
+    let [Step::Trash { paths }, Step::Restore { items }] = done.undo.as_slice() else {
+        panic!("{:?}", done.undo);
+    };
+    assert_eq!((paths.len(), items.len()), (1, 1));
+    world.undo(&done.undo).await;
+    assert_eq!(world.text("a.txt"), "here");
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
