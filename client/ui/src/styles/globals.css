@@ -1250,3 +1250,28 @@ a[data-file][data-kind="text"] {
 [data-phone] [data-slot="pane-buttons"] > :not([data-own]) {
   display: none;
 }
+/* What a thumb takes (SE6): a row of the list and a button are as tall as
+   a finger is wide; what is written in is 16px, under which Safari zooms
+   the page in on a tap; and the page keeps clear of the screen's notch
+   and home bar, which `viewport-fit=cover` lets it reach. */
+[data-phone] {
+  --touch-row: 2.75rem;
+  --touch-control: 2.25rem;
+  /* In the screen's own points, not the page's: Safari counts those. */
+  --touch-text: 16px;
+}
+[data-phone] [data-card],
+[data-phone] [data-head] {
+  min-height: var(--touch-row);
+}
+[data-phone] [data-slot="button"] {
+  min-width: var(--touch-control);
+  min-height: var(--touch-control);
+}
+[data-phone] :is(input, textarea, [contenteditable="true"]) {
+  font-size: var(--touch-text);
+}
+[data-phone] #root > div {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}

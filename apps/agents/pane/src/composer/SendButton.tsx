@@ -16,8 +16,10 @@ import { keyFor, steers } from "./enter-key"
  * The composer's primary button: Stop while the Agent works and nothing is
  * written; else Send, which steers or queues while a turn runs, as Enter
  * does, and Ctrl+click the other (ADR 0010, decision 7); Send when back
- * while the message would wait for its machine (ADR 0105, Q2). It sends
- * nothing itself: it says `onSend`, with whether it goes into the turn.
+ * while the message would wait for its machine (ADR 0105, Q2). Where the
+ * pointer is a finger, Stop stays beside Send while something is written,
+ * as there may be no key to stop with (ADR 0124, SE6). It sends nothing
+ * itself: it says `onSend`, with whether it goes into the turn.
  */
 export function SendButton({
   name,
@@ -62,31 +64,51 @@ export function SendButton({
         <SquareIcon className="size-2.5 fill-current" />
       </Button>
     )
+  const stop = working && (
+    <Button
+      type="button"
+      variant="secondary"
+      size="icon-sm"
+      className="ml-1 hidden rounded-full pointer-coarse:inline-flex"
+      aria-label="Stop"
+      onClick={() => onStop(working)}
+    >
+      <SquareIcon className="size-2.5 fill-current" />
+    </Button>
+  )
   if (whenBack !== undefined)
-    return <SendWhenBack title={whenBack} disabled={!ready} busy={busy} />
+    return (
+      <>
+        {stop}
+        <SendWhenBack title={whenBack} disabled={!ready} busy={busy} />
+      </>
+    )
   const look =
     PRIMARY[!steering ? "send" : steers(enter, false) ? "steer" : "queue"]
   return (
-    <Button
-      type="submit"
-      size="icon-sm"
-      // With nothing to send it is not faded but quiet (ADR 0031).
-      // Held, it still takes the pointer, so its tooltip says why.
-      className={cn(
-        "ml-1 rounded-full hover:bg-primary/90 disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100",
-        held !== undefined && "disabled:pointer-events-auto"
-      )}
-      aria-label={look.label}
-      title={held ?? look.title?.(name, enter)}
-      disabled={!ready}
-      onClick={(event) => {
-        // Ctrl (⌘ on a Mac) does the other thing, as with Enter.
-        event.preventDefault()
-        onSend(steers(enter, event.ctrlKey || event.metaKey))
-      }}
-    >
-      {busy ? <Spinner /> : look.icon}
-    </Button>
+    <>
+      {stop}
+      <Button
+        type="submit"
+        size="icon-sm"
+        // With nothing to send it is not faded but quiet (ADR 0031).
+        // Held, it still takes the pointer, so its tooltip says why.
+        className={cn(
+          "ml-1 rounded-full hover:bg-primary/90 disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100",
+          held !== undefined && "disabled:pointer-events-auto"
+        )}
+        aria-label={look.label}
+        title={held ?? look.title?.(name, enter)}
+        disabled={!ready}
+        onClick={(event) => {
+          // Ctrl (⌘ on a Mac) does the other thing, as with Enter.
+          event.preventDefault()
+          onSend(steers(enter, event.ctrlKey || event.metaKey))
+        }}
+      >
+        {busy ? <Spinner /> : look.icon}
+      </Button>
+    </>
   )
 }
 
