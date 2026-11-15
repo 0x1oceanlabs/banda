@@ -7,7 +7,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import type { Device } from "@banda/contract/look"
+import type { SystemFacts } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
 import { Effect, Layer, Option, Stream } from "effect"
@@ -17,10 +17,10 @@ import { Program } from "../program"
 import { script } from "../testing"
 import { type System, systemLayer } from "./system"
 
-const PLAIN: Device = { reduce_transparency: false, high_contrast: false }
+const PLAIN: SystemFacts = { reduce_transparency: false, high_contrast: false }
 
 /** A system that says `now`, and whoever listens to it. */
-function fake(now: Device) {
+function fake(now: SystemFacts) {
   const listeners = new Set<() => void>()
   const system: System = {
     says: () => now,
@@ -33,7 +33,7 @@ function fake(now: Device) {
     system,
     listeners,
     /** The Person changes the system's settings to `next`. */
-    change: (next: Device) => {
+    change: (next: SystemFacts) => {
       now = next
       for (const changed of listeners) changed()
     },
@@ -44,7 +44,8 @@ function fake(now: Device) {
 const fresh = () =>
   join(mkdtempSync(join(tmpdir(), "banda-test-")), "state", "device.json")
 
-const read = (file: string) => JSON.parse(readFileSync(file, "utf8")) as Device
+const read = (file: string) =>
+  JSON.parse(readFileSync(file, "utf8")) as SystemFacts
 
 /** Lets what a change started run. */
 const settle = Effect.sleep("20 millis")

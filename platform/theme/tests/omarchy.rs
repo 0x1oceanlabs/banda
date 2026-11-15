@@ -6,7 +6,7 @@
 use banda_theme::palette::Palette;
 use banda_theme::readable::{Under, Unread, check};
 use banda_theme::tokens::{Glass, scheme};
-use banda_theme::{Device, Material};
+use banda_theme::{Material, SystemFacts};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -43,7 +43,7 @@ fn check_of(palette: &Palette, glass: Option<(Material, Under)>) -> Vec<Unread> 
         under,
         tokens: &none,
     });
-    let scheme = scheme(palette, [], [], None, None, &Device::default(), glass);
+    let scheme = scheme(palette, [], [], None, None, &SystemFacts::default(), glass);
     check(&scheme, under)
 }
 

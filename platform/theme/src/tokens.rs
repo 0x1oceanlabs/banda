@@ -17,7 +17,7 @@
 use crate::color::{Oklab, is_css_color, is_hex, mix, thinned};
 use crate::palette::{ANSI, Palette};
 use crate::readable::{self, MARK, Under};
-use crate::{Device, Mode};
+use crate::{Mode, SystemFacts};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// What a token's value is.
@@ -433,7 +433,7 @@ pub fn scheme<'a>(
     tokens: impl IntoIterator<Item = (&'a str, &'a str)>,
     border: Option<&str>,
     inactive_border: Option<&str>,
-    device: &Device,
+    device: &SystemFacts,
     glass: Option<Glass>,
 ) -> BTreeMap<String, String> {
     let mut base = palette.clone();
@@ -634,7 +634,7 @@ mod tests {
                     none.clone(),
                     None,
                     None,
-                    &Device::default(),
+                    &SystemFacts::default(),
                     glass,
                 );
                 for token in TOKENS.iter().filter(|t| t.kind == Kind::Colour) {
@@ -655,7 +655,7 @@ mod tests {
             "accent = \"system\"\nblue = \"#007aff\"\nbackground = \"#ffffff\"\ndark_background = \"#f5f5f7\"",
         );
         let none = std::iter::empty();
-        let with = |device: Device| {
+        let with = |device: SystemFacts| {
             scheme(
                 &palette,
                 none.clone(),
@@ -666,28 +666,28 @@ mod tests {
                 None,
             )
         };
-        let apple = with(Device::default());
+        let apple = with(SystemFacts::default());
         assert_eq!(apple["--primary"], "#007aff");
         assert_eq!(apple["--focus"], "#007aff");
-        let pink = with(Device {
+        let pink = with(SystemFacts {
             accent: Some("#e0478c".to_owned()),
-            ..Device::default()
+            ..SystemFacts::default()
         });
         assert_eq!(pink["--primary"], "#e0478c");
         assert_eq!(pink["--sidebar-ring"], "#e0478c");
         // What is not a colour does not get in.
-        let wrong = with(Device {
+        let wrong = with(SystemFacts {
             accent: Some("var(--x)".to_owned()),
-            ..Device::default()
+            ..SystemFacts::default()
         });
         assert_eq!(wrong["--primary"], "#007aff");
     }
 
     #[test]
     fn a_pale_system_accent_reads_where_it_is_a_line_or_text() {
-        let yellow = Device {
+        let yellow = SystemFacts {
             accent: Some("#ffd60a".to_owned()),
-            ..Device::default()
+            ..SystemFacts::default()
         };
         let ratio = |a: &str, b: &str| {
             let rgb = |c: &str| Oklab::parse(c).unwrap().rgb();
@@ -734,7 +734,7 @@ mod tests {
                 [],
                 None,
                 None,
-                &Device::default(),
+                &SystemFacts::default(),
                 Some(glass),
             );
             assert_eq!(readable::check(&scheme, under), []);
@@ -763,7 +763,15 @@ mod tests {
     fn tokens_that_follow_others_take_their_final_values() {
         let palette = palette("background = \"#ffffff\"\nforeground = \"#000000\"");
         let tokens = [("foreground", "#18181b"), ("raised", "#eeeeee")];
-        let scheme = scheme(&palette, [], tokens, None, None, &Device::default(), None);
+        let scheme = scheme(
+            &palette,
+            [],
+            tokens,
+            None,
+            None,
+            &SystemFacts::default(),
+            None,
+        );
         assert_eq!(scheme["--account-own"], "#18181b");
         // 3.5% of the ink in the ground, as color-mix() in sRGB.
         assert_eq!(scheme["--block"], "#f7f7f7");
@@ -790,7 +798,7 @@ mod tests {
                 tokens.clone(),
                 None,
                 None,
-                &Device::default(),
+                &SystemFacts::default(),
                 None,
             );
             let glass = scheme(
@@ -799,7 +807,7 @@ mod tests {
                 tokens,
                 None,
                 None,
-                &Device::default(),
+                &SystemFacts::default(),
                 Some(glass),
             );
             (solid, glass)
@@ -834,7 +842,7 @@ mod tests {
     #[test]
     fn the_solid_desk_greys_the_ground_as_the_page_did() {
         let palette = palette("background = \"#ffffff\"\nforeground = \"#000000\"");
-        let scheme = scheme(&palette, [], [], None, None, &Device::default(), None);
+        let scheme = scheme(&palette, [], [], None, None, &SystemFacts::default(), None);
         let muted = Oklab::parse(&scheme["--muted"]).unwrap();
         let white = Oklab::parse("#ffffff").unwrap();
         assert_eq!(scheme["--desk"], muted.mix(white, 0.4).css());

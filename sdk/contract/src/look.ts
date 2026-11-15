@@ -13,7 +13,7 @@ import type { Widths } from "./generated/look/Widths"
 import type { Motion } from "./generated/look/Motion"
 
 export type { Look } from "./generated/look/Look"
-export type { Device } from "./generated/look/Device"
+export type { SystemFacts } from "./generated/look/SystemFacts"
 export {
   BANDA,
   RENAMED,
