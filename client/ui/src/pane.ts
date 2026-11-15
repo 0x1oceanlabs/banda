@@ -13,7 +13,7 @@ import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import type { ChangedLines, Doing } from "@banda/contract/agents"
 import type { Pull } from "@banda/contract/pulls"
 import {
-  type Device,
+  type PaneDevice,
   paneHost,
   type PaneState,
   type Place,
@@ -181,7 +181,7 @@ export type PaneProps<A> = {
   /** The device the Person is at (ADR 0106, law 1): what it can do, and
    * whether a file is one of this computer's. None where no window gives
    * it. */
-  device?: Device
+  device?: PaneDevice
   /** The file at `path`, stamped with this Pane's Project (ADR 0106, law
    * 2): what a file crosses a boundary as, to a drag, the clipboard, the
    * Message box. None where no window gives it. */

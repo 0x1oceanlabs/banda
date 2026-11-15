@@ -85,6 +85,14 @@ desktop, web and the PWA now.
    [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
    decision 6: the port carries `save_file` too, which ADR 0082 decision
    12's list gains for "Save a copy to this Mac"._
+   _Built_ (track 3, WS10, part 11; W1; #1783): the port is one
+   interface, `Device` in `client/core/src/device.ts`, built from the
+   parts there were (`HostsDevice`, the closed list `Cap`) and the
+   desktop's own, and `boot/desktop.ts`'s `device` is the one object that
+   satisfies it: a browser has no second one, as that object answers
+   with the browser's engine and hosts where the desktop is not. The
+   device as a Pane holds it (ADR 0106, laws 1 and 6) is `PaneDevice`.
+   The screen's facts, presence and storage are not on it yet.
 
 3. **The desktop's device session stays in Electron main.** Main holds it
    today (`client/desktop/src/road.ts:1-6`). There is one device per

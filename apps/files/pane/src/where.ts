@@ -4,7 +4,7 @@
  * the bar with its Tab completion. Pure, so plain tests cover it.
  */
 import type { Entry } from "@banda/contract/files"
-import type { Device, DeviceFile, ProjectFile } from "@banda/core/react"
+import type { DeviceFile, PaneDevice, ProjectFile } from "@banda/core/react"
 import { isFolder } from "./tree"
 
 /** `path` with `~` for `home` and what is under it. */
@@ -160,7 +160,7 @@ export function completed(typed: string, names: readonly string[]): string {
  * decision 3).
  */
 export function localOf(
-  device: Device | undefined,
+  device: PaneDevice | undefined,
   file: ((path: string) => ProjectFile) | undefined,
   whole: string
 ): DeviceFile | undefined {

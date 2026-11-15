@@ -2263,6 +2263,19 @@ test("only boot/index.ts takes in the device's desktop adapter", () => {
 })
 
 /**
+ * The device port is written once, `Device` in the core, and one object
+ * satisfies it: the adapter's `device` (ADR 0089, decision 2). So a part
+ * the adapter gains or changes is the port's first, and no second
+ * object answers the port beside it.
+ */
+test("the device's adapter, and nothing else in the page, satisfies the port", () => {
+  const satisfying = sources(join(app, "web/src"), { tests: false })
+    .filter((file) => /\bsatisfies Device\b/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(root, file))
+  expect(satisfying).toEqual([DEVICE])
+})
+
+/**
  * Electron main, the preload and the desktop's tests import nothing of the
  * page (ADR 0089, decisions 4 and 11), by its package or by a path into
  * it: the bridge's table is the desktop's, and the page takes its type

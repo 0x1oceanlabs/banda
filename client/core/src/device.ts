@@ -3,13 +3,16 @@
  * decision 2): what the bridge's channels carry, which the page's device
  * adapter (`client/web/src/boot/desktop.ts`) and Electron main both read.
  * The channels themselves are the desktop's table (`BRIDGE`, in
- * `client/desktop/src/bridge.ts`). The port's interface (`Device`) joins
- * the core at W1, with its second reader; the device object the Window
- * reaches them by, and its desktop adapter, stay in `client/web/src/boot/`
- * (decision 4).
+ * `client/desktop/src/bridge.ts`). The port's interface is here too
+ * (`Device`), written once: the device object the Window reaches them by
+ * satisfies it, and stays with its desktop adapter in
+ * `client/web/src/boot/` (decision 4).
  */
-import type { Named, ProjectId } from "@banda/contract"
+import type { Address, Named, ProjectId } from "@banda/contract"
+import type { Listed } from "@banda/contract/look"
+import type { HostsDevice } from "./hosts"
 import type { PaneState, Place } from "./pane"
+import type { PaneDevice } from "./route"
 import type { Args } from "./run"
 
 /**
@@ -221,3 +224,106 @@ export type Cap =
   | "drag_out"
   | "save_file"
   | "forward_port"
+
+/** How to stop hearing what a part tells; none where no desktop tells. */
+type Stop = (() => void) | undefined
+
+/**
+ * The device port (ADR 0089, decision 2): the one way from the Window to
+ * the device it runs on, part by part as `client/web/src/boot/desktop.ts`
+ * answers it, where each part says what it does. One object satisfies
+ * it: without the desktop, as in a browser at a machine's door, the same
+ * object answers, its engine and its hosts from the browser's own
+ * (`boot/browser.ts`) and the rest with nothing or a refusal. What a Pane
+ * holds of it is `PaneDevice`, whose `has` is this one's.
+ */
+export interface Device extends Pick<PaneDevice, "has"> {
+  /** Where this machine's engine listens now (ADR 0124, decision 5). */
+  engine: () => Promise<Address>
+  /** The other machines: what the hosts store reads (`HostsDevice`), and
+   * what Settings → Machines does to `hosts.toml` and at an address. */
+  hosts: HostsDevice & {
+    stop: (name: string, force: boolean) => Promise<"stopped" | "working">
+    forward: (
+      name: string,
+      port: number,
+      same?: boolean
+    ) => Promise<number | "away" | "taken">
+    add: (machine: { ssh: string; banda?: string }) => Promise<HostEntry>
+    set: (
+      name: string,
+      change: { ssh?: string; banda?: string }
+    ) => Promise<HostEntry>
+    remove: (name: string) => Promise<void>
+    test: (ssh: string, banda: string | null) => Promise<HostTest>
+    install: (
+      ssh: string,
+      told: (line: string) => void
+    ) => Promise<{ version: string; path: string }>
+    cancelInstall: (ssh: string) => Promise<void>
+    terminalArgs: (ssh: string, remote: string) => Promise<string[]>
+    suggestions: () => Promise<string[]>
+  }
+  /** Panes in windows of their own (ADR 0025, decision 9). */
+  popped: {
+    open: (pane: string, width: number, height: number) => void
+    close: (pane: string) => void
+    follow: (take: (panes: ReadonlySet<string>) => void) => Stop
+    ask: (asked: PoppedAsk) => void
+    asked: (listener: (asked: PoppedAsk) => void) => Stop
+  }
+  /** Actions asked of the Window from outside the page (ADR 0127,
+   * decision 2). */
+  act: {
+    asked: (listener: (asked: ActAsk) => void) => Stop
+    answer: (answer: ActAnswer) => void
+  }
+  /** The Banda menu, as `banda menu ROUTE` opens it (ADR 0017). */
+  menu: {
+    open: (route: string) => void
+    listen: (listener: (route: string) => void) => Stop
+  }
+  /** `sidebar.toml` (ADR 0008). */
+  sidebar: { edit: () => void }
+  /** The settings' files (ADR 0016): each change answers what was wrong,
+   * if it was refused. */
+  settings: {
+    set: (file: string, key: string, value: string) => Promise<string[]>
+    reset: (file: string, key: string) => Promise<string[]>
+    rename: (file: string, key: string, to: string) => Promise<string[]>
+    reveal: (file: string) => void
+    writes: () => boolean
+    themes: () => Promise<Listed[]>
+  }
+  /** What broke in Banda (ADR 0039). */
+  problems: { logs: () => void }
+  /** A folder of this device, as its own dialog picks one (ADR 0026). */
+  folder: { pick: (at: string | null) => Promise<string | null> }
+  /** Files on the machine, by their full path (ADR 0073, decision 14). */
+  files: {
+    exists: (file: string) => Promise<boolean> | undefined
+    outside: (file: string) => void
+    show: (file: string) => void
+    save: (
+      url: string,
+      name: string
+    ) => Promise<"saved" | "canceled" | "away"> | undefined
+  }
+  /** Editing in the page, as the system's menu does (ADR 0063, decision
+   * 3). */
+  edit: {
+    paste: () => void
+    pastePlain: () => void
+    copyImageAt: (x: number, y: number) => void
+  }
+  /** Banda's own update (ADR 0041). */
+  update: {
+    follow: (take: (update: Update) => void) => () => void
+    seen: () => void
+    now: () => void
+    check: () => void
+    restart: () => void
+  }
+  /** Quits Banda (ADR 0086, decision 3). */
+  quit: () => void
+}

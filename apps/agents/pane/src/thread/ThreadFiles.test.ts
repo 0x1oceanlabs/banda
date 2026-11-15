@@ -1,7 +1,7 @@
 import type { ProjectId } from "@banda/contract"
 import type { Item } from "@banda/contract/agents"
 import type { Located } from "@banda/contract/files"
-import { type Device, deviceFile, projectFile } from "@banda/core/react"
+import { deviceFile, type PaneDevice, projectFile } from "@banda/core/react"
 import { beforeEach, expect, test, vi } from "vitest"
 import { ThreadFiles, type FilesHands } from "./ThreadFiles"
 
@@ -36,7 +36,7 @@ function filesOn(local: boolean, answer: Located[] = []) {
   }
   const files = new ThreadFiles({ call } as never, ARC)
   const ran: [string, unknown][] = []
-  const device: Device = {
+  const device: PaneDevice = {
     has: () => true,
     local: (file) => (local ? deviceFile(file.path) : undefined),
     across: () => undefined,
