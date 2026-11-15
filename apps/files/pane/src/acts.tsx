@@ -5,10 +5,23 @@
  * or a copy is a job: a name taken asks the Person first, and one that
  * takes a while shows how far it is in its toast, with Stop.
  */
-import type { Engine, ProjectId } from "@banda/contract"
-import type { Clash, Clashing, Done, Making, Step } from "@banda/contract/files"
+import {
+  type Engine,
+  type ProjectId,
+  Refused,
+  Unreachable,
+} from "@banda/contract"
+import type {
+  Clash,
+  Clashing,
+  Done,
+  Job,
+  Making,
+  Step,
+} from "@banda/contract/files"
 import { toast } from "@banda/ui/components/sonner"
 import { problem } from "@banda/ui/lib/words"
+import { carry, Changed, Folder, type Source, Stopped } from "./across"
 import {
   lastPiece,
   remember,
@@ -297,6 +310,166 @@ export async function transfer(
     toast.error(problem(error, copy ? "the copy" : "the move"))
     return null
   }
+}
+
+/**
+ * Copies `sources`, files of another machine or another app's, into
+ * `dir` of this Pane's machine, `to` by its name (ADR 0120, decision 4):
+ * the window carries each, a toast says how far with Cancel, a name taken
+ * is asked about, and the end is said with Undo. `from` names the machine
+ * they are on, where they are a machine's; `stays` says they were cut,
+ * and stay there. What it did, or none when nothing was copied.
+ */
+export async function bring(
+  at: At,
+  {
+    sources,
+    dir,
+    to,
+    from,
+    stays = false,
+    ask,
+  }: {
+    sources: readonly Source[]
+    dir: string
+    to: string
+    from?: string
+    stays?: boolean
+    ask: Asker
+  }
+): Promise<Done | null> {
+  const id = `files.job.${crypto.randomUUID()}`
+  let job = ""
+  const stopping = new AbortController()
+  let shown = false
+  // A copy that ended before its end, not as the Person asked.
+  let failed = false
+  const forget = () =>
+    job &&
+    void at.engine.command("files.cancel", { job }, at.project).catch(() => {})
+  const stop = (event: { preventDefault: () => void }) => {
+    event.preventDefault()
+    stopping.abort()
+    forget()
+  }
+  const stopped = () => {
+    if (stopping.signal.aborted) throw new Stopped()
+  }
+  const did: Done = { paths: [], undo: [] }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    // Looked at first, all of them: a folder refuses before a byte goes.
+    const looked = await Promise.all(sources.map((one) => one.look()))
+    let last = { done: 0, of: looked.reduce((sum, one) => sum + one.size, 0) }
+    let name = ""
+    const show = () => {
+      shown = true
+      toast(stopping.signal.aborted ? "Stopping…" : `Copying to ${to}`, {
+        id,
+        duration: Infinity,
+        description: <Progress {...last} name={name} />,
+        action: { label: "Cancel", onClick: stop },
+      })
+    }
+    // Quiet at first: a quick one only says its end.
+    timer = setTimeout(show, QUIET)
+    for (const [n, source] of sources.entries()) {
+      job = crypto.randomUUID()
+      name = source.name
+      await carry(
+        at,
+        source,
+        looked[n],
+        job,
+        (bytes) => {
+          last = { ...last, done: last.done + bytes }
+          if (shown) show()
+        },
+        stopping.signal
+      )
+      let taken: Clash = "ask"
+      for (;;) {
+        stopped()
+        const end: Exclude<Job, { kind: "progress" }> = await lastPiece(
+          at.engine,
+          at.project,
+          "files.place",
+          {
+            job,
+            into: dir,
+            name,
+            size: looked[n].size,
+            taken,
+          }
+        )
+        if (end.kind === "done") {
+          did.paths.push(...end.paths)
+          did.undo.push(...end.undo)
+          if (end.skipped) did.skipped = [...(did.skipped ?? []), name]
+          if (end.failed)
+            throw new Refused({ code: "conflict", message: end.failed })
+          if (end.stopped) throw new Stopped()
+          break
+        }
+        clearTimeout(timer)
+        if (shown) toast.dismiss(id)
+        shown = false
+        const answer: Exclude<Clash, "ask"> | undefined = (
+          await ask(end.clashes, nameOf(dir))
+        )?.[name]
+        if (!answer) throw new Stopped()
+        taken = answer
+        timer = setTimeout(show, QUIET)
+      }
+      job = ""
+    }
+  } catch (error) {
+    forget()
+    // What a piece on its way says once the Person stopped is no news.
+    if (!(error instanceof Stopped) && !stopping.signal.aborted) {
+      if (shown) toast.dismiss(id)
+      // A folder is refused, not failed.
+      const say = error instanceof Folder ? toast.warning : toast.error
+      say(copyProblem(error, from))
+      if (did.paths.length === 0) return null
+      failed = true
+    } else did.stopped = true
+  } finally {
+    clearTimeout(timer)
+  }
+  if (did.paths.length === 0 && !did.skipped) {
+    if (shown) toast.dismiss(id)
+    return null
+  }
+  const title = did.stopped
+    ? `Stopped: ${did.paths.length} of ${sources.length} copied`
+    : failed
+      ? `${did.paths.length} of ${sources.length} copied to “${nameOf(dir)}” on ${to}`
+      : did.paths.length === 0
+        ? "Nothing copied"
+        : `Copied ${itemsWords(did.paths)} to “${nameOf(dir)}” on ${to}`
+  const skipped = did.skipped?.length
+  said(at, title, did.undo, {
+    id,
+    description:
+      stays && from && did.paths.length > 0
+        ? `${did.paths.length === 1 ? "It stays" : "They stay"} on ${from}.`
+        : skipped
+          ? `${skipped} skipped.`
+          : undefined,
+  })
+  if (did.undo.some((step) => step.kind === "restore")) toldTrash()
+  return did
+}
+
+/** Why a copy from another machine did not finish, in words. */
+function copyProblem(error: unknown, from: string | undefined): string {
+  if (error instanceof Changed)
+    return `${error.file} changed${from ? ` on ${from}` : ""} while it was copied: copy it again.`
+  if (error instanceof Unreachable && error.machine)
+    return `${error.machine} went away: the copy did not finish.`
+  if (error instanceof Folder) return error.message
+  return problem(error, "the copy")
 }
 
 /** How far a job is: its bytes, and a thin bar. */

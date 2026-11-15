@@ -13,7 +13,7 @@
  * values by the Window's hosts (`KeptHosts`), and never runs on this
  * machine what belongs to another.
  */
-import type { ProjectId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { Cap } from "./device"
 import { type DeviceFile, deviceFile, type ProjectFile } from "./files"
 import { type KeptHosts, namedIn, UNKNOWN } from "./hosts"
@@ -90,7 +90,7 @@ export type Refused = {
 /** What the router reads of the Window's hosts. */
 export type Hosts = Pick<
   KeptHosts,
-  "get" | "hostOf" | "seen" | "machines" | "modulesOf"
+  "get" | "hostOf" | "seen" | "machines" | "modulesOf" | "sessionOf"
 >
 
 /** Where an owner's values are: this machine, a host by its key, or
@@ -129,6 +129,11 @@ const sameWhere = (a: Where, b: Where) =>
 /** Host `host`'s name, as the Window shows it or this device last saw it. */
 const nameOf = (hosts: Hosts, host: string) =>
   namedIn(hosts.get(), host, hosts.seen).name
+
+/** A machine's name as the Person reads it: a host's, or `device` for
+ * this computer. */
+const machineName = (hosts: Hosts, where: Where | undefined, device: string) =>
+  where && "host" in where ? nameOf(hosts, where.host) : device
 
 const refused = (
   why: string,
@@ -239,16 +244,20 @@ export type Device = {
    * two Projects of one machine still goes.
    */
   across: (file: ProjectFile, to: ProjectId) => string | undefined
+  /**
+   * The machine that has `project`, for what a Pane carries from one
+   * machine to another, as a file's copy (ADR 0120, decision 4): its
+   * session, where every act there goes, and its name as the Person
+   * reads it, the device's own for this computer. It throws as an act
+   * there would while the machine is away (`KeptHosts.sessionOf`).
+   */
+  machineOf: (project: ProjectId) => { engine: Engine; name: string }
 }
 
 /** The words for a file on another machine than where it is held
- * (`Device.across`): `name` is that machine's, none for the device's
- * own. */
-function fileIsOn(name: string | undefined, device: string): string {
-  return name === undefined
-    ? `That file is on ${device}. Files don't move between machines yet.`
-    : `That file is on ${name}`
-}
+ * (`Device.across`), by the two machines' names. */
+const fileIsOn = (its: string, held: string) =>
+  `That file is on ${its}, not on ${held}`
 
 /**
  * The device for a Pane, as `has` says what this device can do and
@@ -268,6 +277,13 @@ export function deviceFor(
       return where && "here" in where ? deviceFile(file.path) : undefined
     },
     across: (file, to) => fileAcross(hosts, file, to, device),
+    machineOf: (project) => {
+      const where = whereOf(hosts, { project })
+      return {
+        engine: hosts.sessionOf(project),
+        name: machineName(hosts, where, device),
+      }
+    },
   }
 }
 
@@ -286,7 +302,7 @@ export function fileAcross(
   if ("nowhere" in its) return its.nowhere
   if (sameWhere(whose, its)) return undefined
   return fileIsOn(
-    "host" in whose ? nameOf(hosts, whose.host) : undefined,
-    device
+    machineName(hosts, whose, device),
+    machineName(hosts, its, device)
   )
 }

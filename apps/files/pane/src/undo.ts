@@ -5,8 +5,13 @@
  * steps are Files' commands again, run in order; a move back asks, so
  * nothing is written over a name taken since.
  */
-import { type Engine, type ProjectId, Refused } from "@banda/contract"
-import type { Job, MoveAsk, Step } from "@banda/contract/files"
+import {
+  type Engine,
+  type Params,
+  type ProjectId,
+  Refused,
+} from "@banda/contract"
+import type { Job, Step } from "@banda/contract/files"
 
 /** One operation that can be undone: what it was, and its steps. */
 export type Undoable = {
@@ -90,14 +95,16 @@ export async function runSteps(
   }
 }
 
-/** A move's or a copy's last piece, as it ends: its clashes, or what it
+/** A move's, a copy's or a placed file's last piece, as it ends: its clashes, or what it
  * did; or the client's error, in its machine's words, where it was
  * refused at once or cut off on its way (ADR 0106, law 4). */
-export function lastPiece(
+export function lastPiece<
+  M extends "files.move" | "files.copy" | "files.place",
+>(
   engine: Engine,
   project: ProjectId,
-  method: "files.move" | "files.copy",
-  ask: MoveAsk,
+  method: M,
+  ask: Params<M>,
   onPiece?: (job: Job) => void
 ): Promise<Exclude<Job, { kind: "progress" }>> {
   return new Promise((resolve, reject) => {

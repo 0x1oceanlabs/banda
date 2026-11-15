@@ -333,22 +333,16 @@ test("Save a copy of arc's file puts arc's bytes where the Person picks on this 
   ).toBeVisible()
 })
 
-test("a file of this machine dropped on arc's tree is refused in words, and nothing moves", async () => {
+test("a file of this machine dropped on arc's tree is copied there, a name taken is asked about, and a folder is refused in words (ADR 0120, decision 4)", async () => {
   const { page, composer, there, here } = await onArc()
   const { tree, row } = await filesOf(page, composer)
   await expect(row("only-arc.txt")).toBeVisible()
-  // What a drag of this machine's row carries, its Project and whole
-  // path: a drag between two Panes is the Person's hand.
+  // What a drag of this machine's rows carries, its Project and whole
+  // paths: a drag between two Panes is the Person's hand.
   const project = projectId(window!, "Same")
-  // A Project added from outside shows as its machine says so (ADR
-  // 0127), and only then does the window know this machine holds it.
-  const toast = page
-    .getByRole("region", { name: "Notifications" })
-    .getByText(
-      /That file is on this (Mac|machine)\. Files don't move between machines yet\./
-    )
-  await expect(async () => {
-    await tree.evaluate(
+  const toasts = page.getByRole("region", { name: "Notifications" })
+  const drop = (...names: string[]) =>
+    tree.evaluate(
       (element, payload) => {
         const data = new DataTransfer()
         data.setData("application/x-banda-paths", payload)
@@ -361,13 +355,80 @@ test("a file of this machine dropped on arc's tree is refused in words, and noth
           })
         )
       },
-      JSON.stringify([{ project, path: join(here, "only-mac.txt") }])
+      JSON.stringify(names.map((name) => ({ project, path: join(here, name) })))
     )
-    await expect(toast).toBeVisible({ timeout: 2_000 })
+  // A Project added from outside shows as its machine says so (ADR
+  // 0127), and only then does the window know this machine holds it.
+  const copied = toasts.getByText("Copied “only-mac.txt” to “Same” on arc")
+  await expect(async () => {
+    if (!existsSync(arc!.disk(join(there, "only-mac.txt"))))
+      await drop("only-mac.txt")
+    await expect(copied).toBeVisible({ timeout: 2_000 })
   }).toPass({ timeout: 30_000 })
-  await shot(page, "files-drag-refused", { toasts: true })
-  expect(existsSync(arc!.disk(join(there, "only-mac.txt")))).toBe(false)
+  await shot(page, "files-copied-to-arc", { toasts: true })
+  expect(readFileSync(arc!.disk(join(there, "only-mac.txt")), "utf8")).toBe(
+    "mac\n"
+  )
   expect(existsSync(join(here, "only-mac.txt"))).toBe(true)
+  await expect(row("only-mac.txt")).toBeVisible()
+
+  // A name taken on arc is asked about, as a copy on one machine asks.
+  await drop("who.txt")
+  const asked = page.getByRole("dialog")
+  await expect(asked).toBeVisible()
+  await shot(page, "files-copy-to-arc-asks")
+  await asked.getByRole("button", { name: "Keep both" }).click()
+  await expect(
+    toasts.getByText("Copied “who 2.txt” to “Same” on arc")
+  ).toBeVisible()
+  expect(readFileSync(arc!.disk(join(there, "who.txt")), "utf8")).toBe("arc\n")
+  expect(readFileSync(arc!.disk(join(there, "who 2.txt")), "utf8")).toBe(
+    "mac\n"
+  )
+
+  // A long one says how far it is, with Cancel, then that it is there.
+  const big = Buffer.alloc(6 * 1024 * 1024, "banda")
+  put(here, { "big.bin": big })
+  await drop("big.bin")
+  const going = toasts
+    .getByRole("listitem")
+    .filter({ hasText: "Copying to arc" })
+  await expect(going.getByRole("progressbar")).toBeVisible()
+  await expect(going.getByRole("button", { name: "Cancel" })).toBeVisible()
+  await shot(page, "files-copying-to-arc", { toasts: true })
+  await expect(
+    toasts.getByText("Copied “big.bin” to “Same” on arc")
+  ).toBeVisible({
+    timeout: 60_000,
+  })
+  expect(readFileSync(arc!.disk(join(there, "big.bin"))).equals(big)).toBe(true)
+
+  // A file another app drops, as a Finder's, comes in by its bytes.
+  await tree.evaluate((element) => {
+    const data = new DataTransfer()
+    data.items.add(new File(["from the desktop\n"], "dropped.txt"))
+    element.dispatchEvent(
+      new DragEvent("drop", {
+        dataTransfer: data,
+        bubbles: true,
+        composed: true,
+        cancelable: true,
+      })
+    )
+  })
+  await expect(
+    toasts.getByText("Copied “dropped.txt” to “Same” on arc")
+  ).toBeVisible()
+  expect(readFileSync(arc!.disk(join(there, "dropped.txt")), "utf8")).toBe(
+    "from the desktop\n"
+  )
+
+  // A folder does not go yet, and says so.
+  await drop("src")
+  await expect(
+    toasts.getByText("Folders don't go between machines yet.")
+  ).toBeVisible()
+  await shot(page, "files-folder-refused", { toasts: true })
 })
 
 test("a comment on some lines of arc's file goes into arc's Thread's Message box, and reaches arc's Agent", async () => {

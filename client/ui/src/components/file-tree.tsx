@@ -37,7 +37,12 @@ import {
 } from "react"
 import { useDark } from "../hooks/use-dark"
 import type { ProjectFile } from "@banda/core"
-import { bringsFiles, dropEffectOf, droppedFiles } from "../lib/file-drag"
+import {
+  type Brought,
+  bringsFiles,
+  dropEffectOf,
+  dropped,
+} from "../lib/file-drag"
 import { toast } from "./sonner"
 import { holding, pulseCSS, type RowMark, rowMarkOf } from "../lib/tree-marks"
 import {
@@ -215,10 +220,16 @@ export type FolderTreeProps = {
   /** A row renamed in place, from its path to its new one: whether its
    * holder renamed it; else it goes back. None: no row is renamed. */
   onRename?: (from: string, to: string) => Promise<boolean>
-  /** Banda's files dropped on a folder of the tree, `""` its top, each
-   * with its Project: copied when Alt (⌥) or Ctrl is held as they drop,
-   * else moved. None: nothing drops on it. */
-  onDrop?: (files: readonly ProjectFile[], dir: string, copy: boolean) => void
+  /** Files dropped on a folder of the tree, `""` its top: Banda's, each
+   * with its Project, copied when Alt (⌥) or Ctrl is held as they drop,
+   * else moved; or another app's. `false` says it took none of them,
+   * and the drop goes on as if it were not here. None: nothing drops
+   * on it. */
+  onDrop?: (
+    files: readonly ProjectFile[] | Brought,
+    dir: string,
+    copy: boolean
+  ) => boolean | void
   /** What a screen reader calls it. */
   label: string
   className?: string
@@ -708,14 +719,14 @@ export function FolderTree({
       onDrop={(event) => {
         setDropping(null)
         if (!onDrop) return
-        const files = droppedFiles(event.dataTransfer)
+        const files = dropped(event.dataTransfer)
         if (!files) return
-        event.preventDefault()
-        onDrop(
+        const taken = onDrop(
           files,
           dropFolderAt(event.nativeEvent),
           event.altKey || event.ctrlKey
         )
+        if (taken !== false) event.preventDefault()
       }}
       onContextMenu={(event) => {
         const path = rowAt(event.nativeEvent)

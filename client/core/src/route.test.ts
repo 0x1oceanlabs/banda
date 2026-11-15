@@ -233,14 +233,20 @@ test("a file held over another machine's Project is refused in words that say wh
   const arcs = "r1" as ProjectId
   // This computer's file over arc's tree.
   expect(device.across(projectFile(mine, "/mine/a"), arcs)).toBe(
-    "That file is on this Mac. Files don't move between machines yet."
+    "That file is on this Mac, not on arc"
   )
   // arc's file over this machine's.
   expect(device.across(projectFile(arcs, "/r1/a"), mine)).toBe(
-    "That file is on arc"
+    "That file is on arc, not on this Mac"
   )
   // Between two Projects on one machine it goes, as a whole path does.
   expect(device.across(projectFile(arcs, "/r1/a"), arcs)).toBeUndefined()
+  // What carries a file between the two asks for each machine: its
+  // session, and its name as the Person reads it.
+  expect(device.machineOf(arcs)).toEqual({
+    engine: hosts.sessionOf(arcs),
+    name: "arc",
+  })
   hosts.engine("arc").close()
 })
 

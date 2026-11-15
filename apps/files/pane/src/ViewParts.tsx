@@ -22,7 +22,8 @@ import type { FolderTreeHandle, Mark } from "@banda/ui/components/file-tree"
 import {
   bringsFiles,
   dropEffectOf,
-  droppedFiles,
+  type Brought,
+  dropped,
 } from "@banda/ui/lib/file-drag"
 import { cn } from "@banda/ui/lib/utils"
 import { ARROWS, moved, parentRow, type View } from "./views"
@@ -34,10 +35,15 @@ export type ViewEvents = {
   /** A double click; ↵ is the Pane's, as its other keys. */
   onOpen: (row: string) => void
   onDrag: (rows: string[], event: DragEvent) => void
-  /** Banda's files dropped in a folder, `""` the top: copied with Alt
-   * (⌥) or Ctrl held. Each names its Project: one of another machine's
-   * is refused, in words that say where it is. */
-  onDrop: (files: readonly ProjectFile[], into: string, copy: boolean) => void
+  /** Files dropped in a folder, `""` the top: Banda's, copied with Alt
+   * (⌥) or Ctrl held, each naming its Project, so one of another
+   * machine's is copied from there; or another app's. `false` says it
+   * took none of them. */
+  onDrop: (
+    files: readonly ProjectFile[] | Brought,
+    into: string,
+    copy: boolean
+  ) => boolean | void
   /** A row renamed in place: whether its Pane renamed it. */
   onRename: (from: string, to: string) => Promise<boolean>
 }
@@ -146,11 +152,11 @@ export function useDrop(
       },
       onDrop: (event) => {
         setOver(false)
-        const files = droppedFiles(event.dataTransfer)
+        const files = dropped(event.dataTransfer)
         if (!files) return
+        if (onDrop(files, into, event.altKey || event.ctrlKey) === false) return
         event.preventDefault()
         event.stopPropagation()
-        onDrop(files, into, event.altKey || event.ctrlKey)
       },
     },
   ]
