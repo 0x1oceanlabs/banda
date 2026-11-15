@@ -54,7 +54,7 @@ pub struct Places {
     /// for either.
     pub mac: bool,
     /// The file the window writes what the system says of itself to, for
-    /// the theme ([`crate::Device`]): `device.json` in Banda's state folder.
+    /// the theme ([`crate::SystemFacts`]): `device.json` in Banda's state folder.
     pub device: Option<PathBuf>,
 }
 

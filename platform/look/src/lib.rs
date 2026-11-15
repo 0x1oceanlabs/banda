@@ -33,7 +33,7 @@ pub use banda_theme::hyprland::{Hyprland, Windows};
 use banda_theme::palette::Palette;
 use banda_theme::readable::Under;
 use banda_theme::{
-    Device, Mode, Picked, Theme, Wrong, elevation, fonts, thousandths, tokens, wallpaper,
+    Mode, Picked, SystemFacts, Theme, Wrong, elevation, fonts, thousandths, tokens, wallpaper,
 };
 pub use banda_theme::{Origin, Places, path_of};
 pub use file::{Class, OneFile, SettingsFile};
@@ -684,13 +684,16 @@ pub fn resolve(
     } else {
         (None, None)
     };
-    // What the device says of itself: the system's accent (ADR 0100,
+    // What the system says of itself: its accent (ADR 0100,
     // decision 1), and whether it reduces transparency or raises contrast,
     // which turns glass off while it does (ADR 0100, decision 4).
-    let device = places.device.as_ref().map_or_else(Device::default, |path| {
-        watched.push(path.clone());
-        Device::read(path)
-    });
+    let device = places
+        .device
+        .as_ref()
+        .map_or_else(SystemFacts::default, |path| {
+            watched.push(path.clone());
+            SystemFacts::read(path)
+        });
     let glass = wanted
         && !device.plain()
         && (material == Material::System || wallpaper.is_some() || wallpaper_dark.is_some());
@@ -955,7 +958,7 @@ fn scheme(
     theme: &Laid,
     mine: &Settings,
     all: &Settings,
-    device: &Device,
+    device: &SystemFacts,
     glass: Option<(f64, f64, Under)>,
 ) -> BTreeMap<String, String> {
     fn named<'a>((key, value): (&'a String, &'a Spanned<String>)) -> (&'a str, &'a str) {

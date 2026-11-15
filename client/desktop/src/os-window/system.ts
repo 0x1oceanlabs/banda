@@ -10,7 +10,7 @@
  * A part of the device's window (ADR 0089, decision 9): nothing asks it
  * anything, so it is a layer with no service, as the road's is (road.ts).
  */
-import type { Device } from "@banda/contract/look"
+import type { SystemFacts } from "@banda/contract/look"
 import { writeWhole } from "@banda/desktop-kit"
 import { Effect, FiberSet, Layer } from "effect"
 import { nativeTheme, systemPreferences } from "electron"
@@ -19,7 +19,7 @@ import { nativeTheme, systemPreferences } from "electron"
  * a fake in a test. */
 export type System = {
   /** What it says of itself now. */
-  readonly says: () => Device
+  readonly says: () => SystemFacts
   /** Calls `changed` each time it may say something else; returns how to
    * stop. */
   readonly listen: (changed: () => void) => () => void

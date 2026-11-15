@@ -50,13 +50,14 @@ impl Mode {
     }
 }
 
-/// What the device says of itself that the theme takes (ADR 0100,
-/// decision 1), as the window reads it from the system and writes it to
-/// `device.json` in Banda's state folder, where `banda look` reads it:
-/// so the look a terminal prints is the window's.
+/// The system's facts for the theme (ADR 0100, decision 1): the text of
+/// `device.json` in Banda's state folder, which the window writes as it
+/// reads them from the system and `banda look` reads, so the look a
+/// terminal prints is the window's. Not the device port of ADR 0089, nor
+/// a paired device: only what the operating system says of itself.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq, TS)]
 #[ts(export, export_to = "look/")]
-pub struct Device {
+pub struct SystemFacts {
     /// The accent set in the system's settings, `#rrggbb` (ADR 0075,
     /// decision 6): macOS's and Windows'.
     #[ts(optional)]
@@ -72,16 +73,17 @@ pub struct Device {
     pub high_contrast: bool,
 }
 
-impl Device {
+impl SystemFacts {
     /// Whether the system asks for no glass: it reduces transparency or
     /// raises contrast.
     pub fn plain(&self) -> bool {
         self.reduce_transparency || self.high_contrast
     }
 
-    /// The device's file at `path`; a file that is not there, or does not
-    /// read, says nothing. The window writes it, not the Person.
-    pub fn read(path: &std::path::Path) -> Device {
+    /// The system's facts in the file at `path`; a file that is not there,
+    /// or does not read, says nothing. The window writes it, not the
+    /// Person.
+    pub fn read(path: &std::path::Path) -> SystemFacts {
         std::fs::read(path)
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
