@@ -40,6 +40,7 @@ function filesOn(local: boolean, answer: Located[] = []) {
     has: () => true,
     local: (file) => (local ? deviceFile(file.path) : undefined),
     across: () => undefined,
+    machineOf: () => ({ engine: { call } as never, name: "arc" }),
   }
   const hands: FilesHands = {
     run: (action, args) => ran.push([action, args]),

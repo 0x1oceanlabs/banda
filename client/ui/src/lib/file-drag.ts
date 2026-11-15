@@ -92,3 +92,21 @@ function droppedBack(files: ArrayLike<File>): readonly ProjectFile[] | null {
   out = null
   return back
 }
+
+/** Files another app dropped, as a Finder's (ADR 0120, decision 4):
+ * their bytes are read from the drop. `folder` says one of them is a
+ * folder, which holds no bytes to read. */
+export type Brought = { files: readonly File[]; folder: boolean }
+
+/** What a drop on a folder of Files brings: Banda's files, each with its
+ * Project, or another app's; none for anything else. */
+export function dropped(
+  data: DataTransfer
+): readonly ProjectFile[] | Brought | null {
+  const ours = droppedFiles(data)
+  if (ours || data.files.length === 0) return ours
+  const folder = Array.from(data.items).some(
+    (item) => item.webkitGetAsEntry?.()?.isDirectory === true
+  )
+  return { files: [...data.files], folder }
+}

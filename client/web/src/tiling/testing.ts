@@ -42,6 +42,9 @@ export function arcHosts(
     seen: (name) => ({ name, icon: "server" }),
     machines: { get: () => machines, subscribe: () => () => undefined },
     modulesOf: (name) => (name === "arc" ? modules : undefined),
+    sessionOf: () => {
+      throw new Error("These hosts have no sessions.")
+    },
     reread: () => Promise.resolve(),
   }
 }

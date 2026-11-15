@@ -63,7 +63,10 @@ import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
+import { fileMint } from "@banda/ui/hooks/use-file-url"
+import type { Brought } from "@banda/ui/lib/file-drag"
 import { dragFiles } from "@banda/ui/lib/file-drag-out"
+import { problem } from "@banda/ui/lib/words"
 import { FIELDS } from "@banda/ui/lib/keys"
 import { useFile } from "@banda/ui/lib/look"
 import { holding as holdingFolders } from "@banda/ui/lib/tree-marks"
@@ -98,6 +101,7 @@ import {
   turnedIn,
   wholeFrom,
 } from "./agent"
+import { droppedFile, Folder, machineFile, type Source } from "./across"
 import * as acts from "./acts"
 import { BulkRename } from "./BulkRename"
 import type { Named } from "./bulk"
@@ -707,17 +711,12 @@ function FolderView({
     [run, dir, project]
   )
 
-  // A file held over this Pane from another machine is refused, in words
-  // that say where it is (ADR 0106, decision 3): only the machines count,
-  // the host alone judging whether two names are one file.
-  const refused = useCallback(
-    (files: readonly ProjectFile[]) => {
-      const why = files
-        .map((one) => device?.across(one, project))
-        .find((words) => words !== undefined)
-      if (why) toast.warning(why, { id: `across ${why}` })
-      return why !== undefined
-    },
+  // Whether files held over this Pane are on another machine than its
+  // Project (ADR 0106, decision 3): only the machines count, the host
+  // alone judging whether two names are one file.
+  const far = useCallback(
+    (files: readonly ProjectFile[]) =>
+      files.some((one) => device?.across(one, project) !== undefined),
     [device, project]
   )
   // What Files does with its rows (decision 10): each said in a toast with
@@ -759,6 +758,67 @@ function FolderView({
       return done
     },
     [at, dir, ask, here]
+  )
+  // Files of another machine, or another app's, are copied here: the
+  // window carries them (ADR 0120, decision 4). `from` names the machine
+  // they are on, where they are a machine's.
+  const bring = useCallback(
+    async (
+      sources: readonly Source[],
+      into: string,
+      { from, cut = false }: { from?: string; cut?: boolean } = {}
+    ) => {
+      if (!device) return
+      let to: string
+      // Asked for first, so a machine that is away refuses at once.
+      try {
+        to = device.machineOf(project).name
+      } catch (error) {
+        toast.warning(problem(error))
+        return
+      }
+      const done = await acts.bring(at, {
+        sources,
+        dir: wholeOf(dir, into),
+        to,
+        from,
+        stays: cut,
+        ask,
+      })
+      const first = done?.paths[0]
+      const row = first === undefined ? null : within(here, first)
+      if (row) setPicked(row)
+    },
+    [device, project, at, dir, ask, here]
+  )
+  // Files of another machine's, copied here from where each is.
+  const bringFar = useCallback(
+    (files: readonly ProjectFile[], into: string, cut = false) => {
+      if (!device) return
+      const sources: Source[] = []
+      let from: string | undefined
+      try {
+        for (const one of files) {
+          const there = device.machineOf(one.project)
+          const mint = fileMint(there.engine, one.project)
+          const no = device.across(one, project)
+          // A device that reads no file of another machine, as a
+          // browser.
+          if (!mint) {
+            toast.warning(no ?? "This device reads no file to copy.")
+            return
+          }
+          if (no !== undefined) from ??= there.name
+          const end = { engine: there.engine, project: one.project }
+          sources.push(machineFile(end, one.path, mint))
+        }
+      } catch (error) {
+        toast.warning(problem(error))
+        return
+      }
+      void bring(sources, into, { from, cut })
+    },
+    [device, project, bring]
   )
   // A new thing is made untitled, then named in place.
   const newItem = useCallback(
@@ -843,7 +903,11 @@ function FolderView({
           return
         case "paste": {
           const clip = kept()
-          if (!clip || refused(clip.files)) return
+          if (!clip) return
+          if (far(clip.files)) {
+            bringFar(clip.files, folderOfRow(row ?? picked), clip.cut)
+            return
+          }
           void transfer(
             !clip.cut,
             clip.files.map((one) => one.path),
@@ -873,7 +937,8 @@ function FolderView({
       setRenaming,
       setSearching,
       file,
-      refused,
+      far,
+      bringFar,
     ]
   )
   /** What a row's menu offers, or the folder's, under the rows. */
@@ -1022,17 +1087,29 @@ function FolderView({
     },
     [named, file, local]
   )
-  // Dropped here: refused from another machine, moved or copied else.
+  // Dropped here: copied from another machine or another app, moved or
+  // copied else. Another app's files come in by their bytes only onto a
+  // machine this device is not: on its own, nothing reads them yet.
   const drop = useCallback(
-    (dropped: readonly ProjectFile[], into: string, copy: boolean) => {
-      if (refused(dropped)) return
+    (
+      dropped: readonly ProjectFile[] | Brought,
+      into: string,
+      copy: boolean
+    ) => {
+      if ("folder" in dropped) {
+        if (local(dir)) return false
+        if (dropped.folder) toast.warning(new Folder().message)
+        else void bring(dropped.files.map(droppedFile), into)
+        return
+      }
+      if (far(dropped)) return bringFar(dropped, into)
       void transfer(
         copy,
         dropped.map((one) => one.path),
         into
       )
     },
-    [refused, transfer]
+    [far, bring, bringFar, transfer, local, dir]
   )
 
   // The tree takes the keys once it is drawn, in the Pane that has the

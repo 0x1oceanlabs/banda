@@ -30,6 +30,14 @@ the same PR.
   come whole is not placed; the pieces go as it lands, with
   `files.cancel`, or after a day. Only a Person carries
   (`engine/src/carried.rs`).
+  In the Pane (`pane/src/across.ts`, `acts.tsx`'s `bring`), a drop or a
+  paste of another machine's files copies them here: the window reads
+  each where it is, by range through the file host, looks at it before
+  and after (`files.stat`), and a toast says how far with Cancel. A cut
+  copies too, and says the file stays. A file another app drops on
+  another machine's tree comes in by its bytes. A folder is refused in
+  words, and so is a copy while either machine is away. The Pane asks
+  the device for each machine (`Device.machineOf`), never where it is.
 - **`files.find` answers every "which file"**: the composer's `@` and the
   Banda menu's Files, a source of the files module's own. The menu opens
   `name:42` at line 42; its Tab offers "Show in Files" too.
