@@ -238,6 +238,12 @@ On the list, Roma decided:
      (Roma): nothing lands. A sideways swipe scrolls the Strip as the
      system scrolls a page, its glide too, and it stays where the hand
      leaves it, as a drag does; the focus stays where it was._
+     _Amended 2026-11-15 (Roma): left to the system, the swipe was the
+     Pane's under the pointer whenever that Pane scrolls up and down, a
+     Thread first, and the Strip stood still. The Strip no longer
+     scrolls by the system's hand: Banda moves it by what the system
+     says of the swipe, its glide too, wherever the pointer is; a swipe
+     begun over what can still scroll that way by itself is that Pane's._
    - **The view.** `Alt` and the middle button drag the Strip sideways
      and the workspaces up and down. The wheel stays as it is (the
      architecture's swipes): `Alt` and the wheel go a workspace up or

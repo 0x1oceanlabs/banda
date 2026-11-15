@@ -1,5 +1,6 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest"
-import { pixels, SWIPE_END, Swipe } from "./swipe"
+import { pixels, sidewaysRoom, SWIPE_END, Swipe } from "./swipe"
 
 describe("a swipe", () => {
   it("picks its way once it has gone a little, and keeps it", () => {
@@ -7,10 +8,10 @@ describe("a swipe", () => {
     expect(swipe.add(2, 1, 0)).toBe(true)
     expect(swipe.way).toBeUndefined()
     swipe.add(10, 1, 10)
-    expect(swipe.way).toBe("sideways")
+    expect(swipe).toMatchObject({ way: "sideways", picked: true })
     // Up and down later in the same swipe does not change its way.
     swipe.add(0, 40, 20)
-    expect(swipe.way).toBe("sideways")
+    expect(swipe).toMatchObject({ way: "sideways", picked: false })
   })
 
   it("goes up and down when a scroll up a Thread drifts sideways a little", () => {
@@ -50,5 +51,46 @@ describe("a swipe", () => {
       x: 4,
       y: 5,
     })
+  })
+})
+
+describe("the room to scroll sideways under a swipe", () => {
+  /** A wide table in a Pane in the Strip, scrolled `at` of 300 pixels. */
+  function table(at: number, direction = "ltr") {
+    const strip = document.createElement("div")
+    const pane = strip.appendChild(document.createElement("div"))
+    const wide = pane.appendChild(document.createElement("div"))
+    const cell = wide.appendChild(document.createElement("span"))
+    wide.style.overflowX = "auto"
+    wide.style.direction = direction
+    Object.defineProperties(wide, {
+      scrollWidth: { value: 500 },
+      clientWidth: { value: 200 },
+      scrollLeft: { value: at },
+    })
+    document.body.append(strip)
+    return { strip, pane, cell }
+  }
+
+  it("is none over what does not scroll sideways", () => {
+    const { strip, pane } = table(0)
+    expect(sidewaysRoom(pane, strip)).toEqual({ back: 0, on: 0 })
+  })
+
+  it("is what is left each way, and none at an end", () => {
+    const start = table(0)
+    expect(sidewaysRoom(start.cell, start.strip)).toEqual({ back: 0, on: 300 })
+    const middle = table(100)
+    expect(sidewaysRoom(middle.cell, middle.strip)).toEqual({
+      back: 100,
+      on: 200,
+    })
+    const end = table(300)
+    expect(sidewaysRoom(end.cell, end.strip)).toEqual({ back: 300, on: 0 })
+  })
+
+  it("counts from the right in a right-to-left text", () => {
+    const { strip, cell } = table(-100, "rtl")
+    expect(sidewaysRoom(cell, strip)).toEqual({ back: 200, on: 100 })
   })
 })
