@@ -101,6 +101,8 @@ export const DOES = {
   "files.rename": "act",
   "files.move": "act",
   "files.copy": "act",
+  "files.take_piece": "act",
+  "files.place": "act",
   "files.cancel": "act",
   "files.trash": "act",
   "files.trashed": "read",

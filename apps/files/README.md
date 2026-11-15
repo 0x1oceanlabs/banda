@@ -20,6 +20,16 @@ the same PR.
   a little among matches of their kind. `files.places` answers home,
   Desktop and Downloads as the system names them (XDG's user dirs on
   Linux).
+- **A file from another machine comes in pieces** (ADR 0120, decision
+  4). No engine talks to another, so the Person's window carries it:
+  `files.take_piece` keeps each piece, 512 KiB at most, in the Project's
+  data (`copies/<job>/`), the next one only, and a first piece begins
+  the copy anew. `files.place` puts the file in its folder once all its
+  bytes came: a stream as `files.copy` is, with its rule for a name
+  taken, its progress, its stop and a copy's undo. One that did not
+  come whole is not placed; the pieces go as it lands, with
+  `files.cancel`, or after a day. Only a Person carries
+  (`engine/src/carried.rs`).
 - **`files.find` answers every "which file"**: the composer's `@` and the
   Banda menu's Files, a source of the files module's own. The menu opens
   `name:42` at line 42; its Tab offers "Show in Files" too.

@@ -144,6 +144,9 @@ pub struct Plan {
     pub skipped: Vec<String>,
     /// Already where a move takes them.
     pub stay: Vec<PathBuf>,
+    /// What it moves is new in its folder, as a file that came from
+    /// another machine: undone as a copy is.
+    pub arrives: bool,
 }
 
 /// What each of `sources` (as asked, and where it is) does as it moves or
@@ -326,7 +329,7 @@ pub fn run(plan: Plan, copy: bool, run: &mut Run<'_>) -> Done {
     }
     done.paths.extend(went.iter().map(|(to, _)| shown(to)));
     let ids = crate::walled::outside(move || crate::trashcan::ids(&replaced, since));
-    done.undo = undo(&went, copy, ids.unwrap_or_default());
+    done.undo = undo(&went, copy || plan.arrives, ids.unwrap_or_default());
     match halt {
         Some(Halt::Stopped) => done.stopped = true,
         Some(Halt::Failed(path, error)) => {
@@ -508,7 +511,7 @@ pub fn remove_whole(path: &Path) -> io::Result<()> {
 }
 
 /// Removes what a copy left half done, if it can.
-fn remove(path: &Path) {
+pub fn remove(path: &Path) {
     if let Err(error) = remove_whole(path)
         && error.kind() != io::ErrorKind::NotFound
     {

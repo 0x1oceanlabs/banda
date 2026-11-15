@@ -22,6 +22,8 @@ import type { MakeAsk } from "./MakeAsk";
 import type { MoveAsk } from "./MoveAsk";
 import type { Opened } from "./Opened";
 import type { OpenedAsk } from "./OpenedAsk";
+import type { PieceAsk } from "./PieceAsk";
+import type { PlaceAsk } from "./PlaceAsk";
 import type { Places } from "./Places";
 import type { ReadAsk } from "./ReadAsk";
 import type { RecentAsk } from "./RecentAsk";
@@ -136,8 +138,23 @@ move: StreamMethod<MoveAsk, Job>,
  */
 copy: StreamMethod<MoveAsk, Job>, 
 /**
+ * Keeps a piece of a file the Person's window carries from another
+ * machine, 512 KiB at most, at its byte: the next one, or the
+ * first, which begins the copy anew. In the Project's data, until
+ * `place` or `cancel`, or a day. Only the Person's.
+ */
+take_piece: CommandMethod<PieceAsk, null>, 
+/**
+ * Puts the file `take_piece` kept into a folder under its name,
+ * when all its bytes came: where the name is taken, as `copy`
+ * does, and it says how far it is, stops and ends as `copy`
+ * does. Only the Person's.
+ */
+place: StreamMethod<PlaceAsk, Job>, 
+/**
  * Stops a move or a copy that named its job: what it left half
- * done is removed, and it says what it did.
+ * done is removed, and it says what it did. The pieces
+ * `take_piece` kept for the job go too.
  */
 cancel: CommandMethod<CancelAsk, null>, 
 /**

@@ -9,7 +9,9 @@
 //! files (`search`). It writes a file's text only over the text
 //! it was read at (`write`), and makes, renames, moves, copies and sends
 //! to the system's Trash what is at a path (`make`, `rename`, `move`,
-//! `copy`, `trash`), each answering what undoes it; it lists the Trash,
+//! `copy`, `trash`), each answering what undoes it; it takes a file from
+//! another machine in pieces and puts it in its folder (`take_piece`,
+//! `place`); it lists the Trash,
 //! puts back from it and deletes there for good (`trashed`, `restore`,
 //! `delete`, `empty`). Nothing in `.git` nor in Banda's settings folder
 //! is changed. It makes a file's small picture (`thumb`), says what a path
@@ -27,6 +29,7 @@ pub mod settings;
 mod archive;
 #[cfg(target_os = "linux")]
 mod beneath;
+mod carried;
 mod find;
 mod info;
 mod list;
@@ -48,8 +51,9 @@ use banda_kernel::{
 use model::{
     Archive, ArchiveAsk, CancelAsk, Counted, Done, FindAsk, Found, Info, InfoAsk, ItemsAsk, Job,
     ListAsk, Listing, LocateAsk, Located, Locked, MakeAsk, Making, MoveAsk, Opened, OpenedAsk,
-    Places, ReadAsk, RecentAsk, RenameAsk, SearchAsk, Searched, Sheet, SheetAsk, SizeAsk, Stat,
-    StatAsk, Step, Text, Thumb, ThumbAsk, TrashAsk, Trashcan, WatchAsk, Watched, WriteAsk, Written,
+    PieceAsk, PlaceAsk, Places, ReadAsk, RecentAsk, RenameAsk, SearchAsk, Searched, Sheet,
+    SheetAsk, SizeAsk, Stat, StatAsk, Step, Text, Thumb, ThumbAsk, TrashAsk, Trashcan, WatchAsk,
+    Watched, WriteAsk, Written,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -191,8 +195,19 @@ banda_kernel::methods! {
         /// all it holds, a link as a link; into its own folder, beside
         /// itself.
         stream copy(MoveAsk) -> Job, Write;
+        /// Keeps a piece of a file the Person's window carries from another
+        /// machine, 512 KiB at most, at its byte: the next one, or the
+        /// first, which begins the copy anew. In the Project's data, until
+        /// `place` or `cancel`, or a day. Only the Person's.
+        command take_piece(PieceAsk) -> (), Write;
+        /// Puts the file `take_piece` kept into a folder under its name,
+        /// when all its bytes came: where the name is taken, as `copy`
+        /// does, and it says how far it is, stops and ends as `copy`
+        /// does. Only the Person's.
+        stream place(PlaceAsk) -> Job, Write;
         /// Stops a move or a copy that named its job: what it left half
-        /// done is removed, and it says what it did.
+        /// done is removed, and it says what it did. The pieces
+        /// `take_piece` kept for the job go too.
         command cancel(CancelAsk) -> (), Write;
         /// Sends paths to the system's Trash, and answers how to put them
         /// back, where the system lets an app (not on macOS).
@@ -846,13 +861,26 @@ impl Files {
                 return Ok(heard);
             }
         };
+        self.run(&call, ask.job, say, move |run| ops::run(plan, copy, run))?;
+        Ok(heard)
+    }
+
+    /// Runs `work`, a job planned, off the engine's threads: it says how
+    /// far it is and ends with what it did, and stops when the caller
+    /// lets go or, named, when `files.cancel` says.
+    fn run(
+        &self,
+        call: &Call,
+        job: Option<String>,
+        say: tokio::sync::mpsc::Sender<Value>,
+        work: impl FnOnce(&mut ops::Run<'_>) -> Done + Send + 'static,
+    ) -> Result<(), Refusal> {
         let stop = Arc::new(AtomicBool::new(false));
         let jobs = self.jobs.clone();
-        if let Some(job) = &ask.job {
+        if let Some(job) = &job {
             (jobs.lock().unwrap()).insert(job.clone(), stop.clone());
         }
-        let job = ask.job;
-        started(&call, move || {
+        started(call, move || {
             let mut tell = |piece: Job| {
                 if let Ok(piece) = serde_json::to_value(piece) {
                     let _ = say.blocking_send(piece);
@@ -863,18 +891,70 @@ impl Files {
                 stop: &stopped,
                 tell: &mut tell,
             };
-            let done = ops::run(plan, copy, &mut run);
+            let done = work(&mut run);
             if let Some(job) = job {
                 jobs.lock().unwrap().remove(&job);
             }
             tell(Job::Done(done));
-        })?;
+        })
+    }
+
+    async fn take_piece(&self, call: Call, ask: PieceAsk) -> Result<(), Refusal> {
+        use base64::Engine as _;
+        carried::person_only(&call)?;
+        let folder = carried::folder(call.project().data(), &ask.job)?;
+        let piece = (base64::engine::general_purpose::STANDARD.decode(ask.data))
+            .map_err(|_| Refusal::invalid("A piece is base64."))?;
+        if piece.len() > carried::PIECE {
+            return Err(Refusal::invalid("A piece is 512 KiB at most."));
+        }
+        let kept = blocking(move || carried::take(&folder, ask.at, &piece)).await?;
+        match kept.map_err(|error| failed(format!("The piece could not be kept: {error}.")))? {
+            true => Ok(()),
+            false => Err(Refusal::conflict(
+                "That piece is not the next one: copy the file again.",
+            )),
+        }
+    }
+
+    async fn place(&self, call: Call, ask: PlaceAsk) -> Result<Stream, Refusal> {
+        carried::person_only(&call)?;
+        if let Some(why) = ops::misnamed(&ask.name) {
+            return Err(Refusal::invalid(why));
+        }
+        let folder = carried::folder(call.project().data(), &ask.job)?;
+        let dir = Reach::of(&call, &ask.into)?.into_path();
+        self.fence(&call, &dir.join(&ask.name), &ask.name, false)?;
+        let planned = blocking({
+            let (folder, name, into) = (folder.clone(), ask.name, ask.into);
+            move || {
+                if !dir.is_dir() {
+                    return Err(Refusal::not_found(format!("{into} is not a folder there.")));
+                }
+                carried::plan(&folder, &dir, &name, ask.size, ask.taken)
+            }
+        });
+        let planned = planned.await??;
+        let (say, heard) = tokio::sync::mpsc::channel(16);
+        match planned {
+            Ok(plan) => self.run(&call, Some(ask.job), say, move |run| {
+                carried::land(&folder, plan, run)
+            })?,
+            Err(clashes) => {
+                let _ = send(&say, &Job::Clashes { clashes }).await;
+            }
+        }
         Ok(heard)
     }
 
-    async fn cancel(&self, _call: Call, ask: CancelAsk) -> Result<(), Refusal> {
+    async fn cancel(&self, call: Call, ask: CancelAsk) -> Result<(), Refusal> {
         if let Some(stop) = self.jobs.lock().unwrap().get(&ask.job) {
             stop.store(true, Ordering::Relaxed);
+        }
+        if carried::person_only(&call).is_ok()
+            && let Ok(folder) = carried::folder(call.project().data(), &ask.job)
+        {
+            blocking(move || carried::forget(&folder)).await?;
         }
         Ok(())
     }

@@ -546,6 +546,37 @@ pub struct CancelAsk {
     pub job: String,
 }
 
+/// What `files.take_piece` asks: a piece of a file that comes from
+/// another machine, as copy `job`.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct PieceAsk {
+    /// The copy's name, a window's: letters, digits and `-`.
+    pub job: String,
+    /// The byte of the file the piece starts at.
+    #[ts(type = "number")]
+    pub at: u64,
+    /// The piece, base64: 512 KiB of the file at most.
+    pub data: String,
+}
+
+/// What `files.place` asks: the file copy `job` carried, into a folder.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct PlaceAsk {
+    pub job: String,
+    /// The folder it goes into.
+    pub into: String,
+    /// The file's name there.
+    pub name: String,
+    /// The file's bytes, all of them: it is placed only when all came.
+    #[ts(type = "number")]
+    pub size: u64,
+    /// What to do when the name is taken in the folder: ask unless said.
+    #[serde(default)]
+    pub taken: Clash,
+}
+
 /// What `files.trash` asks: paths, each moved to the system's Trash. A
 /// link goes there, not what it leads to.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
