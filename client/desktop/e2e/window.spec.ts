@@ -412,17 +412,15 @@ test("a sideways swipe scrolls the Strip freely and stops where it does; a scrol
   const box = await launcher.boundingBox()
   await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
 
-  // A scroll up moves nothing sideways. (One that drifts sideways scrolls
-  // the Strip by its drift, as the system scrolls a page, unless the Pane
-  // under the pointer scrolls up and down and takes the whole swipe.)
+  // A scroll up moves nothing sideways, drift as it may.
   const before = await scrolled()
   for (let i = 0; i < 6; i++) await page.mouse.wheel(0, -40)
   await page.waitForTimeout(300)
   expect(await scrolled()).toBe(before)
   await expect(launcher).toHaveAttribute("data-focused", "true")
 
-  // A swipe to the left scrolls the Strip by as much, as the system scrolls
-  // a page: no column pulls it on, and the focus stays where it was.
+  // A swipe to the left moves the Strip by as much: no column pulls it on,
+  // and the focus stays where it was.
   for (let i = 0; i < 5; i++) await page.mouse.wheel(-60, 0)
   await expect.poll(scrolled).toBe(before - 300)
   await page.waitForTimeout(500)
@@ -434,6 +432,25 @@ test("a sideways swipe scrolls the Strip freely and stops where it does; a scrol
   await expect.poll(scrolled).toBe(0)
   await thread.locator("header").click()
   await expect(thread).toHaveAttribute("data-focused", "true")
+
+  // Over a Thread long enough to scroll up and down, a sideways swipe is
+  // the Strip's all the same, though the hand drifts down a little: left to
+  // the system, the Thread took the swipe and the Strip stood still. What
+  // the swipe goes before it has picked its way, the Strip makes up.
+  for (const word of ["one", "two", "three", "four", "five", "six"]) {
+    await composer.fill(word)
+    await composer.press("Enter")
+    await expect(thread.getByText(`You said: ${word}`)).toBeVisible()
+  }
+  const log = thread.locator('[data-slot="message-scroller-viewport"]')
+  await expect
+    .poll(() => log.evaluate((e) => e.scrollHeight > e.clientHeight))
+    .toBe(true)
+  expect(await scrolled()).toBe(0)
+  await log.hover()
+  await page.mouse.wheel(3, 1)
+  for (let i = 0; i < 5; i++) await page.mouse.wheel(60, 2)
+  await expect.poll(scrolled).toBe(303)
 
   // Alt and a long swipe down moves one workspace, however long it is.
   // The Thread goes to the second, which the screen follows once the engine

@@ -48,7 +48,7 @@ import { type Frame, PaneFrame } from "./PaneFrame"
 import { aimed, drawnStrip, leftStrip } from "./tiles"
 
 import { Tabs } from "./Tabs"
-import { pixels, scrollsSideways, Swipe, type Way } from "./swipe"
+import { pixels, sidewaysRoom, Swipe, type Way } from "./swipe"
 import { THRESHOLD } from "./sizing"
 import { useSizing } from "./useSizing"
 import { usePlates } from "./usePlates"
@@ -65,11 +65,12 @@ const VIEW_STEP = 48
  * fills the screen, as every one does in solo, the Group comes whole into
  * view, from its first column.
  *
- * A sideways swipe scrolls the Strip freely, as the system scrolls any
- * page, its glide too: it stops where the hand leaves it, and the focus
- * stays where it was. Over what scrolls sideways by itself, a swipe without
- * the mod is that Pane's. A swipe up or down is the Pane's under the
- * pointer: the Strip never moves by itself.
+ * A sideways swipe moves the Strip freely, wherever the pointer is, by as
+ * much as the system says, its glide too: it stops where the hand leaves
+ * it, and the focus stays where it was. Begun over what can still scroll
+ * that way by itself, a swipe without the mod is that Pane's. A swipe up
+ * or down is the Pane's under the pointer: the Strip never moves by
+ * itself.
  *
  * the mod and the middle button drag the view, as niri's `Mod` and the
  * middle button: sideways the Strip follows the pointer, and stays where
@@ -298,25 +299,37 @@ export const Strip = memo(function Strip({
     const strip = scroller.current
     if (!strip) return
     const swipe = new Swipe()
+    let room = { back: 0, on: 0 }
     let mine = false
     const onWheel = (event: WheelEvent) => {
       const { x, y } = pixels(event)
-      const held = holdsMod(event)
       if (swipe.add(x, y, event.timeStamp)) {
-        mine =
-          held ||
-          (!event.defaultPrevented && !scrollsSideways(event.target, strip))
+        room = sidewaysRoom(event.target, strip)
+        mine = false
       }
-      if (held) event.preventDefault()
-      if (!mine || swipe.way !== "sideways") return
+      if (swipe.way !== "sideways" || !now.current.on) return
+      // Whose the swipe is, is said once, as it picks its way: the Strip's,
+      // unless it began over what could still scroll that way by itself.
+      if (swipe.picked) {
+        mine = holdsMod(event) || (swipe.x < 0 ? room.back : room.on) <= 1
+      }
+      if (!mine) return
+      // The Strip never scrolls by the system's hand (`overflow-hidden`),
+      // which gives a swipe to the Pane under the pointer whenever that
+      // Pane scrolls up and down: Banda moves it, by as much as the system
+      // says, and the Pane hears nothing of the swipe. Chromium lets the
+      // first event of a swipe alone be cancelled.
+      if (event.cancelable) event.preventDefault()
+      event.stopPropagation()
       // The fingers take the Strip from wherever the spring has it.
       scrollOf(strip).stop()
-      // Without the mod the system scrolls it, as any page; with it, the
-      // swipe was the mod's, so Banda moves it by as much.
-      if (held) strip.scrollLeft += x
+      // What it went before it picked its way, the Strip makes up.
+      strip.scrollLeft += swipe.picked ? swipe.x : x
     }
-    strip.addEventListener("wheel", onWheel, { passive: false })
-    return () => strip.removeEventListener("wheel", onWheel)
+    // Before the Pane's own listeners, so none takes a sideways swipe first.
+    const options = { passive: false, capture: true }
+    strip.addEventListener("wheel", onWheel, options)
+    return () => strip.removeEventListener("wheel", onWheel, options)
   }, [holdsMod])
 
   useEffect(() => {
@@ -404,7 +417,7 @@ export const Strip = memo(function Strip({
         hover(target?.closest<HTMLElement>("[data-column]")?.dataset.group)
       }}
       onPointerLeave={() => hover(undefined)}
-      className="relative flex h-full gap-(--gap-inner) overflow-x-auto overflow-y-hidden p-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))] [scrollbar-width:none]"
+      className="relative flex h-full gap-(--gap-inner) overflow-hidden p-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))]"
     >
       <Before read={() => motion.current.before(scroller.current)} />
       {/* The Strip stays when its last Pane goes, so that Pane fades out

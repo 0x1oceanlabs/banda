@@ -38,6 +38,8 @@ export class Swipe {
   x = 0
   y = 0
   way: Way | undefined
+  /** Whether the last event is the one it picked its way on. */
+  picked = false
   private last = -Infinity
 
   /** Takes one wheel event, sent at `at` milliseconds. True when the event
@@ -52,7 +54,8 @@ export class Swipe {
     }
     this.x += x
     this.y += y
-    if (this.way === undefined && Math.hypot(this.x, this.y) >= PICK) {
+    this.picked = this.way === undefined && Math.hypot(this.x, this.y) >= PICK
+    if (this.picked) {
       this.way =
         Math.abs(this.x) > 2 * Math.abs(this.y) ? "sideways" : "upright"
     }
@@ -61,23 +64,27 @@ export class Swipe {
 }
 
 /**
- * Whether something between `target` and `stop` scrolls sideways by itself,
- * as a wide table or a long line of code does: a sideways swipe over it is
- * its own.
+ * How far what lies between `target` and `stop` can still scroll sideways
+ * by itself, back (to the left) and on (to the right), as a wide table or
+ * a long line of code does: the most of them, each way. A sideways swipe
+ * begun over room its way is that thing's own.
  */
-export function scrollsSideways(target: EventTarget | null, stop: Element) {
+export function sidewaysRoom(target: EventTarget | null, stop: Element) {
+  const room = { back: 0, on: 0 }
   for (
     let element = target instanceof Element ? target : null;
     element && element !== stop;
     element = element.parentElement
   ) {
-    const { overflowX } = getComputedStyle(element)
-    if (
-      (overflowX === "auto" || overflowX === "scroll") &&
-      element.scrollWidth > element.clientWidth + 1
-    ) {
-      return true
-    }
+    const { overflowX, direction } = getComputedStyle(element)
+    if (overflowX !== "auto" && overflowX !== "scroll") continue
+    // From its start: the left edge, or the right one in a right-to-left
+    // text, where `scrollLeft` counts down from zero.
+    const gone = Math.abs(element.scrollLeft)
+    const rest = element.scrollWidth - element.clientWidth - gone
+    const [back, on] = direction === "rtl" ? [rest, gone] : [gone, rest]
+    room.back = Math.max(room.back, back)
+    room.on = Math.max(room.on, on)
   }
-  return false
+  return room
 }
