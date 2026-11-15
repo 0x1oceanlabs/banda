@@ -8,6 +8,8 @@
  *           picker and the region it speaks in, which the Window mounts
  *           once; on the Bar, the counts (`countsWidget`), which open the
  *           small inbox
+ *   counts  how many call the Person, Your turn's number, for a phone's
+ *           way back to the list (`useYourTurn`)
  *   says    the one order of what calls, for Alt+U and the counts
  *           (`useOrderNow`, `byOrder`, `placeIn`)
  *   takes   its keys' scope and list, which the Window registers; a tab
@@ -22,7 +24,7 @@ export { GROUP_WORDS, type Settings } from "./model/settings"
 export { kept, WIDTH } from "./model/width"
 export { askTab, isTab } from "./list/showing"
 export { byOrder, placeIn, useOrderNow } from "./model/order"
-export { countsWidget } from "./bar/Counts"
+export { countsWidget, useYourTurn } from "./bar/Counts"
 export { writeSidebar } from "./list/write-setting"
 export { LaterPicker, pickLater } from "./list/LaterPicker"
 export { Edge } from "./list/Edge"

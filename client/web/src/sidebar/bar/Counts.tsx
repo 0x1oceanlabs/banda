@@ -23,6 +23,7 @@
  *         the Sidebar shows, its list takes the focus
  *   runs  what the small inbox's cards and its "7 at work ›" run
  */
+import type { ProjectSummary } from "@banda/contract"
 import type { Count } from "@banda/contract/sidebar"
 import {
   BandaMark,
@@ -68,6 +69,12 @@ const aheadProjectOf = (here: Here) =>
 /** The sidebar's Inbox, as the counts read it: whatever tab the list
  * shows, its counts are the same. */
 const INBOX: SidebarInput["view"] = { tab: "inbox" }
+
+/** How many call the Person, as Your turn's head in the Inbox says it:
+ * a phone's way back to the list says it beside its chevron (SE6). */
+export function useYourTurn(projects: readonly ProjectSummary[]): number {
+  return useDrawn(projects, useLookSidebar(), INBOX).drawn.yours
+}
 
 /** The counts, as the top of this file says. */
 function Counts({ engine, projects }: WidgetProps) {

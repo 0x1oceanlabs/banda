@@ -71,6 +71,9 @@ export type BarCount = { count: number; mark: MarkState }
 export type Drawn = {
   /** Each tab's count, and whether it is the Person's turn there. */
   tabs: Record<Tab, TabCount>
+  /** How many call the Person: the Threads and the Projects of Your
+   * turn, the number its head says, whatever tab is in view. */
+  yours: number
   /** The tab in view as the list draws it, top down: inbox zero or a
    * tab's empty words, the parts' heads, the groups' headers, the cards,
    * the dividers and what a cut list leaves out. */

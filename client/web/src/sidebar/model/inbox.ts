@@ -139,7 +139,9 @@ export type GroupBlock = Extract<Block, { kind: "group" }>
 export type TabCount = { count: number; calls: boolean }
 
 /** The Inbox as `sidebarOf` says it, the list still in its blocks. */
-export type Inbox = Pick<Drawn, "tabs" | "zero" | "keys"> & { blocks: Block[] }
+export type Inbox = Pick<Drawn, "tabs" | "yours" | "zero" | "keys"> & {
+  blocks: Block[]
+}
 
 /** How many of Working the Inbox's shelf shows before "+ N more": its
  * Threads that are no child at work, each with its children. */
@@ -311,6 +313,7 @@ export function inboxOf(
       later: { count: by.later.length, calls: false },
       archive: { count: by.archived.length, calls: false },
     },
+    yours,
     blocks,
     ...(zero ? { zero } : {}),
     // At work, each child under its parent, not by when it began.
