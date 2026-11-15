@@ -165,8 +165,9 @@ PR.
   Person looks (`client/web/src/calls`). What calls has one order, the
   sidebar's as the Person arranged it (`sidebarOf` in
   `client/web/src/sidebar/model/drawn.ts`): the sidebar list draws it,
-  `Alt+U` walks it, and the bar's counts and the small inbox they open
-  read it too (ADR 0079, ADR 0087, ADR 0098).
+  `Alt+U` walks it, and the bar's counts, the small inbox they open and
+  the number beside a phone's way back (`useYourTurn`) read it too
+  (ADR 0079, ADR 0087, ADR 0098).
   The window knows nothing of Threads: a Pane kind's `shows` names the
   thing it shows, so the window knows when the Person looks at it (its
   Pane has the focus and the window is in front), sees it on screen, or

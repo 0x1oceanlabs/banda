@@ -466,3 +466,20 @@ test("waiting takes what asks and what is done, and archived Threads are not cou
   expect(bar(counted).counts.waiting.count).toBe(4)
   expect(bar(archive(counted, ["old"])).counts.waiting.count).toBe(3)
 })
+
+test("how many call the Person is Your turn's head, on every tab (SE6: a phone's way back says it)", () => {
+  const drawn = bar(counted)
+  const head = drawn.items.flatMap((item) =>
+    item.kind === "piece" &&
+    item.piece.kind === "head" &&
+    item.piece.key === "turn:head"
+      ? [item.piece.count]
+      : []
+  )
+  expect(head).toEqual([drawn.yours])
+  expect(drawn.yours).toBe(4)
+  const all = ["a", "b", "c"].map((id) => project(id, id))
+  for (const tab of ["working", "later", "archive"] as const)
+    expect(draw(counted, all, DEFAULT_SIDEBAR, { view: { tab } }).yours).toBe(4)
+  expect(bar(archive(counted, ["old"])).yours).toBe(3)
+})
