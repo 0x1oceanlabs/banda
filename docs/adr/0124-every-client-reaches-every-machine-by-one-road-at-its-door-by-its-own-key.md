@@ -327,9 +327,16 @@ repository), with an adversarial check.
   named; a button over the list starts a new Thread, the one door a phone
   has to it. The Window places the Panes as ever, and the phone shows the
   one with the focus. With no Pane to show, the list shows whatever was
-  asked. Not yet: Stop beside Send while text is typed; rows a thumb's
-  height; how many Threads call, at the way back; the screen's safe
-  areas.
+  asked.
+- **What a thumb takes (SE6, PR 2).** On a phone a row of the list and a
+  button are as tall as a finger is wide (44 and 36 points, two lengths
+  of the theme); what is written in is 16px, under which Safari zooms the
+  page in on a tap; the page reaches the whole screen
+  (`viewport-fit=cover`) and keeps clear of its notch and home bar. Where
+  the pointer is a finger, on a phone or not, the composer keeps Stop
+  beside Send while something is written, as there may be no key to stop
+  with. Not yet: how many Threads call, at the way back, which the
+  sidebar's door has no word for.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The
