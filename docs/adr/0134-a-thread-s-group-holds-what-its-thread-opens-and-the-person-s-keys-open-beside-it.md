@@ -110,6 +110,11 @@ and its principle 1 (one thing, one place).
    the workspace on screen (`on`), and the window's `startingHere` goes.
    It answers ADR 0110's open question for an empty free workspace; one
    that holds Panes keeps today's way until a case asks for another.
+   _Built_ in step 4 (#1810): `placing.rs` puts a Pane the Person opens
+   with no Pane in front on the empty workspace on screen that no Project
+   owns, in `free` and in the row; the empty workspace's buttons call
+   `parts.open` as a key does, and `startingHere` is gone. In the row, a
+   Project that owns no workspace yet still gets its own, as before.
 
 ## Consequences
 
