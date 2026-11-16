@@ -42,6 +42,7 @@ impl Machine {
                 let rule = Rule {
                     width: width.map(str::to_owned),
                     opens: *opens,
+                    ..Rule::default()
                 };
                 ((*kind).to_owned(), rule)
             })
@@ -1367,6 +1368,7 @@ async fn a_list_opens_at_the_narrowest_width_for_the_window_a_program_and_an_age
     let ruled = Rule {
         width: Some("2/5".to_owned()),
         opens: None,
+        ..Rule::default()
     };
     (tiling.rules).insert("git.diff".to_owned(), ruled);
     let lists = ["files.tree", "files.file", "git.diff"];

@@ -39,10 +39,12 @@ import {
   type Column,
   type Pane,
   type Place,
+  type Opens,
   type Rule,
   seeded,
   type Side,
   type Via,
+  type When,
   type Workspace,
 } from "@banda/contract/workspaces"
 
@@ -405,6 +407,7 @@ function openCommand(
       project: open.project,
       home: homeIn(facts, open.kind),
       opens: facts.rules?.[open.kind]?.opens,
+      when: facts.rules?.[open.kind]?.when ?? [],
       scratch: open.scratch === true,
       from: away ?? open.from,
       on: open.on,
@@ -431,6 +434,8 @@ type Asked = {
   home: boolean
   /** Where its kind's rule says it opens, by the Pane in front. */
   opens: Rule["opens"]
+  /** Its kind's rule's lines, by how it is asked for. */
+  when: readonly When[]
   scratch: boolean
   from: string | undefined
   on: string | undefined
@@ -449,15 +454,30 @@ type Line = {
   via?: Via
   from?: "pane" | "group" | "in-group"
   home?: true
-  to:
-    | "beside"
-    | "below"
-    | "group"
-    | "beside-group"
-    | "project"
-    | "project-start"
-    | "here"
+  to: Opens
   anywhere?: true
+}
+
+/** As `placing::Opens::to`: the places by the Pane in front ask for one. */
+const BY_THE_FRONT: readonly Opens[] = [
+  "beside",
+  "below",
+  "group",
+  "beside-group",
+]
+
+/** As `placing::persons`: the Person's lines for a kind, its rule's `when`
+ * in order, then the rule's own `opens`; none of it for `project`, which
+ * the row's line for a kind that stands on its Project's workspace does
+ * (`homeIn`). */
+function personsLines(when: readonly When[], opens: Rule["opens"]): Line[] {
+  const whole: When[] =
+    opens === undefined || opens === "project" ? [] : [{ opens }]
+  return [...when, ...whole].map(({ via, from, opens }) => ({
+    ...(via && { via }),
+    from: from ?? (BY_THE_FRONT.includes(opens) ? "pane" : undefined),
+    to: opens,
+  }))
 }
 
 const CLICK: Line = { via: "click", from: "group", to: "group", anywhere: true }
@@ -483,7 +503,7 @@ function placeAsked(
   leads: readonly string[],
   asked: Asked
 ): Place | undefined {
-  const { flow, project, home, opens, scratch, from, on, agents, via } = asked
+  const { flow, project, home, scratch, from, on, agents, via } = asked
   const row = flow === "row"
   const itsWorkspace: Place = scratch
     ? { to: "free" }
@@ -509,6 +529,8 @@ function placeAsked(
     const owns = list.some((w) => w.project === project)
     if (!row || scratch || owns) return here()
   }
+  const screen = list.find((w) => w.id === on)?.project
+  const onTheirs = row && !scratch && screen !== undefined && screen !== project
   const holds = (line: Line): boolean =>
     (!line.home || home) &&
     (line.via === undefined || (!agents && line.via === via)) &&
@@ -533,19 +555,19 @@ function placeAsked(
           ? { to: "beside", pane: by.last, side: "right" }
           : undefined
       case "project":
-        return itsWorkspace
+        // A Project owns a workspace in the row alone.
+        return row ? itsWorkspace : undefined
       case "project-start":
+        if (!row) return undefined
         // Of no Project.
         return scratch ? here() : { to: "start", project }
       case "here":
-        return here()
+        // The row's workspaces: not on one another Project owns.
+        return onTheirs ? undefined : here()
     }
   }
-  // The Person's line for the kind, then Banda's for the Flow.
-  const persons: Line[] =
-    opens === undefined || opens === "project"
-      ? []
-      : [{ from: "pane", to: opens }]
+  // The Person's lines for the kind, then Banda's for the Flow.
+  const persons = personsLines(asked.when, asked.opens)
   for (const line of [...persons, ...(row ? ROW : FREE)]) {
     const place = holds(line) ? made(line) : undefined
     if (place) return place

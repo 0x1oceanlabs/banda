@@ -115,11 +115,23 @@ has it whole (`main` at `5291a5b6`):
    [rule.terminal.terminal]
    width = "1/3"
 
-   [rule.terminal.terminal.click.group]   # a click, from a Group
+   [[rule.terminal.terminal.when]]   # a click, from a Group
+   via = "click"
+   from = "group"
    opens = "below"
    ```
 
-   Banda's defaults are the same text, kept in the binary.
+   Banda's defaults are lines of the same kind, kept in the binary.
+   _Built_ in steps 1 and 2 (#1853 and the PR of step 2): a rule's lines
+   are an array of `when` tables, read in order before the rule's own
+   `opens`, as an order is what they have. A line with a wrong word is
+   named by `banda settings check` and left out whole: with the word
+   alone left out it would hold for more than was meant. `project` and
+   `project-start` give way in the Flow `free`, where no Project owns a
+   workspace. Banda's own lines stay a constant beside the laws
+   (`placing::FREE`, `ROW`), read by the same code as the Person's: two
+   of their words, a kind that stands on its Project's workspace and a
+   line the row's law does not hold, are not the Person's to write.
 
 7. **After a close.** The focus goes back to the Pane that had it before
    the closed one, while that Pane still stands on the same workspace.

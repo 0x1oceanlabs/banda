@@ -325,6 +325,7 @@ pub fn open(
             grouped,
             home: facts.at_home(&shows.kind),
             opens: facts.opens(&shows.kind),
+            when: facts.when(&shows.kind),
             scratch: scratch == Some(true),
             from: away.or(from),
             on,

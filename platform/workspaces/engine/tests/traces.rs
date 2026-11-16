@@ -24,8 +24,8 @@
 use banda_kernel::{Code, Refusal};
 use banda_workspaces::commands::{self, METHODS};
 use banda_workspaces::model::{self, Arrangement, Seed};
-use banda_workspaces::placing::{Facts, Flow};
-use banda_workspaces::tiling::{Opens, Rule};
+use banda_workspaces::placing::{Facts, Flow, Via};
+use banda_workspaces::tiling::{Front, Opens, Rule, When};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -181,8 +181,15 @@ impl Tracing {
         let rule = Rule {
             width: width.map(str::to_owned),
             opens,
+            ..Rule::default()
         };
         self.facts.rules.insert(kind.to_owned(), rule);
+    }
+
+    /// The next steps run with these lines of the rule of `kind`, as
+    /// `[[rule.<kind>.when]]` says them.
+    fn lined(&mut self, kind: &str, when: &[When]) {
+        self.facts.rules.entry(kind.to_owned()).or_default().when = when.to_vec();
     }
 
     /// The next steps run with `kind` a list beside other Panes, and
@@ -1609,6 +1616,59 @@ fn rules() -> Tracing {
     t
 }
 
+fn rule_lines() -> Tracing {
+    let mut t = Tracing::new(
+        21,
+        "rule-lines",
+        "A rule's lines say where a Pane of its kind opens by how it is asked for \
+         and from what (ADR 0135, decision 6): a click from a Group under the Pane \
+         clicked in, a key from a Group into it. A line that does not hold leaves \
+         the Pane to Banda's lines; its lines go before the rule's own `opens`; and \
+         `here` opens last on the workspace on screen though a Pane is in front.",
+    );
+    t.led_by_threads();
+    let line = |via, from, opens| When { via, from, opens };
+    let group = Some(Front::Group);
+    t.lined("c.c", &[line(Some(Via::Click), group, Opens::Below)]);
+    t.lined("k.k", &[line(Some(Via::Key), group, Opens::Group)]);
+    t.lined("h.h", &[line(None, None, Opens::Here)]);
+    // Its lines first, then its own `opens`.
+    t.ruled("o.o", None, Some(Opens::Below));
+    t.lined("o.o", &[line(Some(Via::Click), None, Opens::Beside)]);
+    let key = |pane: &str| json!({ "from": pane, "via": "key" });
+    for (at, flow, project, n) in [(0, Flow::Free, HOME, 0), (1, Flow::Row, WORK, 10)] {
+        t.in_the_flow(flow);
+        let on = t.bottom();
+        let one = t.opened(and(shows(project, "a.a", n + 1), json!({ "on": on })));
+        let two = t.opened(and(thread(project, n + 2), key(&one)));
+        // A click from the Thread: under it. A key from it: into its Group.
+        t.ok("open", and(shows(project, "c.c", n + 3), clicked(&two)));
+        t.ok("open", and(shows(project, "k.k", n + 4), key(&two)));
+        // The lines do not hold: right of the Group, and right of a Pane
+        // in no Group.
+        t.ok("open", and(shows(project, "c.c", n + 5), key(&two)));
+        t.ok("open", and(shows(project, "k.k", n + 6), key(&one)));
+        // Last on the workspace on screen, though a Pane is in front.
+        t.ok(
+            "open",
+            and(
+                shows(project, "h.h", n + 7),
+                json!({ "from": one, "on": on }),
+            ),
+        );
+        // By a click beside, by a key under, as its own `opens` says.
+        t.ok("open", and(shows(project, "o.o", n + 8), clicked(&one)));
+        t.ok("open", and(shows(project, "o.o", n + 9), key(&one)));
+        let ns = |column: &[u32]| column.iter().map(|m| u64::from(n + m)).collect::<Vec<_>>();
+        let columns: [&[u32]; 7] = [&[1, 9], &[8], &[6], &[2, 3], &[4], &[5], &[7]];
+        assert_eq!(t.layout()[at], columns.map(ns));
+        let g = t.grouping()[at][3];
+        assert_eq!(t.grouping()[at], [0, 0, 0, g, g, 0, 0]);
+        assert_ne!(g, 0);
+    }
+    t
+}
+
 fn clicks_and_keys() -> Tracing {
     let mut t = Tracing::new(
         20,
@@ -1676,6 +1736,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         refused_moves(),
         rules(),
         clicks_and_keys(),
+        rule_lines(),
     ];
     let steps = || traces.iter().flat_map(|t| &t.trace.steps);
 

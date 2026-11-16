@@ -28,6 +28,8 @@ use std::path::Path;
 use toml::Spanned;
 use ts_rs::TS;
 
+use crate::placing::Via;
+
 /// The file's name in the config folder.
 pub const NAME: &str = "tiling.toml";
 
@@ -74,7 +76,7 @@ impl From<Flow> for crate::placing::Flow {
 /// says. Each is a place `placing` gives already: a rule chooses among
 /// them, by the Pane in front.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "workspaces/")]
 pub enum Opens {
     /// Right of the Pane in front, in a column of its own.
@@ -87,6 +89,48 @@ pub enum Opens {
     /// Last on its Project's workspace, in the row, as a Thread opens (ADR
     /// 0102).
     Project,
+    /// Right of the whole Group of the Pane in front (ADR 0134, decision
+    /// 2).
+    BesideGroup,
+    /// First on its Project's workspace, in the row, right of its columns
+    /// in no Group (ADR 0134, decision 3).
+    ProjectStart,
+    /// Last on the workspace on screen.
+    Here,
+}
+
+/// What a line of a rule asks of the Pane in front (ADR 0135, decision 6).
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export, export_to = "workspaces/")]
+pub enum Front {
+    /// There is one.
+    Pane,
+    /// It is a Thread, or a Pane in a Group.
+    Group,
+}
+
+/// A line of a rule: where a Pane of the kind opens when it is asked for
+/// this way (ADR 0135, decision 6). What a line leaves out, it does not
+/// ask. The first line that holds, and whose place can be made, decides;
+/// then the rule's own `opens`; then Banda's lines for the Flow.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export, export_to = "workspaces/")]
+pub struct When {
+    /// How the Person asked: "click", in the Pane in front, a path or a
+    /// link; or "key", a key, a menu, the sidebar or `banda`. A line that
+    /// says it never holds for what an Agent opens.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<Via>,
+    /// What is in front: "pane", any Pane; or "group", a Thread or a Pane
+    /// in a Group.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<Front>,
+    /// Where it opens then, as the rule's `opens` says a place.
+    pub opens: Opens,
 }
 
 /// A rule for one kind of Pane, as the file says it. Every key is
@@ -102,8 +146,70 @@ pub struct RuleSettings {
     /// right of the Pane in front; "below", under it, in its column;
     /// "group", in its Group; or "project", last on its Project's
     /// workspace, in the row. With no Pane in front, and in the row from a
-    /// workspace of another Project, it opens as the Flow says.
+    /// workspace of another Project, it opens as the Flow says. Also
+    /// "beside-group", right of the whole Group of the Pane in front;
+    /// "project-start", first on its Project's workspace, in the row; and
+    /// "here", last on the workspace on screen.
     pub opens: Option<Opens>,
+    /// Lines that say where it opens by how it is asked for and from what,
+    /// each `[[rule.<app>.<kind>.when]]`, with `via`, `from` and `opens`.
+    /// They go before the rule's own `opens`, the first that holds first.
+    pub when: Option<Vec<WhenSettings>>,
+}
+
+/// A line of a rule, as the file says it. It is read whatever it holds
+/// and checked after (`check`), so a line with a wrong word, a key no line
+/// has or no `opens` is named and left out whole: with the wrong part
+/// alone left out, as the look leaves a key out, it would hold for more
+/// than its writer meant.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct WhenSettings {
+    /// How you asked: "click", in the Pane in front, a path or a link; or
+    /// "key", a key, a menu, the sidebar or banda.
+    #[schemars(with = "Option<Via>")]
+    pub via: Option<Spanned<toml::Value>>,
+    /// What is in front: "pane", any Pane; or "group", a Thread or a Pane
+    /// in a Group.
+    #[schemars(with = "Option<Front>")]
+    pub from: Option<Spanned<toml::Value>>,
+    /// Where it opens then, as the rule's `opens` says a place.
+    #[schemars(with = "Opens")]
+    pub opens: Option<Spanned<toml::Value>>,
+    /// Keys no line has.
+    #[serde(flatten)]
+    #[schemars(skip)]
+    pub other: BTreeMap<String, toml::Value>,
+}
+
+/// Where in the file a line is wrong, where it is known, and what to say.
+type Wrong = (Option<std::ops::Range<usize>>, String);
+
+/// The word `written` as one of `T`'s, or where it is and what to say.
+fn word<T: serde::de::DeserializeOwned>(written: &Spanned<toml::Value>) -> Result<T, Wrong> {
+    (written.get_ref().clone().try_into())
+        .map_err(|error: toml::de::Error| (Some(written.span()), error.message().to_owned()))
+}
+
+impl WhenSettings {
+    /// The line it says, or the first thing wrong in it.
+    fn line(&self) -> Result<When, Wrong> {
+        let said = [&self.via, &self.from, &self.opens];
+        let here = said.into_iter().flatten().next().map(Spanned::span);
+        if let Some(key) = self.other.keys().next() {
+            let says = format!("a line of a rule has `via`, `from` and `opens`, not `{key}`");
+            return Err((here, says));
+        }
+        let Some(opens) = &self.opens else {
+            let says = "a line of a rule says where it opens: `opens`".to_owned();
+            return Err((here, says));
+        };
+        Ok(When {
+            via: self.via.as_ref().map(word).transpose()?,
+            from: self.from.as_ref().map(word).transpose()?,
+            opens: word(opens)?,
+        })
+    }
 }
 
 /// How Panes stand: the Flow, the widths, and rules by kind of Pane. A
@@ -134,6 +240,10 @@ pub struct Rule {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opens: Option<Opens>,
+    /// Its lines by how a Pane is asked for and from what, in order.
+    #[ts(as = "Option<Vec<When>>", optional)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub when: Vec<When>,
 }
 
 /// How the Tiling behaves, every key resolved.
@@ -212,6 +322,10 @@ impl OneFile for TilingSettings {
                     let rule = Rule {
                         width: rule.width.map(Spanned::into_inner),
                         opens: rule.opens,
+                        // `check` has named and left out what is no line.
+                        when: (rule.when.iter().flatten())
+                            .filter_map(|line| line.line().ok())
+                            .collect(),
                     };
                     (format!("{app}.{pane}"), rule)
                 })
@@ -236,6 +350,16 @@ impl OneFile for TilingSettings {
             if let Some(width) = rule.width.take_if(|width| share(width.get_ref()).is_none()) {
                 let says = no_width(width.get_ref());
                 problems.push(Problem::at(path, text, Some(width.span()), says));
+            }
+            // What is no line is named and left out whole.
+            if let Some(when) = &mut rule.when {
+                when.retain(|line| match line.line() {
+                    Ok(_) => true,
+                    Err((span, says)) => {
+                        problems.push(Problem::at(path, text, span, says));
+                        false
+                    }
+                });
             }
         }
     }
@@ -320,6 +444,11 @@ mod tests {
         let rule = Rule {
             width: Some("1/3".to_owned()),
             opens: Some(Opens::Beside),
+            when: vec![When {
+                via: Some(Via::Click),
+                from: Some(Front::Group),
+                opens: Opens::Below,
+            }],
         };
         assert_eq!(
             tiling.rules,
@@ -462,6 +591,53 @@ mod tests {
         assert_eq!(tiling.flow, Flow::Row);
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert!(problems[0].message.contains("\"row\""));
+    }
+
+    #[test]
+    fn a_rule_s_lines_say_where_its_kind_opens_by_how_it_is_asked_for() {
+        let text = "[rule.git.diff]\nopens = \"beside-group\"\n\n\
+                    [[rule.git.diff.when]]\nvia = \"key\"\nfrom = \"group\"\nopens = \"group\"\n\n\
+                    [[rule.git.diff.when]]\nopens = \"here\"\n\n\
+                    [[rule.files.tree.when]]\nfrom = \"pane\"\nopens = \"project-start\"\n";
+        let (tiling, _, problems) = resolved(Some(text), None);
+        assert!(problems.is_empty(), "{problems:?}");
+        let diff = &tiling.rules["git.diff"];
+        assert_eq!(diff.opens, Some(Opens::BesideGroup));
+        let line = |via, from, opens| When { via, from, opens };
+        assert_eq!(
+            diff.when,
+            [
+                line(Some(Via::Key), Some(Front::Group), Opens::Group),
+                line(None, None, Opens::Here),
+            ]
+        );
+        // A rule of lines alone is a rule.
+        let tree = &tiling.rules["files.tree"].when;
+        assert_eq!(*tree, [line(None, Some(Front::Pane), Opens::ProjectStart)]);
+        // A line with a wrong word, a key no line has, a value that is no
+        // word or no `opens` is named and left out whole: with the wrong
+        // part alone left out it would hold for more than was meant. The
+        // rest of its rule, and of the file, holds.
+        for bad in [
+            "via = \"mouse\"\nopens = \"here\"",
+            "from = \"thread\"\nopens = \"here\"",
+            "opens = \"left\"",
+            "fron = \"group\"\nopens = \"here\"",
+            "via = 1\nopens = \"here\"",
+            "via = \"key\"",
+        ] {
+            let text = format!(
+                "flow = \"free\"\n[rule.git.diff]\nwidth = \"1/3\"\n\
+                 [[rule.git.diff.when]]\n{bad}\n\
+                 [[rule.git.diff.when]]\nopens = \"below\"\n"
+            );
+            let (tiling, _, problems) = resolved(Some(&text), None);
+            assert_eq!(problems.len(), 1, "{bad}: {problems:?}");
+            assert_eq!(tiling.flow, Flow::Free, "{bad}");
+            let rule = &tiling.rules["git.diff"];
+            assert_eq!(rule.width.as_deref(), Some("1/3"), "{bad}");
+            assert_eq!(rule.when, [line(None, None, Opens::Below)], "{bad}");
+        }
     }
 
     #[test]
