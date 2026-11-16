@@ -1,0 +1,3636 @@
+{
+  "about": "A rule's lines say where a Pane of its kind opens by how it is asked for and from what (ADR 0135, decision 6): a click from a Group under the Pane clicked in, a key from a Group into it. A line that does not hold leaves the Pane to Banda's lines; its lines go before the rule's own `opens`; and `here` opens last on the workspace on screen though a Pane is in front.",
+  "start": [
+    {
+      "id": "15443781-96ed-5def-807e-2eb826692263",
+      "columns": []
+    }
+  ],
+  "steps": [
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000001",
+      "params": {
+        "args": {
+          "n": 1
+        },
+        "kind": "a.a",
+        "on": "15443781-96ed-5def-807e-2eb826692263",
+        "project": "a0000000-0000-4000-8000-000000000002"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "740d094c-100d-5381-8621-5cf7cd2a1da8"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000002",
+      "params": {
+        "args": {
+          "n": 2
+        },
+        "from": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+        "grouped": true,
+        "kind": "t.t",
+        "project": "a0000000-0000-4000-8000-000000000002",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "704c3c39-c703-5114-a81f-3a60457105d2"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000003",
+      "params": {
+        "args": {
+          "n": 3
+        },
+        "from": "704c3c39-c703-5114-a81f-3a60457105d2",
+        "kind": "c.c",
+        "project": "a0000000-0000-4000-8000-000000000002",
+        "via": "click"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "45936397-3eb3-5a69-8acb-89bdaea80029"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000004",
+      "params": {
+        "args": {
+          "n": 4
+        },
+        "from": "704c3c39-c703-5114-a81f-3a60457105d2",
+        "kind": "k.k",
+        "project": "a0000000-0000-4000-8000-000000000002",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "1abc4208-243f-552b-9683-726e7413859f"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000005",
+      "params": {
+        "args": {
+          "n": 5
+        },
+        "from": "704c3c39-c703-5114-a81f-3a60457105d2",
+        "kind": "c.c",
+        "project": "a0000000-0000-4000-8000-000000000002",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "d923cd61-4d05-5bd3-b3c1-9c6f19654084"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000006",
+      "params": {
+        "args": {
+          "n": 6
+        },
+        "from": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+        "kind": "k.k",
+        "project": "a0000000-0000-4000-8000-000000000002",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "7b9439db-8ce7-5e02-a65b-d838b564bd17"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000007",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "from": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+        "kind": "h.h",
+        "on": "15443781-96ed-5def-807e-2eb826692263",
+        "project": "a0000000-0000-4000-8000-000000000002"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "28ed7add-1041-5b92-8127-007ab0f270d9"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000008",
+      "params": {
+        "args": {
+          "n": 8
+        },
+        "from": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+        "kind": "o.o",
+        "project": "a0000000-0000-4000-8000-000000000002",
+        "via": "click"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000009",
+      "params": {
+        "args": {
+          "n": 9
+        },
+        "from": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+        "kind": "o.o",
+        "project": "a0000000-0000-4000-8000-000000000002",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "1ec23191-e727-5676-9c22-b826d5c0deac"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-00000000000a",
+      "params": {
+        "args": {
+          "n": 11
+        },
+        "kind": "a.a",
+        "on": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": [
+            {
+              "id": "11223f6b-f1e9-515c-a506-f0990f1d67ab",
+              "panes": [
+                {
+                  "id": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "full": false
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "cccce31f-3e9d-5087-a135-cbbf6040cf8b",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-00000000000b",
+      "params": {
+        "args": {
+          "n": 12
+        },
+        "from": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+        "grouped": true,
+        "kind": "t.t",
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "2157933f-d150-5041-9b76-ac431511097d"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": [
+            {
+              "id": "11223f6b-f1e9-515c-a506-f0990f1d67ab",
+              "panes": [
+                {
+                  "id": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "55dc5290-a3b7-5887-8b8a-266c8ec3a765",
+              "panes": [
+                {
+                  "id": "2157933f-d150-5041-9b76-ac431511097d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 12
+                  }
+                }
+              ],
+              "full": false,
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "cccce31f-3e9d-5087-a135-cbbf6040cf8b",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-00000000000c",
+      "params": {
+        "args": {
+          "n": 13
+        },
+        "from": "2157933f-d150-5041-9b76-ac431511097d",
+        "kind": "c.c",
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "via": "click"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "00a85d0a-1fa3-588d-a374-1a78290b0ad2"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": [
+            {
+              "id": "11223f6b-f1e9-515c-a506-f0990f1d67ab",
+              "panes": [
+                {
+                  "id": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "55dc5290-a3b7-5887-8b8a-266c8ec3a765",
+              "panes": [
+                {
+                  "id": "2157933f-d150-5041-9b76-ac431511097d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 12
+                  }
+                },
+                {
+                  "id": "00a85d0a-1fa3-588d-a374-1a78290b0ad2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 13
+                  }
+                }
+              ],
+              "full": false,
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "cccce31f-3e9d-5087-a135-cbbf6040cf8b",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-00000000000d",
+      "params": {
+        "args": {
+          "n": 14
+        },
+        "from": "2157933f-d150-5041-9b76-ac431511097d",
+        "kind": "k.k",
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "bd617239-e120-500c-b677-6c56cb8bf46c"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": [
+            {
+              "id": "11223f6b-f1e9-515c-a506-f0990f1d67ab",
+              "panes": [
+                {
+                  "id": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "55dc5290-a3b7-5887-8b8a-266c8ec3a765",
+              "panes": [
+                {
+                  "id": "2157933f-d150-5041-9b76-ac431511097d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 12
+                  }
+                },
+                {
+                  "id": "00a85d0a-1fa3-588d-a374-1a78290b0ad2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 13
+                  }
+                }
+              ],
+              "full": false,
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "f9e6b434-1697-5172-9fd8-eb9920b12853",
+              "panes": [
+                {
+                  "id": "bd617239-e120-500c-b677-6c56cb8bf46c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 14
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "cccce31f-3e9d-5087-a135-cbbf6040cf8b",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-00000000000e",
+      "params": {
+        "args": {
+          "n": 15
+        },
+        "from": "2157933f-d150-5041-9b76-ac431511097d",
+        "kind": "c.c",
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "c026862a-6f9f-5955-95b3-7929760cfc7f"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": [
+            {
+              "id": "11223f6b-f1e9-515c-a506-f0990f1d67ab",
+              "panes": [
+                {
+                  "id": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "55dc5290-a3b7-5887-8b8a-266c8ec3a765",
+              "panes": [
+                {
+                  "id": "2157933f-d150-5041-9b76-ac431511097d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 12
+                  }
+                },
+                {
+                  "id": "00a85d0a-1fa3-588d-a374-1a78290b0ad2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 13
+                  }
+                }
+              ],
+              "full": false,
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "f9e6b434-1697-5172-9fd8-eb9920b12853",
+              "panes": [
+                {
+                  "id": "bd617239-e120-500c-b677-6c56cb8bf46c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 14
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "160fc2e4-b0d0-5abc-a238-ef8f0c3af38f",
+              "panes": [
+                {
+                  "id": "c026862a-6f9f-5955-95b3-7929760cfc7f",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 15
+                  }
+                }
+              ],
+              "full": false
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "cccce31f-3e9d-5087-a135-cbbf6040cf8b",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-00000000000f",
+      "params": {
+        "args": {
+          "n": 16
+        },
+        "from": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+        "kind": "k.k",
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "49d86ea7-e098-562b-ba97-fbdd1ff4f484"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": [
+            {
+              "id": "11223f6b-f1e9-515c-a506-f0990f1d67ab",
+              "panes": [
+                {
+                  "id": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "fbdf62ac-57d0-5152-a4a5-b7495c1efb1b",
+              "panes": [
+                {
+                  "id": "49d86ea7-e098-562b-ba97-fbdd1ff4f484",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 16
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "55dc5290-a3b7-5887-8b8a-266c8ec3a765",
+              "panes": [
+                {
+                  "id": "2157933f-d150-5041-9b76-ac431511097d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 12
+                  }
+                },
+                {
+                  "id": "00a85d0a-1fa3-588d-a374-1a78290b0ad2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 13
+                  }
+                }
+              ],
+              "full": false,
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "f9e6b434-1697-5172-9fd8-eb9920b12853",
+              "panes": [
+                {
+                  "id": "bd617239-e120-500c-b677-6c56cb8bf46c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 14
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "160fc2e4-b0d0-5abc-a238-ef8f0c3af38f",
+              "panes": [
+                {
+                  "id": "c026862a-6f9f-5955-95b3-7929760cfc7f",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 15
+                  }
+                }
+              ],
+              "full": false
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "cccce31f-3e9d-5087-a135-cbbf6040cf8b",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000010",
+      "params": {
+        "args": {
+          "n": 17
+        },
+        "from": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+        "kind": "h.h",
+        "on": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "edb0d705-cb93-56e7-9d63-adaa5ad12d4b"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": [
+            {
+              "id": "11223f6b-f1e9-515c-a506-f0990f1d67ab",
+              "panes": [
+                {
+                  "id": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "fbdf62ac-57d0-5152-a4a5-b7495c1efb1b",
+              "panes": [
+                {
+                  "id": "49d86ea7-e098-562b-ba97-fbdd1ff4f484",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 16
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "55dc5290-a3b7-5887-8b8a-266c8ec3a765",
+              "panes": [
+                {
+                  "id": "2157933f-d150-5041-9b76-ac431511097d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 12
+                  }
+                },
+                {
+                  "id": "00a85d0a-1fa3-588d-a374-1a78290b0ad2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 13
+                  }
+                }
+              ],
+              "full": false,
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "f9e6b434-1697-5172-9fd8-eb9920b12853",
+              "panes": [
+                {
+                  "id": "bd617239-e120-500c-b677-6c56cb8bf46c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 14
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "160fc2e4-b0d0-5abc-a238-ef8f0c3af38f",
+              "panes": [
+                {
+                  "id": "c026862a-6f9f-5955-95b3-7929760cfc7f",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 15
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "7657c4b5-2943-5053-8f6b-682b8555bdf3",
+              "panes": [
+                {
+                  "id": "edb0d705-cb93-56e7-9d63-adaa5ad12d4b",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 17
+                  }
+                }
+              ],
+              "full": false
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "cccce31f-3e9d-5087-a135-cbbf6040cf8b",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000011",
+      "params": {
+        "args": {
+          "n": 18
+        },
+        "from": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+        "kind": "o.o",
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "via": "click"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "e76ad3a5-0ba0-5682-baf5-cca0facfd9f7"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": [
+            {
+              "id": "11223f6b-f1e9-515c-a506-f0990f1d67ab",
+              "panes": [
+                {
+                  "id": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "33b3aa42-aeac-527f-a496-03b2fcabcacd",
+              "panes": [
+                {
+                  "id": "e76ad3a5-0ba0-5682-baf5-cca0facfd9f7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 18
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "fbdf62ac-57d0-5152-a4a5-b7495c1efb1b",
+              "panes": [
+                {
+                  "id": "49d86ea7-e098-562b-ba97-fbdd1ff4f484",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 16
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "55dc5290-a3b7-5887-8b8a-266c8ec3a765",
+              "panes": [
+                {
+                  "id": "2157933f-d150-5041-9b76-ac431511097d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 12
+                  }
+                },
+                {
+                  "id": "00a85d0a-1fa3-588d-a374-1a78290b0ad2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 13
+                  }
+                }
+              ],
+              "full": false,
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "f9e6b434-1697-5172-9fd8-eb9920b12853",
+              "panes": [
+                {
+                  "id": "bd617239-e120-500c-b677-6c56cb8bf46c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 14
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "160fc2e4-b0d0-5abc-a238-ef8f0c3af38f",
+              "panes": [
+                {
+                  "id": "c026862a-6f9f-5955-95b3-7929760cfc7f",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 15
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "7657c4b5-2943-5053-8f6b-682b8555bdf3",
+              "panes": [
+                {
+                  "id": "edb0d705-cb93-56e7-9d63-adaa5ad12d4b",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 17
+                  }
+                }
+              ],
+              "full": false
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "cccce31f-3e9d-5087-a135-cbbf6040cf8b",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000015-0000-4000-8000-000000000012",
+      "params": {
+        "args": {
+          "n": 19
+        },
+        "from": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+        "kind": "o.o",
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "via": "key"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ],
+        "leads": [
+          "t.t"
+        ],
+        "rules": {
+          "c.c": {
+            "when": [
+              {
+                "via": "click",
+                "from": "group",
+                "opens": "below"
+              }
+            ]
+          },
+          "h.h": {
+            "when": [
+              {
+                "opens": "here"
+              }
+            ]
+          },
+          "k.k": {
+            "when": [
+              {
+                "via": "key",
+                "from": "group",
+                "opens": "group"
+              }
+            ]
+          },
+          "o.o": {
+            "opens": "below",
+            "when": [
+              {
+                "via": "click",
+                "opens": "beside"
+              }
+            ]
+          }
+        }
+      },
+      "answer": {
+        "new": true,
+        "pane": "0ab323d5-288a-5cf9-b611-622814192db8"
+      },
+      "after": [
+        {
+          "id": "15443781-96ed-5def-807e-2eb826692263",
+          "columns": [
+            {
+              "id": "708951f5-5c8e-5ef9-a503-a2533cb0a5e8",
+              "panes": [
+                {
+                  "id": "740d094c-100d-5381-8621-5cf7cd2a1da8",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1ec23191-e727-5676-9c22-b826d5c0deac",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "3f934cb5-0561-5f44-b1b5-0bc391c73896",
+              "panes": [
+                {
+                  "id": "1657ac79-3c2c-5609-bc05-19c21a3ca3ec",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "82fb8f03-32ce-5cec-ad65-14ce51bcc128",
+              "panes": [
+                {
+                  "id": "7b9439db-8ce7-5e02-a65b-d838b564bd17",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "cfe68ecc-ad31-51e7-bf63-85c57ae5317a",
+              "panes": [
+                {
+                  "id": "704c3c39-c703-5114-a81f-3a60457105d2",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                },
+                {
+                  "id": "45936397-3eb3-5a69-8acb-89bdaea80029",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "f4d27446-c7b1-5f82-ad50-49324d6d565b",
+              "panes": [
+                {
+                  "id": "1abc4208-243f-552b-9683-726e7413859f",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "5b1be773-f18b-5c6a-a785-f9db6cf5d824"
+            },
+            {
+              "id": "31a1f1f7-cd36-5508-b83a-10d9e1db0cde",
+              "panes": [
+                {
+                  "id": "d923cd61-4d05-5bd3-b3c1-9c6f19654084",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "eaa1f49c-2c54-58d1-b48c-c7882b9cf30b",
+              "panes": [
+                {
+                  "id": "28ed7add-1041-5b92-8127-007ab0f270d9",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "52a26ac6-a564-5dd4-abf0-c54b28c1c259",
+          "columns": [
+            {
+              "id": "11223f6b-f1e9-515c-a506-f0990f1d67ab",
+              "panes": [
+                {
+                  "id": "9131296e-5e2a-5513-a2d9-9888bf0d7bdf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                },
+                {
+                  "id": "0ab323d5-288a-5cf9-b611-622814192db8",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 19
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "33b3aa42-aeac-527f-a496-03b2fcabcacd",
+              "panes": [
+                {
+                  "id": "e76ad3a5-0ba0-5682-baf5-cca0facfd9f7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "o.o",
+                  "args": {
+                    "n": 18
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "fbdf62ac-57d0-5152-a4a5-b7495c1efb1b",
+              "panes": [
+                {
+                  "id": "49d86ea7-e098-562b-ba97-fbdd1ff4f484",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 16
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "55dc5290-a3b7-5887-8b8a-266c8ec3a765",
+              "panes": [
+                {
+                  "id": "2157933f-d150-5041-9b76-ac431511097d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 12
+                  }
+                },
+                {
+                  "id": "00a85d0a-1fa3-588d-a374-1a78290b0ad2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 13
+                  }
+                }
+              ],
+              "full": false,
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "f9e6b434-1697-5172-9fd8-eb9920b12853",
+              "panes": [
+                {
+                  "id": "bd617239-e120-500c-b677-6c56cb8bf46c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "k.k",
+                  "args": {
+                    "n": 14
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9d33faca-3b92-5fe9-9d3c-a95d52b50d2d"
+            },
+            {
+              "id": "160fc2e4-b0d0-5abc-a238-ef8f0c3af38f",
+              "panes": [
+                {
+                  "id": "c026862a-6f9f-5955-95b3-7929760cfc7f",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "c.c",
+                  "args": {
+                    "n": 15
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "7657c4b5-2943-5053-8f6b-682b8555bdf3",
+              "panes": [
+                {
+                  "id": "edb0d705-cb93-56e7-9d63-adaa5ad12d4b",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "h.h",
+                  "args": {
+                    "n": 17
+                  }
+                }
+              ],
+              "full": false
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "cccce31f-3e9d-5087-a135-cbbf6040cf8b",
+          "columns": []
+        }
+      ]
+    }
+  ]
+}

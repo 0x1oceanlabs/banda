@@ -110,8 +110,15 @@
           "type": "string"
         },
         "opens": {
-          "description": "Where a Pane of this kind opens when no one named a place: \"beside\",\nright of the Pane in front; \"below\", under it, in its column;\n\"group\", in its Group; or \"project\", last on its Project's\nworkspace, in the row. With no Pane in front, and in the row from a\nworkspace of another Project, it opens as the Flow says.",
+          "description": "Where a Pane of this kind opens when no one named a place: \"beside\",\nright of the Pane in front; \"below\", under it, in its column;\n\"group\", in its Group; or \"project\", last on its Project's\nworkspace, in the row. With no Pane in front, and in the row from a\nworkspace of another Project, it opens as the Flow says. Also\n\"beside-group\", right of the whole Group of the Pane in front;\n\"project-start\", first on its Project's workspace, in the row; and\n\"here\", last on the workspace on screen.",
           "$ref": "#/$defs/Opens"
+        },
+        "when": {
+          "description": "Lines that say where it opens by how it is asked for and from what,\neach `[[rule.<app>.<kind>.when]]`, with `via`, `from` and `opens`.\nThey go before the rule's own `opens`, the first that holds first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WhenSettings"
+          }
         }
       },
       "additionalProperties": false
@@ -138,6 +145,73 @@
           "description": "Last on its Project's workspace, in the row, as a Thread opens (ADR\n0102).",
           "type": "string",
           "const": "project"
+        },
+        {
+          "description": "Right of the whole Group of the Pane in front (ADR 0134, decision\n2).",
+          "type": "string",
+          "const": "beside-group"
+        },
+        {
+          "description": "First on its Project's workspace, in the row, right of its columns\nin no Group (ADR 0134, decision 3).",
+          "type": "string",
+          "const": "project-start"
+        },
+        {
+          "description": "Last on the workspace on screen.",
+          "type": "string",
+          "const": "here"
+        }
+      ]
+    },
+    "WhenSettings": {
+      "description": "A line of a rule, as the file says it. It is read whatever it holds\nand checked after (`check`), so a line with a wrong word, a key no line\nhas or no `opens` is named and left out whole: with the wrong part\nalone left out, as the look leaves a key out, it would hold for more\nthan its writer meant.",
+      "type": "object",
+      "properties": {
+        "via": {
+          "description": "How you asked: \"click\", in the Pane in front, a path or a link; or\n\"key\", a key, a menu, the sidebar or banda.",
+          "$ref": "#/$defs/Via"
+        },
+        "from": {
+          "description": "What is in front: \"pane\", any Pane; or \"group\", a Thread or a Pane\nin a Group.",
+          "$ref": "#/$defs/Front"
+        },
+        "opens": {
+          "description": "Where it opens then, as the rule's `opens` says a place.",
+          "$ref": "#/$defs/Opens"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "opens"
+      ]
+    },
+    "Via": {
+      "description": "How the Person asked for a Pane (ADR 0134, decision 5).",
+      "oneOf": [
+        {
+          "description": "A click in the Pane it is opened from: a path, a link, a Diff in a\nThread, a file in a Group's Files. It opens into that Pane's\nThread's Group (ADR 0134, decision 1).",
+          "type": "string",
+          "const": "click"
+        },
+        {
+          "description": "A key, a menu, the sidebar or `banda`: it opens beside, never into\na Group (ADR 0134, decision 2).",
+          "type": "string",
+          "const": "key"
+        }
+      ]
+    },
+    "Front": {
+      "description": "What a line of a rule asks of the Pane in front (ADR 0135, decision 6).",
+      "oneOf": [
+        {
+          "description": "There is one.",
+          "type": "string",
+          "const": "pane"
+        },
+        {
+          "description": "It is a Thread, or a Pane in a Group.",
+          "type": "string",
+          "const": "group"
         }
       ]
     }

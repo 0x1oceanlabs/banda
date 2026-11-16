@@ -878,29 +878,29 @@ impl Workspaces {
         // Its new column is as wide as its kind's rule says.
         let facts = self.facts();
         let width = facts.width(&shows.kind);
-        let asked = if beside.is_none() {
-            Some(Asked {
-                flow: facts.flow,
-                project: shows.project,
-                grouped,
-                home: facts.at_home(&shows.kind),
-                opens: facts.opens(&shows.kind),
-                scratch: self.scratch(&call, shows.project).await == Some(true),
-                from: None,
-                on: None,
-                by: By::Agent {
-                    thread: call.thread(),
-                },
-            })
-        } else {
-            None
+        let scratch = match beside {
+            None => self.scratch(&call, shows.project).await == Some(true),
+            Some(_) => false,
         };
+        let thread = call.thread();
         let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             let place = beside.map(|b| b.place(list, wall)).transpose()?;
             if let Some(shown) = model::showing_asked(list, &shows) {
                 return Ok((shown.id, false));
             }
-            let place = place.or_else(|| placing::place(list, &facts.leads, asked?));
+            let asked = Asked {
+                flow: facts.flow,
+                project: shows.project,
+                grouped,
+                home: facts.at_home(&shows.kind),
+                opens: facts.opens(&shows.kind),
+                when: facts.when(&shows.kind),
+                scratch,
+                from: None,
+                on: None,
+                by: By::Agent { thread },
+            };
+            let place = place.or_else(|| placing::place(list, &facts.leads, asked));
             let opening = Opening {
                 place,
                 width,

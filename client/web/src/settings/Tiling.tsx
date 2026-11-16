@@ -328,6 +328,9 @@ const OPENS: { [opens in NonNullable<Rule["opens"]>]: string } = {
   below: "below",
   group: "in its Group",
   project: "on its Project's workspace",
+  "beside-group": "beside its Group",
+  "project-start": "first on its Project's workspace",
+  here: "on the workspace on screen",
 }
 
 /** What a rule says, in a Person's words: `a third wide, below`. */
@@ -335,6 +338,9 @@ export function ruleWords(rule: Rule): string {
   return [
     rule.width && (WIDE[rule.width] ?? `${rule.width} wide`),
     rule.opens && OPENS[rule.opens],
+    rule.when?.length &&
+      (rule.when.length === 1 ? "1 line" : `${rule.when.length} lines`) +
+        " by how it is asked for",
   ]
     .filter(Boolean)
     .join(", ")

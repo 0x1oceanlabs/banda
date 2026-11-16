@@ -7,8 +7,9 @@
 //! decision 11).
 
 use crate::model::{self, Arrangement, ColumnId, PaneId, Place, Shown, Side, WorkspaceId};
-use crate::tiling::{Opens, Rule};
+use crate::tiling::{self, Opens, Rule, When};
 use banda_kernel::{ProjectId, Refusal};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use ts_rs::TS;
@@ -71,6 +72,11 @@ impl Facts {
         self.rules.get(kind)?.opens
     }
 
+    /// The lines of the rule of `kind`, by how a Pane is asked for.
+    pub fn when(&self, kind: &str) -> &[When] {
+        self.rules.get(kind).map_or(&[], |rule| &rule.when)
+    }
+
     /// A new column's width for a Pane of `kind`, where the command names
     /// none: the one its rule gives, else, for a list, the narrowest of
     /// the Tiling's. Any other is each client's to draw, by what stands
@@ -96,7 +102,7 @@ pub enum By {
 }
 
 /// How the Person asked for a Pane (ADR 0134, decision 5).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export_to = "workspaces/")]
 pub enum Via {
@@ -112,7 +118,7 @@ pub enum Via {
 
 /// A Pane to place, and the facts it is placed by.
 #[derive(Clone, Copy, Debug)]
-pub struct Asked {
+pub struct Asked<'a> {
     pub flow: Flow,
     pub project: ProjectId,
     /// Its kind opens as a Group of its own (`PaneKind.grouped`).
@@ -122,6 +128,8 @@ pub struct Asked {
     pub home: bool,
     /// Where its kind's rule says it opens, by the Pane in front.
     pub opens: Option<Opens>,
+    /// Its kind's rule's lines, by how it is asked for (`Facts::when`).
+    pub when: &'a [When],
     /// Its Project is no Project: a draft, or a scratch one (ADR 0046).
     pub scratch: bool,
     /// The Pane it is opened from, the one in front where its caller is.
@@ -134,7 +142,7 @@ pub struct Asked {
 /// What a line of the table asks of the Pane in front (ADR 0135, decision
 /// 4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Front {
+enum Is {
     /// There is one.
     Pane,
     /// It is in a Group, or leads one, as a Thread does.
@@ -143,24 +151,13 @@ enum Front {
     InGroup,
 }
 
-/// Where a line of the table sends a Pane.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum To {
-    /// Right of the Pane in front, in a column of its own.
-    Beside,
-    /// Under the Pane in front, in its column.
-    Below,
-    /// Into the Group of the Pane in front, which starts one when it is in
-    /// none.
-    Group,
-    /// Right of the whole Group of the Pane in front.
-    BesideGroup,
-    /// Last on its Project's workspace.
-    Project,
-    /// First on its Project's workspace, right of its columns in no Group.
-    ProjectStart,
-    /// Last on the workspace on screen.
-    Here,
+impl From<tiling::Front> for Is {
+    fn from(front: tiling::Front) -> Is {
+        match front {
+            tiling::Front::Pane => Is::Pane,
+            tiling::Front::Group => Is::Group,
+        }
+    }
 }
 
 /// A line of the table: what it asks, where none is any, and where it
@@ -168,16 +165,16 @@ enum To {
 #[derive(Clone, Copy, Debug)]
 struct Line {
     via: Option<Via>,
-    from: Option<Front>,
+    from: Option<Is>,
     /// It asks a kind that stands on its Project's workspace.
     home: bool,
-    to: To,
+    to: Opens,
     /// It holds on a workspace another Project owns too, where the row's
     /// law has every other line give way: Banda's click into a Group.
     anywhere: bool,
 }
 
-const fn line(via: Option<Via>, from: Option<Front>, to: To) -> Line {
+const fn line(via: Option<Via>, from: Option<Is>, to: Opens) -> Line {
     Line {
         via,
         from,
@@ -189,13 +186,13 @@ const fn line(via: Option<Via>, from: Option<Front>, to: To) -> Line {
 
 const CLICK: Line = Line {
     anywhere: true,
-    ..line(Some(Via::Click), Some(Front::Group), To::Group)
+    ..line(Some(Via::Click), Some(Is::Group), Opens::Group)
 };
-const KEY: Line = line(Some(Via::Key), Some(Front::InGroup), To::BesideGroup);
-const BESIDE: Line = line(None, Some(Front::Pane), To::Beside);
+const KEY: Line = line(Some(Via::Key), Some(Is::InGroup), Opens::BesideGroup);
+const BESIDE: Line = line(None, Some(Is::Pane), Opens::Beside);
 
 /// Banda's lines in the Flow `free` (ADR 0135, decision 4).
-const FREE: [Line; 4] = [CLICK, KEY, BESIDE, line(None, None, To::Here)];
+const FREE: [Line; 4] = [CLICK, KEY, BESIDE, line(None, None, Opens::Here)];
 
 /// Banda's lines in the row. A kind that stands on its Project's
 /// workspace goes there before a key from a Group sends it beside the
@@ -204,26 +201,43 @@ const ROW: [Line; 5] = [
     CLICK,
     Line {
         home: true,
-        ..line(None, None, To::Project)
+        ..line(None, None, Opens::Project)
     },
     KEY,
     BESIDE,
-    line(None, None, To::ProjectStart),
+    line(None, None, Opens::ProjectStart),
 ];
 
 impl Opens {
-    /// The Person's line for a kind whose rule says this, by the Pane in
-    /// front; none for `project`, which the row's own line for such a
-    /// kind does, as `Asked::home` says it (`Facts::at_home`).
-    fn line(self) -> Option<Line> {
-        let to = match self {
-            Opens::Beside => To::Beside,
-            Opens::Below => To::Below,
-            Opens::Group => To::Group,
-            Opens::Project => return None,
-        };
-        Some(line(None, Some(Front::Pane), to))
+    /// Whether it is a place by the Pane in front, so a line that says it
+    /// asks for one.
+    fn by_the_front(self) -> bool {
+        match self {
+            Opens::Beside | Opens::Below | Opens::Group | Opens::BesideGroup => true,
+            Opens::Project | Opens::ProjectStart | Opens::Here => false,
+        }
     }
+}
+
+impl When {
+    /// The Person's line this is.
+    fn line(&self) -> Line {
+        let needs = self.opens.by_the_front().then_some(Is::Pane);
+        line(self.via, self.from.map(Is::from).or(needs), self.opens)
+    }
+}
+
+/// The Person's lines for a kind: its rule's `when`, in order, then the
+/// rule's own `opens`; none of it for `project`, which the row's line for
+/// a kind that stands on its Project's workspace does, as `Asked::home`
+/// says it (`Facts::at_home`).
+fn persons<'a>(asked: &Asked<'a>) -> impl Iterator<Item = Line> + 'a {
+    let whole = (asked.opens.filter(|opens| *opens != Opens::Project)).map(|opens| When {
+        via: None,
+        from: None,
+        opens,
+    });
+    (asked.when.iter().copied().chain(whole)).map(|when| when.line())
 }
 
 /// The Pane in front, as the laws and the lines ask of it.
@@ -265,7 +279,7 @@ struct InFront<'a> {
 ///
 /// The lines: the Person's for the kind (`tiling.toml`; ADR 0127, decision
 /// 4), then Banda's for the Flow, [`FREE`] or [`ROW`].
-pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Option<Place> {
+pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked<'_>) -> Option<Place> {
     let Asked {
         flow,
         project,
@@ -325,36 +339,43 @@ pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Opti
             return here();
         }
     }
+    let on_theirs = row
+        && !scratch
+        && (on.and_then(|on| list.iter().find(|w| w.id == on)))
+            .is_some_and(|w| w.project.is_some_and(|owner| owner != project));
     let beside = |pane, side| Place::Beside { pane, side };
     let made = |line: &Line| {
         // The row's workspaces.
         let front = front.filter(|front| line.anywhere || !front.theirs);
         match line.to {
-            To::Beside => front.map(|front| beside(front.pane, Side::Right)),
-            To::Below => front.map(|front| beside(front.pane, Side::Below)),
-            To::Group => front.map(|front| Place::Group { pane: front.pane }),
-            To::BesideGroup => front.filter(|front| front.in_group).map(|front| {
+            Opens::Beside => front.map(|front| beside(front.pane, Side::Right)),
+            Opens::Below => front.map(|front| beside(front.pane, Side::Below)),
+            Opens::Group => front.map(|front| Place::Group { pane: front.pane }),
+            Opens::BesideGroup => front.filter(|front| front.in_group).map(|front| {
                 // Right of its last column, which no column of it flanks.
                 let columns = front.columns;
                 let last = &columns[model::run(columns, front.column).end - 1];
                 beside(last.panes[0].id, Side::Right)
             }),
-            To::Project => Some(its_workspace.clone()),
+            // A Project owns a workspace in the row alone.
+            Opens::Project | Opens::ProjectStart if !row => None,
+            Opens::Project => Some(its_workspace.clone()),
             // Of no Project.
-            To::ProjectStart if scratch => here(),
-            To::ProjectStart => Some(Place::Start { project }),
-            To::Here => here(),
+            Opens::ProjectStart if scratch => here(),
+            Opens::ProjectStart => Some(Place::Start { project }),
+            // The row's workspaces: not on one another Project owns.
+            Opens::Here if on_theirs => None,
+            Opens::Here => here(),
         }
     };
-    let persons = asked.opens.and_then(Opens::line);
     let banda: &[Line] = if row { &ROW } else { &FREE };
-    (persons.iter().chain(banda))
+    (persons(&asked).chain(banda.iter().copied()))
         .filter(|line| holds(line, &asked, front))
-        .find_map(made)
+        .find_map(|line| made(&line))
 }
 
 /// Whether `line` asks what `asked` and the Pane in `front` are.
-fn holds(line: &Line, asked: &Asked, front: Option<&InFront>) -> bool {
+fn holds(line: &Line, asked: &Asked<'_>, front: Option<&InFront>) -> bool {
     let via = match asked.by {
         By::Person { via } => Some(via),
         By::Agent { .. } => None,
@@ -362,9 +383,9 @@ fn holds(line: &Line, asked: &Asked, front: Option<&InFront>) -> bool {
     let from = match (line.from, front) {
         (None, _) => true,
         (Some(_), None) => false,
-        (Some(Front::Pane), Some(_)) => true,
-        (Some(Front::Group), Some(front)) => front.in_group || front.leads,
-        (Some(Front::InGroup), Some(front)) => front.in_group,
+        (Some(Is::Pane), Some(_)) => true,
+        (Some(Is::Group), Some(front)) => front.in_group || front.leads,
+        (Some(Is::InGroup), Some(front)) => front.in_group,
     };
     (!line.home || asked.home) && (line.via.is_none() || line.via == via) && from
 }
@@ -518,13 +539,14 @@ mod tests {
     /// who opens it.
     type From = (Option<PaneId>, Option<WorkspaceId>, By);
 
-    fn asked(project: ProjectId, flow: Flow, (from, on, by): From) -> Asked {
+    fn asked(project: ProjectId, flow: Flow, (from, on, by): From) -> Asked<'static> {
         Asked {
             flow,
             project,
             grouped: false,
             home: false,
             opens: None,
+            when: &[],
             scratch: false,
             from,
             on,
@@ -557,7 +579,7 @@ mod tests {
         })
     }
 
-    fn scratch(asked: Asked) -> Asked {
+    fn scratch(asked: Asked<'_>) -> Asked<'_> {
         Asked {
             scratch: true,
             ..asked
@@ -669,7 +691,7 @@ mod tests {
         (list, work, [thread, deck, loose])
     }
 
-    fn clicked(asked: Asked) -> Asked {
+    fn clicked(asked: Asked<'_>) -> Asked<'_> {
         Asked {
             by: By::Person { via: Via::Click },
             ..asked
@@ -758,6 +780,69 @@ mod tests {
     }
 
     #[test]
+    fn a_rule_s_lines_go_before_its_own_opens_and_banda_s() {
+        let (list, work, [thread, deck, loose]) = a_threads_group(on_its_workspace);
+        let when = [
+            When {
+                via: Some(Via::Key),
+                from: Some(tiling::Front::Group),
+                opens: Opens::Group,
+            },
+            When {
+                via: Some(Via::Click),
+                from: None,
+                opens: Opens::Project,
+            },
+        ];
+        for flow in [Flow::Free, Flow::Row] {
+            let lined = |from| Asked {
+                when: &when,
+                opens: Some(Opens::Below),
+                ..asked(work, flow, from)
+            };
+            // A key from the Group: into it, as the first line says.
+            assert_eq!(place(&list, &leads(), lined(from(deck))), group(deck));
+            // A key from a Pane in no Group: no line holds, so the rule's
+            // own `opens`.
+            let below = Some(Place::Beside {
+                pane: loose,
+                side: Side::Below,
+            });
+            assert_eq!(place(&list, &leads(), lined(from(loose))), below);
+            // A click: on its Project's workspace in the row; in the Flow
+            // `free` no Project owns one, and the line gives way.
+            let click = clicked(lined(from(loose)));
+            let home = match flow {
+                Flow::Row => on_its_workspace(work),
+                Flow::Free => below.clone(),
+            };
+            assert_eq!(place(&list, &leads(), click), home);
+            // `here`, with a Pane in front too: last on the workspace on
+            // screen, but in the row not on one another Project owns.
+            let here = [When {
+                via: None,
+                from: None,
+                opens: Opens::Here,
+            }];
+            let on = list[0].id;
+            let onto = |project| Asked {
+                when: &here,
+                ..asked(project, flow, (Some(loose), Some(on), KEY))
+            };
+            assert_eq!(place(&list, &leads(), onto(work)), there(on));
+            let other = ProjectId::new();
+            let theirs = match flow {
+                Flow::Row => at_start(other),
+                Flow::Free => there(on),
+            };
+            assert_eq!(place(&list, &leads(), onto(other)), theirs);
+            // What an Agent opens goes by its Thread, whatever a line says.
+            let agents = lined((Some(thread), None, FOR_AGENT));
+            assert_ne!(place(&list, &leads(), agents), group(thread));
+        }
+    }
+
+    #[test]
     fn a_rule_that_opens_into_a_group_wins_over_a_key() {
         let (list, work, [thread, ..]) = a_threads_group(on_its_workspace);
         for flow in [Flow::Free, Flow::Row] {
@@ -784,7 +869,7 @@ mod tests {
         Some(Place::Group { pane })
     }
 
-    fn asked_row(project: ProjectId, pane: PaneId) -> Asked {
+    fn asked_row(project: ProjectId, pane: PaneId) -> Asked<'static> {
         asked(project, Flow::Row, from(pane))
     }
 
@@ -940,7 +1025,7 @@ mod tests {
     #[test]
     fn a_rule_gives_way_with_no_pane_in_front_and_on_another_projects_workspace() {
         let (list, work, pane) = one_pane(on_its_workspace);
-        let ruled = |asked: Asked| Asked {
+        let ruled = |asked: Asked<'static>| Asked {
             opens: Some(Opens::Below),
             ..asked
         };
@@ -1006,6 +1091,7 @@ mod tests {
                     Rule {
                         width: Some("1/3".to_owned()),
                         opens: None,
+                        ..Rule::default()
                     },
                 ),
             ]),
@@ -1037,6 +1123,7 @@ mod tests {
         let rule = |width: Option<&str>| Rule {
             width: width.map(str::to_owned),
             opens: Some(Opens::Beside),
+            ..Rule::default()
         };
         let facts = Facts {
             narrow: BTreeSet::from(["l.l".to_owned(), "r.r".to_owned(), "o.o".to_owned()]),

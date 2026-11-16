@@ -5,4 +5,4 @@
  * says. Each is a place `placing` gives already: a rule chooses among
  * them, by the Pane in front.
  */
-export type Opens = "beside" | "below" | "group" | "project";
+export type Opens = "beside" | "below" | "group" | "project" | "beside-group" | "project-start" | "here";
