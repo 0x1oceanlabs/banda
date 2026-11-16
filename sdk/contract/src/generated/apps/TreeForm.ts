@@ -12,4 +12,9 @@ command: string,
 /**
  * The words on its button.
  */
-submit: string, fields: Array<TreeField>, };
+submit: string, 
+/**
+ * The params it sends as written, beside what its fields fill: the
+ * id of what it changes.
+ */
+params: Record<string, unknown>, fields: Array<TreeField>, };

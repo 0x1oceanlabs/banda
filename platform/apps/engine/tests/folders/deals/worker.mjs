@@ -62,6 +62,64 @@ export const methods = {
     return { answer: await read(`${DEALS} ORDER BY amount DESC`) }
   },
 
+  // One deal's own screen, opened from its row. The Pane keeps the way
+  // back to the list.
+  async deal({ id }, { read }) {
+    const [deal] = await read(`${DEALS} WHERE id = ?`, [id])
+    if (!deal)
+      return {
+        answer: {
+          title: "Deal",
+          children: [
+            { node: "Empty", title: "This deal is gone" },
+            { node: "Link", label: "All deals", view: "home" },
+          ],
+        },
+      }
+    return {
+      answer: {
+        title: deal.client,
+        about: `Deal ${deal.id}`,
+        children: [
+          {
+            node: "Grid",
+            columns: 3,
+            children: [
+              { node: "Stat", label: "Amount, €", value: deal.amount },
+              { node: "Stat", label: "Stage", value: deal.stage },
+              { node: "Stat", label: "Due", value: deal.due ?? "—" },
+            ],
+          },
+          { node: "Progress", label: "Chance", value: deal.chance },
+          {
+            node: "Card",
+            title: "Change it",
+            children: [
+              {
+                node: "Form",
+                command: "update",
+                submit: "Save",
+                params: { id },
+                values: {
+                  client: deal.client,
+                  amount: deal.amount,
+                  stage: deal.stage,
+                  due: deal.due,
+                },
+                fields: [
+                  { name: "client" },
+                  { name: "amount" },
+                  { name: "stage" },
+                  { name: "due" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+  },
+
   async home(_, { read }) {
     const deals = (await read(`${DEALS} ORDER BY amount DESC`)).map((deal) => ({
       ...deal,
@@ -81,6 +139,8 @@ export const methods = {
     const table = (rows) => ({
       node: "Table",
       search: true,
+      // A click on a row opens the deal's own screen.
+      open: { view: "deal", take: { id: "id" } },
       empty: "No deals here yet",
       rows,
       columns: [

@@ -15,14 +15,16 @@ import {
 } from "@banda/ui/components/table"
 import { cn } from "@banda/ui/lib/utils"
 import { ArrowDownIcon, ArrowUpIcon, CheckIcon } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useContext, useMemo, useState } from "react"
 import { ActButton } from "./Act"
 import type { Send } from "./Fields"
+import { Opening } from "./nav"
 import { FRAME, Nothing } from "./frame"
 import {
   type Cell,
   found,
   nextOrder,
+  opensWith,
   type Order,
   ordered,
   PAGE,
@@ -98,6 +100,9 @@ export function TableNode({ table, send }: { table: TreeTable; send: Send }) {
   const [order, setOrder] = useState<Order>()
   const [page, setPage] = useState(0)
   const actions = table.actions ?? []
+  const opening = useContext(Opening)
+  // A click on a row opens its view, where the App named one.
+  const opens = table.open && opening ? table.open : undefined
   // Each row with its place among those the App wrote: a row is the
   // same one however they are ordered. Typing in Find orders nothing.
   const places = useMemo(
@@ -179,7 +184,25 @@ export function TableNode({ table, send }: { table: TreeTable; send: Send }) {
           </TableHeader>
           <TableBody>
             {shown.map((row) => (
-              <TableRow key={places.get(row)}>
+              <TableRow
+                key={places.get(row)}
+                {...(opens && {
+                  tabIndex: 0,
+                  "aria-label": `Open ${wordsOf(row[table.columns[0]!.key])}`,
+                  className: "cursor-pointer",
+                  onClick: () => {
+                    // Text dragged over to copy is not a click on its row.
+                    if (window.getSelection()?.toString()) return
+                    opening?.(opens.view, opensWith(opens, row))
+                  },
+                  onKeyDown: (event: React.KeyboardEvent) => {
+                    if (event.target !== event.currentTarget) return
+                    if (event.key !== "Enter" && event.key !== " ") return
+                    event.preventDefault()
+                    opening?.(opens.view, opensWith(opens, row))
+                  },
+                })}
+              >
                 {table.columns.map((column, place) => (
                   <TableCell
                     key={column.key}
@@ -192,7 +215,8 @@ export function TableNode({ table, send }: { table: TreeTable; send: Send }) {
                   </TableCell>
                 ))}
                 {actions.length > 0 && (
-                  <TableCell>
+                  // A click on what is done with the row does not open it.
+                  <TableCell onClick={(event) => event.stopPropagation()}>
                     <RowActions actions={actions} row={row} send={send} />
                   </TableCell>
                 )}

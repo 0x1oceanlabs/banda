@@ -3,7 +3,12 @@
  * words find, in the order of the column they chose, a page at a time.
  * Pure, so it is tested without a page.
  */
-import type { TreeAction, TreeColumn, TreeTable } from "@banda/contract/apps"
+import type {
+  TreeAction,
+  TreeColumn,
+  TreeOpen,
+  TreeTable,
+} from "@banda/contract/apps"
 
 export type Row = TreeTable["rows"][number]
 export type Cell = Row[string] | undefined
@@ -69,6 +74,25 @@ export function nextOrder(
   return order.down ? undefined : { key, down: true }
 }
 
+/** The params `take` names, each from the row's key. */
+function fromRow(
+  take: Record<string, string | undefined> | undefined,
+  row: Row
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(take ?? {}).map(([param, key]) => [
+      param,
+      (key === undefined ? undefined : row[key]) ?? null,
+    ])
+  )
+}
+
+/** The params a view is opened with from `row`: those written and those
+ * taken from the row. */
+export function opensWith(open: TreeOpen, row?: Row): Record<string, unknown> {
+  return { ...open.params, ...(row && fromRow(open.take, row)) }
+}
+
 /** What an action does with `row`: `given` is what it writes and what
  * it takes from the row, and `sent` that without what its form fills,
  * which is the form's to send: the row's cell is only what the field
@@ -77,11 +101,7 @@ export function taken(
   action: TreeAction,
   row: Row
 ): { sent: Record<string, unknown>; given: Record<string, unknown> } {
-  const from = Object.entries(action.take ?? {}).map(([param, key]) => [
-    param,
-    row[key] ?? null,
-  ])
-  const given = { ...action.params, ...Object.fromEntries(from) }
+  const given = { ...action.params, ...fromRow(action.take, row) }
   const filled = new Set(action.form?.fields.map((field) => field.name))
   const sent = Object.fromEntries(
     Object.entries(given).filter(([name]) => !filled.has(name))

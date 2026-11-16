@@ -9,6 +9,7 @@ import type {
   Tree,
   TreeAccordion,
   TreeDialog,
+  TreeLink,
   TreeList,
   TreeNode,
   TreeStat,
@@ -56,12 +57,15 @@ import {
   TabsTrigger,
 } from "@banda/ui/components/tabs"
 import { cn } from "@banda/ui/lib/utils"
-import { memo, useState } from "react"
+import { ChevronRightIcon } from "lucide-react"
+import { memo, useContext, useState } from "react"
 import { ActButton } from "./Act"
 import { ChartNode } from "./ChartNode"
 import { Closing, FormNode, type Send } from "./Fields"
 import { TableNode } from "./TableNode"
 import { FRAME, Nothing } from "./frame"
+import { Opening } from "./nav"
+import { opensWith } from "./rows"
 import { ALERT, toneBadge, toneText } from "./tone"
 
 export type { Send }
@@ -187,6 +191,8 @@ const NodeView = memo(function NodeView({
           variant={node.tone === "bad" ? "destructive" : "outline"}
         />
       )
+    case "Link":
+      return <LinkNode link={node} />
     case "Badge":
       return (
         <Badge variant="outline" className={toneBadge(node.tone)}>
@@ -222,6 +228,24 @@ const NodeView = memo(function NodeView({
       )
   }
 })
+
+function LinkNode({ link }: { link: TreeLink }) {
+  const opening = useContext(Opening)
+  return (
+    <div data-slot="tree-link">
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="px-0"
+        onClick={() => opening?.(link.view, opensWith(link))}
+      >
+        {link.label}
+        <ChevronRightIcon />
+      </Button>
+    </div>
+  )
+}
 
 function StatNode({ stat }: { stat: TreeStat }) {
   return (
@@ -322,6 +346,7 @@ function DialogNode({ dialog, send }: { dialog: TreeDialog; send: Send }) {
 }
 
 function ListNode({ list, send }: { list: TreeList; send: Send }) {
+  const opening = useContext(Opening)
   if (list.items.length === 0 && list.empty)
     return <Nothing title={list.empty} />
   return (
@@ -331,7 +356,21 @@ function ListNode({ list, send }: { list: TreeList; send: Send }) {
         return (
           <Item key={place} size="sm">
             <ItemContent>
-              <ItemTitle>{item.title}</ItemTitle>
+              <ItemTitle>
+                {item.open && opening ? (
+                  <button
+                    type="button"
+                    className="rounded-control text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                    onClick={() =>
+                      item.open && opening(item.open.view, opensWith(item.open))
+                    }
+                  >
+                    {item.title}
+                  </button>
+                ) : (
+                  item.title
+                )}
+              </ItemTitle>
               {item.about && <ItemDescription>{item.about}</ItemDescription>}
             </ItemContent>
             {(item.badge || actions.length > 0) && (

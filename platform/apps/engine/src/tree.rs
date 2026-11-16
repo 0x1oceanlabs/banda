@@ -35,7 +35,7 @@ const COLUMNS: usize = 12;
 const ACROSS: usize = 6;
 
 /// The names of the nodes, as a refusal lists them.
-const NAMES: &str = "Card, Grid, Tabs, Accordion, Dialog, Table, List, Chart, Stat, Progress, Form, Button, Badge, Alert, Empty, Separator and Markdown";
+const NAMES: &str = "Card, Grid, Tabs, Accordion, Dialog, Table, List, Chart, Stat, Progress, Form, Button, Link, Badge, Alert, Empty, Separator and Markdown";
 
 /// An App's screen, as its view answers it and the engine read it.
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -68,6 +68,7 @@ pub enum Node {
     Progress(Progress),
     Form(Form),
     Button(Button),
+    Link(Link),
     Badge(Badge),
     Alert(Alert),
     Empty(Empty),
@@ -155,6 +156,8 @@ pub struct Table {
     pub empty: Option<String>,
     /// Whether it has a field that finds rows by their text.
     pub search: bool,
+    /// The view a click on a row opens.
+    pub open: Option<Open>,
     /// What can be done with each row.
     pub actions: Vec<Action>,
 }
@@ -187,6 +190,34 @@ pub enum Shown {
     Check,
     /// A number from 0 to 100 as a bar.
     Progress,
+}
+
+/// Another of the App's views, opened in the screen's place: a record's
+/// own screen from its row, the same list by another filter. The Pane
+/// keeps the way back.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export, export_to = "apps/", rename = "TreeOpen")]
+pub struct Open {
+    /// The App's view, without the App's prefix.
+    pub view: String,
+    /// The params written here.
+    #[serde(default)]
+    #[ts(type = "Record<string, unknown>")]
+    pub params: Map<String, Value>,
+    /// The params it takes from its row, each by the row's key.
+    #[serde(default)]
+    pub take: BTreeMap<String, String>,
+}
+
+/// Words that open another of the App's views.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export, export_to = "apps/", rename = "TreeLink")]
+pub struct Link {
+    pub label: String,
+    #[serde(flatten)]
+    pub open: Open,
 }
 
 /// What can be done with a row of a Table or an item of a List: one of
@@ -228,6 +259,8 @@ pub struct Item {
     pub badge: Option<String>,
     /// Its badge's tone.
     pub tone: Tone,
+    /// The view a click on it opens.
+    pub open: Option<Open>,
     /// What can be done with it.
     pub actions: Vec<Action>,
 }
@@ -326,6 +359,10 @@ pub struct Form {
     pub command: String,
     /// The words on its button.
     pub submit: String,
+    /// The params it sends as written, beside what its fields fill: the
+    /// id of what it changes.
+    #[ts(type = "Record<string, unknown>")]
+    pub params: Map<String, Value>,
     pub fields: Vec<Field>,
 }
 
@@ -495,6 +532,7 @@ struct WrittenTable {
     empty: Option<String>,
     #[serde(default)]
     search: bool,
+    open: Option<Open>,
     #[serde(default)]
     actions: Vec<WrittenAction>,
 }
@@ -515,6 +553,7 @@ struct WrittenItem {
     badge: Option<String>,
     #[serde(default)]
     tone: Tone,
+    open: Option<Open>,
     #[serde(default)]
     actions: Vec<WrittenAction>,
 }
@@ -552,6 +591,8 @@ struct WrittenForm {
     /// What its fields hold as it opens, by param.
     #[serde(default)]
     values: Map<String, Value>,
+    #[serde(default)]
+    params: Map<String, Value>,
 }
 
 /// One field as an App writes it: the rest comes from the param.
@@ -668,6 +709,9 @@ fn node(written: Value, at: &str, app: &Folder, nodes: &mut usize) -> Result<Nod
                     let at = &format!("{at}.items[{place}]");
                     Ok(Item {
                         actions: actions(item.actions, false, app, at)?,
+                        open: (item.open)
+                            .map(|open| opened(open, None, app, &format!("{at}.open")))
+                            .transpose()?,
                         title: item.title,
                         about: item.about,
                         badge: item.badge,
@@ -697,6 +741,13 @@ fn node(written: Value, at: &str, app: &Folder, nodes: &mut usize) -> Result<Nod
             let button: Button = read(props, at)?;
             command(app, &button.command, at)?;
             Node::Button(button)
+        }
+        "Link" => {
+            let link: Link = read(props, at)?;
+            Node::Link(Link {
+                open: opened(link.open, None, app, at)?,
+                label: link.label,
+            })
         }
         "Badge" => Node::Badge(read(props, at)?),
         "Alert" => Node::Alert(read(props, at)?),
@@ -784,6 +835,67 @@ fn chart(chart: Chart, at: &str) -> Result<Chart, String> {
     Ok(chart)
 }
 
+/// What `open` opens, checked: one of the App's own views, with params
+/// the view takes and every one it requires. `rows` are the rows it
+/// takes from, a Table's: nothing else has keys to take.
+fn opened(
+    open: Open,
+    rows: Option<&[Map<String, Value>]>,
+    app: &Folder,
+    at: &str,
+) -> Result<Open, String> {
+    let declared = match app.declared(&open.view) {
+        Some(declared) if declared.kind == Kind::View => declared,
+        Some(_) => {
+            return Err(format!(
+                "{at}: {} is not a view: only a view is opened, and a command is sent by a Button.",
+                open.view
+            ));
+        }
+        None => {
+            return Err(format!(
+                "{at}: {} has no view {}: declare it in methods.json with \"kind\": \"view\".",
+                app.id, open.view
+            ));
+        }
+    };
+    match rows {
+        None if !open.take.is_empty() => {
+            return Err(format!(
+                "{at}.take: only a Table's row has keys to take from: write its params."
+            ));
+        }
+        // A key no row has is a slip of the pen: a row leaves out only
+        // what it has nothing for.
+        Some(rows) if !rows.is_empty() => {
+            let missing = |key: &&String| !rows.iter().any(|row| row.contains_key(*key));
+            if let Some(key) = open.take.values().find(missing) {
+                return Err(format!("{at}.take: no row has the key {key}."));
+            }
+        }
+        _ => {}
+    }
+    let takes = declared.params.get("properties").and_then(Value::as_object);
+    let given = |name: &str| open.params.contains_key(name) || open.take.contains_key(name);
+    let named = open.params.keys().chain(open.take.keys());
+    if let Some(name) = { named }.find(|name| !takes.is_some_and(|takes| takes.contains_key(*name)))
+    {
+        return Err(format!(
+            "{at}: the view {} takes no param {name}: declare it in the view's params.",
+            declared.name
+        ));
+    }
+    let required = declared.params.get("required").and_then(Value::as_array);
+    let required = required.into_iter().flatten().filter_map(Value::as_str);
+    if let Some(name) = { required }.find(|name| !given(name)) {
+        return Err(format!(
+            "{at}: the view {} requires the param {name}: write it in \"params\", or take it from the row.",
+            declared.name
+        ));
+    }
+    Ok(open)
+}
+
 /// The actions of a row or an item, each checked as a control is. Only a
 /// row has keys to take from.
 fn actions(
@@ -825,6 +937,7 @@ fn actions(
                         submit: Some(action.submit.unwrap_or_else(|| action.label.clone())),
                         fields: action.fields,
                         values: Map::new(),
+                        params: Map::new(),
                     };
                     form(written, &action.params, app, at)
                 })
@@ -859,6 +972,9 @@ fn table(written: WrittenTable, app: &Folder, at: &str) -> Result<Table, String>
     cells(&written.rows, at)?;
     Ok(Table {
         actions: actions(written.actions, true, app, at)?,
+        open: (written.open)
+            .map(|open| opened(open, Some(&written.rows), app, &format!("{at}.open")))
+            .transpose()?,
         columns: written.columns,
         rows: written.rows,
         empty: written.empty,
@@ -910,7 +1026,8 @@ fn form(
             placeholder: None,
             about: None,
         };
-        (params.keys().filter(|name| !sent.contains_key(*name)))
+        (params.keys())
+            .filter(|name| !sent.contains_key(*name) && !written.params.contains_key(*name))
             .map(field)
             .collect()
     });
@@ -978,6 +1095,18 @@ fn form(
             options,
         });
     }
+    if let Some(field) = (fields.iter()).find(|field| written.params.contains_key(&field.name)) {
+        return Err(format!(
+            "{at}.params.{}: it is one of the form's fields too: write it or let the form fill it.",
+            field.name
+        ));
+    }
+    if let Some(name) = (written.params.keys()).find(|name| !params.contains_key(*name)) {
+        return Err(format!(
+            "{at}.params.{name}: the command {} takes no param of that name.",
+            declared.name
+        ));
+    }
     if let Some(name) = values.keys().next() {
         return Err(format!(
             "{at}.values.{name}: the form has no field of that name."
@@ -987,6 +1116,7 @@ fn form(
         title: written.title,
         submit: written.submit.unwrap_or_else(|| words(&declared.name)),
         command: written.command,
+        params: written.params,
         fields,
     })
 }
@@ -1102,7 +1232,15 @@ mod tests {
                 method("update", Kind::Command, true, update),
                 method("purge", Kind::Command, false, none.clone()),
                 method("tag", Kind::Command, true, tagged),
-                method("find", Kind::Call, false, none),
+                method("find", Kind::Call, false, none.clone()),
+                method(
+                    "card",
+                    Kind::View,
+                    false,
+                    json!({ "type": "object", "required": ["id"],
+                        "properties": { "id": { "type": "integer" } } }),
+                ),
+                method("home", Kind::View, false, none),
             ],
             migrations: Vec::new(),
         }
@@ -1192,6 +1330,26 @@ mod tests {
         let said = refused(json!([{ "node": "Form", "command": "update",
             "fields": [{ "name": "rate", "kind": "slider" }] }]));
         assert!(said.contains("a slider goes from"), "{said}");
+        // What it sends as written is no field of a form of every param.
+        let read =
+            tree(json!([{ "node": "Form", "command": "update", "params": { "id": 4 } }])).unwrap();
+        let Node::Form(form) = &read.children[0] else {
+            panic!("a Form");
+        };
+        assert_eq!(form.params["id"], 4);
+        assert!(form.fields.iter().all(|field| field.name != "id"));
+        let said = refused(json!([{ "node": "Form", "command": "update",
+            "params": { "id": 4, "name": "Anna" }, "fields": [{ "name": "name" }] }]));
+        assert!(
+            said.contains("params.name: it is one of the form's fields too"),
+            "{said}"
+        );
+        let said =
+            refused(json!([{ "node": "Form", "command": "update", "params": { "who": 4 } }]));
+        assert!(
+            said.contains("(Form).params.who: the command update takes no param"),
+            "{said}"
+        );
         let said = refused(json!([{ "node": "Form", "command": "update",
             "fields": [{ "name": "name" }], "values": { "born": "2000-01-01" } }]));
         assert!(
@@ -1257,6 +1415,59 @@ mod tests {
         let said = refused(json!([{ "node": "List", "items": [{ "title": "Anna",
             "actions": [{ "label": "Purge", "command": "purge" }] }] }]));
         assert!(said.contains("\"ui\": true"), "{said}");
+    }
+
+    #[test]
+    fn a_row_an_item_and_a_link_open_another_of_the_apps_views() {
+        let written = json!([
+            { "node": "Table", "columns": [{ "key": "name", "title": "Name" }],
+              "rows": [{ "id": 1, "name": "Anna" }],
+              "open": { "view": "card", "take": { "id": "id" } } },
+            { "node": "List", "items": [
+                { "title": "Anna", "open": { "view": "card", "params": { "id": 1 } } }] },
+            { "node": "Link", "label": "All clients", "view": "home" }
+        ]);
+        let read = tree(written).unwrap();
+        let Node::Table(table) = &read.children[0] else {
+            panic!("a Table");
+        };
+        assert_eq!(table.open.as_ref().unwrap().take["id"], "id");
+        let Node::Link(link) = &read.children[2] else {
+            panic!("a Link");
+        };
+        assert_eq!((&*link.label, &*link.open.view), ("All clients", "home"));
+        assert_eq!(
+            serde_json::to_value(link).unwrap(),
+            json!({ "label": "All clients", "view": "home", "params": {}, "take": {} })
+        );
+
+        let refused = |children: Value| tree(children).unwrap_err();
+        let said = refused(json!([{ "node": "Link", "label": "Add", "view": "add" }]));
+        assert!(said.contains("add is not a view"), "{said}");
+        let said = refused(json!([{ "node": "Link", "label": "Gone", "view": "gone" }]));
+        assert!(said.contains("clients has no view gone"), "{said}");
+        let said = refused(
+            json!([{ "node": "Link", "label": "Anna", "view": "card", "params": { "who": 1 } }]),
+        );
+        assert!(said.contains("the view card takes no param who"), "{said}");
+        let said = refused(
+            json!([{ "node": "Link", "label": "Anna", "view": "card", "take": { "id": "id" } }]),
+        );
+        assert!(said.contains("only a Table's row has keys"), "{said}");
+        let said = refused(json!([{ "node": "Link", "label": "Anna", "view": "card" }]));
+        assert!(
+            said.contains("the view card requires the param id"),
+            "{said}"
+        );
+        let said = refused(
+            json!([{ "node": "Table", "columns": [{ "key": "name", "title": "Name" }],
+            "rows": [{ "id": 1, "name": "Anna" }],
+            "open": { "view": "card", "take": { "id": "ID" } } }]),
+        );
+        assert!(
+            said.contains("(Table).open.take: no row has the key ID"),
+            "{said}"
+        );
     }
 
     #[test]

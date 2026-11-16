@@ -9,6 +9,7 @@ import type { TreeDialog } from "./TreeDialog";
 import type { TreeEmpty } from "./TreeEmpty";
 import type { TreeForm } from "./TreeForm";
 import type { TreeGrid } from "./TreeGrid";
+import type { TreeLink } from "./TreeLink";
 import type { TreeList } from "./TreeList";
 import type { TreeMarkdown } from "./TreeMarkdown";
 import type { TreeProgress } from "./TreeProgress";
@@ -20,4 +21,4 @@ import type { TreeTabs } from "./TreeTabs";
 /**
  * One component of a Tree, by its `node`.
  */
-export type TreeNode = { "node": "Card" } & TreeCard | { "node": "Grid" } & TreeGrid | { "node": "Tabs" } & TreeTabs | { "node": "Accordion" } & TreeAccordion | { "node": "Dialog" } & TreeDialog | { "node": "Table" } & TreeTable | { "node": "List" } & TreeList | { "node": "Chart" } & TreeChart | { "node": "Stat" } & TreeStat | { "node": "Progress" } & TreeProgress | { "node": "Form" } & TreeForm | { "node": "Button" } & TreeButton | { "node": "Badge" } & TreeBadge | { "node": "Alert" } & TreeAlert | { "node": "Empty" } & TreeEmpty | { "node": "Separator" } & TreeSeparator | { "node": "Markdown" } & TreeMarkdown;
+export type TreeNode = { "node": "Card" } & TreeCard | { "node": "Grid" } & TreeGrid | { "node": "Tabs" } & TreeTabs | { "node": "Accordion" } & TreeAccordion | { "node": "Dialog" } & TreeDialog | { "node": "Table" } & TreeTable | { "node": "List" } & TreeList | { "node": "Chart" } & TreeChart | { "node": "Stat" } & TreeStat | { "node": "Progress" } & TreeProgress | { "node": "Form" } & TreeForm | { "node": "Button" } & TreeButton | { "node": "Link" } & TreeLink | { "node": "Badge" } & TreeBadge | { "node": "Alert" } & TreeAlert | { "node": "Empty" } & TreeEmpty | { "node": "Separator" } & TreeSeparator | { "node": "Markdown" } & TreeMarkdown;
