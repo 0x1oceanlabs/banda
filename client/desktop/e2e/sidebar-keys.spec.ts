@@ -613,6 +613,12 @@ test("Archive 3 done, on Your turn's head under the pointer, archives the cards 
   const done = ["call one", "call two", "call three"]
   for (const text of done) await send(window, text)
   await expect(list.locator("[data-card]")).toHaveCount(6)
+  // The engine says each is done before the list draws it so: on a busy
+  // machine the head counted one short (#1619).
+  for (const text of done)
+    await expect(
+      cardOf(list, text).getByRole("img", { name: "Done" })
+    ).toBeVisible()
 
   // Hidden till the pointer is on the head; there it counts the done.
   const head = list.locator('[data-block="turn:head"]')
