@@ -378,8 +378,14 @@ repository), with an adversarial check.
   While one holds it, that device's window tells its Person, as ever. A
   Thread that called before the machine started is told of no more. The
   line's rows say what a Thread tells its Person (`calls`: the Question,
-  or why it failed). Not yet: a tap that opens the Thread; a window that
-  stays silent while another device is in front.
+  or why it failed). A tap on the push opens the Thread: the machine says
+  where the tap goes (`Pushed.to`, `./#go/<what>`: the Project and the
+  Pane, as the page's `pane.pick` takes them), so the page names no App;
+  the worker opens the page there, or tells an open page, which goes to
+  the Pane once it knows which machine has the Project
+  (`client/web/src/devices/PushTap.tsx`). Going to a Pane puts away the
+  list a narrow window shows over it, as it does the Sheet. Not yet: a
+  window that stays silent while another device is in front.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

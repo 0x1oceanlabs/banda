@@ -13,7 +13,7 @@ body: string,
  */
 tag: string, 
 /**
- * Where a tap goes, in the page: a path and query, none for the
- * page as it opens.
+ * Where a tap goes, as an address in the page, `./#go/<what>`: none
+ * for the page as it opens.
  */
 to?: string, };

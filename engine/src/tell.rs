@@ -14,6 +14,8 @@ use crate::status::{Reader, ReaderGone, Status};
 use banda_agents::counts::{CountedAs, CountedThread};
 use banda_agents::model::ThreadId;
 use banda_devices::{Paired, Pushed};
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use std::collections::HashMap;
 
 /// Tells `paired`'s devices of each Thread that begins to call, for as
@@ -106,8 +108,23 @@ fn pushed(thread: &CountedThread, machine: Option<&str>) -> Option<Pushed> {
         body: format!("{what}{at}{words}"),
         // A later call of the same Thread takes the place of this one.
         tag: thread.thread.to_string(),
-        to: None,
+        to: Some(to(thread)),
     })
+}
+
+/// Where a tap on `thread`'s push goes, in the page: its Project and its
+/// Pane, as the page's `pane.pick` takes them and a row of the menu bar
+/// opens it, in base64url (`PushTap.tsx` in the page). The Thread Pane's
+/// kind is the agents module's.
+fn to(thread: &CountedThread) -> String {
+    let pick = serde_json::json!({
+        "project": thread.project,
+        "pane": {
+            "kind": "agents.thread",
+            "args": { "thread": thread.thread, "harness": "", "title": thread.title },
+        },
+    });
+    format!("./#go/{}", URL_SAFE_NO_PAD.encode(pick.to_string()))
 }
 
 #[cfg(test)]
@@ -133,6 +150,15 @@ mod tests {
         assert_eq!(said.title, "Deploy docs · banda");
         assert_eq!(said.body, "Asks on arc: Keep the old rows, or drop them?");
         assert_eq!(said.tag, asks.thread.to_string());
+        // The tap goes to the Thread's Pane, as the page's `pane.pick`
+        // takes it.
+        let to = said.to.unwrap();
+        let went = URL_SAFE_NO_PAD.decode(to.strip_prefix("./#go/").unwrap());
+        let went: serde_json::Value = serde_json::from_slice(&went.unwrap()).unwrap();
+        assert_eq!(went["project"], asks.project.to_string());
+        assert_eq!(went["pane"]["kind"], "agents.thread");
+        assert_eq!(went["pane"]["args"]["thread"], asks.thread.to_string());
+        assert_eq!(went["pane"]["args"]["title"], "Deploy docs");
 
         let done = pushed(&thread(CountedAs::Done, None), Some("devbox")).unwrap();
         assert_eq!(done.body, "Done on devbox");

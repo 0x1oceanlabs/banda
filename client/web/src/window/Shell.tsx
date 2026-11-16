@@ -127,6 +127,7 @@ import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
 import { bare, List, PhoneForm, phoneNow } from "../phone"
+import { PushTap } from "../devices/PushTap"
 import { useKeyRouter, useKeys } from "./keys"
 import { useSteady } from "./steady"
 import { closeTop, Layered, TopPart, useTopFollows, useTops } from "./top"
@@ -479,8 +480,9 @@ export function Shell({
       }),
     drawn: drawnNow,
     paneOn,
-    // The Sheet, by the Top layer's one stack (ADR 0110, step 3).
-    uncover: () => closeTop("sheet"),
+    // The Sheet, by the Top layer's one stack (ADR 0110, step 3); else
+    // the list, where a narrow window shows it over the Panes.
+    uncover: () => closeTop("sheet") || (over && (hideOver(), true)),
     look: () => told,
     quiet: quiet.on,
     projects: () => open,
@@ -722,6 +724,7 @@ export function Shell({
         <PhoneForm projects={projects}>
           <ThreadMenus engine={engine} projects={projects}>
             <TopPart shell={parts} />
+            <PushTap projects={projects} />
             <div className="flex h-svh flex-col bg-desk text-foreground">
               <Watches engine={engine} modules={modules} projects={open} />
               <Bar
