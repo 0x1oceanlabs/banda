@@ -15,4 +15,9 @@ title: string, project: ProjectId,
  * Its Project's name, as the sidebar shows it: "No Project" for one
  * Thread's own (ADR 0046).
  */
-project_name: string, state: CountedAs, };
+project_name: string, state: CountedAs, 
+/**
+ * What it tells its Person as it calls them: the Question it asks,
+ * or why it failed, on one line and no longer than a notice shows.
+ */
+calls?: string, };

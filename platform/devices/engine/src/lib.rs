@@ -42,6 +42,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::{oneshot, watch};
 use ts_rs::TS;
@@ -186,6 +187,8 @@ struct Kept {
     kept: watch::Sender<u64>,
     /// Where a push reaches each device, and the key that signs it.
     pushes: push::Pushes,
+    /// How many devices say their Person looks at Banda there now.
+    front: AtomicUsize,
 }
 
 /// This machine's host key and the devices it paired, as the engine holds
@@ -223,6 +226,7 @@ impl Paired {
             removals: watch::channel(0).0,
             kept: watch::channel(0).0,
             pushes: push::Pushes::open(state)?,
+            front: AtomicUsize::new(0),
         })))
     }
 
@@ -384,6 +388,19 @@ impl Paired {
         let paired = self.listed();
         let takes = |(id, _): (DeviceId, _)| paired.iter().any(|one| one.id == id).then_some(id);
         self.0.pushes.all().into_iter().filter_map(takes).collect()
+    }
+
+    /// Counts up as a device is paired, handed machines or removed, and
+    /// as one says where its pushes go.
+    pub fn changes(&self) -> watch::Receiver<u64> {
+        self.0.kept.subscribe()
+    }
+
+    /// Whether the Person looks at Banda on some device that reaches this
+    /// machine, as the devices say (`devices.front`): they see there what
+    /// calls them, and a push would say it twice.
+    pub fn looking(&self) -> bool {
+        self.0.front.load(Ordering::Relaxed) > 0
     }
 
     /// Pushes `pushed` to `device`, where it said a push reaches it; or
@@ -649,6 +666,10 @@ banda_kernel::methods! {
         /// Pushes a few words to the device that asks, so its Person
         /// sees that pushes from this machine reach it.
         command push_try(Nothing) -> (), Manage;
+        /// Held by the device that asks while its Person looks at Banda
+        /// there: this machine pushes to no device while one holds it. It
+        /// says `true` once, and ends as the device lets go of it.
+        stream front(Nothing) -> bool, Manage, read;
     }
 }
 
@@ -773,7 +794,26 @@ impl DevicesModule {
 impl DevicesModule {
     async fn push_to(&self, call: Call, to: PushTo) -> Result<(), Refusal> {
         let (paired, device) = (self.paired.clone(), asks(&call)?);
-        written(move || paired.0.pushes.keep(device, to.subscription)).await
+        written(move || {
+            paired.0.pushes.keep(device, to.subscription)?;
+            paired.0.kept.send_modify(|kept| *kept += 1);
+            Ok(())
+        })
+        .await
+    }
+
+    async fn front(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
+        asks(&call)?;
+        let (says, stream) = tokio::sync::mpsc::channel(1);
+        let paired = self.paired.clone();
+        paired.0.front.fetch_add(1, Ordering::Relaxed);
+        tokio::spawn(async move {
+            let _ = says.send(Value::Bool(true)).await;
+            // Its device stopped hearing it, or its session ended.
+            says.closed().await;
+            paired.0.front.fetch_sub(1, Ordering::Relaxed);
+        });
+        Ok(stream)
     }
 
     async fn push_try(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
@@ -787,12 +827,11 @@ impl DevicesModule {
     }
 }
 
-/// The device a call came from, which alone says where its pushes go.
+/// The device a call came from, which alone says where its pushes go and
+/// whether its Person looks.
 fn asks(call: &Call) -> Result<DeviceId, Refusal> {
     call.device().ok_or_else(|| {
-        Refusal::invalid(
-            "Only a device says where its pushes go: a program on the machine has none.",
-        )
+        Refusal::invalid("Only a device says this of itself: a program on the machine is none.")
     })
 }
 

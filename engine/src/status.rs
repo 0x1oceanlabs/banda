@@ -414,7 +414,20 @@ const PROJECTS_EVERY: Duration = Duration::from_secs(2);
 const GATHER: Duration = Duration::from_millis(50);
 
 /// The reader of `--follow` went: nothing more to print.
-struct ReaderGone;
+pub(crate) struct ReaderGone;
+
+/// Who takes this machine's line, each time it is worked out: `banda
+/// status --follow` prints it, and the engine reads in it who began to
+/// call (`tell.rs`).
+pub(crate) trait Reader {
+    fn take(&mut self, line: &Status) -> Result<(), ReaderGone>;
+}
+
+impl Reader for Lines {
+    fn take(&mut self, line: &Status) -> Result<(), ReaderGone> {
+        self.print(line)
+    }
+}
 
 /// Prints a line to `out`, stdout, when it differs from the one printed
 /// before.
@@ -466,7 +479,11 @@ async fn follow_status(places: &Places, with_parent: bool) -> Result<(), Failure
 }
 
 /// Follows the engine while one runs, and looks for one while none does.
-async fn watch(places: &Places, lines: &mut Lines, system: Option<String>) -> ReaderGone {
+pub(crate) async fn watch(
+    places: &Places,
+    lines: &mut impl Reader,
+    system: Option<String>,
+) -> ReaderGone {
     // What this machine is with no engine: read once each time none runs.
     let mut idle = None;
     loop {
@@ -482,7 +499,7 @@ async fn watch(places: &Places, lines: &mut Lines, system: Option<String>) -> Re
             Err(Failure::Refused(refusal)) if refusal.code == Code::Protocol => {
                 if let Ok(running) = places.running() {
                     let line = this_machine(said(&running), system.clone(), None);
-                    if let Err(gone) = lines.print(&line) {
+                    if let Err(gone) = lines.take(&line) {
                         return gone;
                     }
                 }
@@ -496,7 +513,7 @@ async fn watch(places: &Places, lines: &mut Lines, system: Option<String>) -> Re
                         this_machine(Status::default(), system.clone(), Some(named))
                     }
                 };
-                let printed = lines.print(&line);
+                let printed = lines.take(&line);
                 idle = Some(line);
                 if let Err(gone) = printed {
                     return gone;
@@ -521,7 +538,7 @@ struct Heard {
 async fn follow_engine(
     running: &Running,
     mut reader: Client,
-    lines: &mut Lines,
+    lines: &mut impl Reader,
     system: &Option<String>,
 ) -> Result<(), ReaderGone> {
     let Ok(mut events) = Client::hello(&running.url(), running.secret.clone(), NOWHERE).await
@@ -559,7 +576,7 @@ async fn follow_engine(
             agents: lists.counts(ms),
             ..this_machine(line.clone(), system.clone(), named.clone())
         };
-        lines.print(&status)?;
+        lines.take(&status)?;
         // A Later's time comes with no fact to say so.
         let wakes = counts::wakes_next(lists.threads(), ms)
             .map(|at| now + Duration::from_millis((at - ms).unsigned_abs()) + GATHER);

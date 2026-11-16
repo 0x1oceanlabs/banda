@@ -161,6 +161,7 @@ export const DOES = {
   "devices.machines": "read",
   "devices.push_to": "act",
   "devices.push_try": "act",
+  "devices.front": "read",
   "harnesses.list": "read",
   "harnesses.accounts": "read",
   "harnesses.account_profiles": "read",

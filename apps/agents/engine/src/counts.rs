@@ -12,6 +12,7 @@
 
 use crate::model::{ListedThread, ThreadId, TurnState};
 use crate::rules::later::{asleep, woke_by_itself};
+use crate::rules::title::{one_line, start};
 use banda_kernel::ProjectId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -86,6 +87,10 @@ fn woke_at(thread: &ListedThread, now: i64) -> Option<i64> {
     later.woke.map_or(later.until, |woke| Some(woke.at))
 }
 
+/// The most of a Thread's own words a row carries, in characters: a line
+/// of a notice, or of a push on a lock screen.
+const CALLS: usize = 240;
+
 /// One Thread the bar counts, as its panel lists it: a row opens it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -98,6 +103,11 @@ pub struct CountedThread {
     /// Thread's own (ADR 0046).
     pub project_name: String,
     pub state: CountedAs,
+    /// What it tells its Person as it calls them: the Question it asks,
+    /// or why it failed, on one line and no longer than a notice shows.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calls: Option<String>,
 }
 
 /// Who works and who waits on this machine: how many of each, and each
@@ -162,6 +172,15 @@ impl AgentCounts {
                     project,
                     project_name: name.to_owned(),
                     state,
+                    calls: match state {
+                        CountedAs::Asking => thread.asking.first().map(|asks| asks.title.as_str()),
+                        CountedAs::Failed => {
+                            (thread.latest.as_ref()).and_then(|latest| latest.reason.as_deref())
+                        }
+                        _ => None,
+                    }
+                    .map(|words| start(&one_line(words), CALLS))
+                    .filter(|words| !words.is_empty()),
                 };
                 rows.push((state.waits(), since, row));
             }
@@ -379,6 +398,7 @@ mod tests {
                 project,
                 project_name: "banda".into(),
                 state: CountedAs::Asking,
+                calls: None,
             }],
         };
         assert_eq!(

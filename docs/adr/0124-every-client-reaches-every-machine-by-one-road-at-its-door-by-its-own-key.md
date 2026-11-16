@@ -363,8 +363,23 @@ repository), with an adversarial check.
   asks. Settings → Devices has the same switch for any browser, and a
   push to try it by. While pushes are on, the page tells each machine it
   reaches where one finds it, as it starts and as it reaches another.
-  Banda's app takes none. Not yet: what is pushed, and when (who is
-  looking); a tap that opens the Thread; one signal over several devices.
+  Banda's app takes none.
+- **Whom a machine tells (SE7, PR 3).** A device says that its Person
+  looks at Banda there by holding a stream, `devices.front`, on each
+  machine it reaches, while its window is in front and its page shown:
+  Banda's app and a browser alike. A machine hears the hold end as the
+  window goes behind another, the page is put away or the connection
+  goes, with no clock between. The engine reads who calls where
+  everything outside a window does, in this machine's line as `banda
+  status --follow` works it out (`engine/src/tell.rs`, over a connection
+  to itself), and a Thread that begins to ask, fails or is done is pushed
+  to every device that takes pushes, while no device holds the stream:
+  "Deploy docs · banda", "Asks on arc: Keep the old rows, or drop them?".
+  While one holds it, that device's window tells its Person, as ever. A
+  Thread that called before the machine started is told of no more. The
+  line's rows say what a Thread tells its Person (`calls`: the Question,
+  or why it failed). Not yet: a tap that opens the Thread; a window that
+  stays silent while another device is in front.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

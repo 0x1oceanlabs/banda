@@ -69,4 +69,10 @@ push_to: CommandMethod<PushTo, null>,
  * Pushes a few words to the device that asks, so its Person
  * sees that pushes from this machine reach it.
  */
-push_try: CommandMethod<Nothing, null>, };
+push_try: CommandMethod<Nothing, null>, 
+/**
+ * Held by the device that asks while its Person looks at Banda
+ * there: this machine pushes to no device while one holds it. It
+ * says `true` once, and ends as the device lets go of it.
+ */
+front: StreamMethod<Nothing, boolean>, };
