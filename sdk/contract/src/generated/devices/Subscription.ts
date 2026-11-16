@@ -16,4 +16,15 @@ p256dh: string,
 /**
  * Its authentication secret: 16 bytes, as base64url.
  */
-auth: string, };
+auth: string, 
+/**
+ * The device's push key, public, which its browser named as it
+ * subscribed (`applicationServerKey`): P-256, uncompressed, as
+ * base64url.
+ */
+key: string, 
+/**
+ * That key's private half, which signs each push to this device: 32
+ * bytes, as base64url.
+ */
+signs: string, };

@@ -5,6 +5,10 @@
  * every machine the window reaches. A device joins by asking at a door:
  * the window asks the Person then (`AskingDialog.tsx`), so nothing here adds
  * one.
+ *
+ * Over them, in a browser that has pushes, whether this device takes
+ * them (SE7; `push.ts`): the switch the phone's list asks with once, and
+ * a push to try it by, from the machine shown.
  */
 import { useCallback, useEffect, useState } from "react"
 import type { PairedDevice } from "@banda/contract/devices"
@@ -19,9 +23,10 @@ import {
 } from "@banda/ui/components/dialog"
 import { Empty, EmptyDescription, EmptyTitle } from "@banda/ui/components/empty"
 import { RadioGroup } from "@banda/ui/components/radio-group"
-import { Group, Rows } from "@banda/ui/components/setting-row"
+import { Group, RowFrame, Rows } from "@banda/ui/components/setting-row"
 import { toast } from "@banda/ui/components/sonner"
 import { Spinner } from "@banda/ui/components/spinner"
+import { Switch } from "@banda/ui/components/switch"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useRead } from "@banda/ui/hooks/use-read"
@@ -29,6 +34,7 @@ import type { SectionProps } from "@banda/ui/settings"
 import { hearAsking, named, type Reached } from "./asking"
 import { ChoiceCard } from "./ChoiceCard"
 import { pairedWords, remove } from "./paired"
+import { type Stand, turnOff, turnOn, useStand } from "./push"
 import { KIND_ICONS, useReached } from "./reached"
 
 export function DevicesSettings({ engine }: SectionProps) {
@@ -55,9 +61,10 @@ export function DevicesSettings({ engine }: SectionProps) {
   if (listed.state === "loading") return <Spinner />
   if (listed.state === "refused")
     return <p className="text-ui text-destructive">{listed.refusal.message}</p>
-  const { devices } = listed.value
+  const { devices, pushed } = listed.value
   return (
     <div className="flex flex-col gap-3">
+      <Pushes at={at} all={[at, ...others]} />
       <Group title={`On ${at.name}`}>
         <Rows>
           {devices.length === 0 && (
@@ -89,6 +96,7 @@ export function DevicesSettings({ engine }: SectionProps) {
                   </span>
                   <span className="truncate text-meta text-muted-foreground">
                     {pairedWords(device, now)}
+                    {pushed?.includes(device.id) && " · takes pushes"}
                   </span>
                 </div>
                 {/* A machine's own window pairs itself again, so
@@ -125,6 +133,72 @@ export function DevicesSettings({ engine }: SectionProps) {
         />
       )}
     </div>
+  )
+}
+
+/** What the switch's row says. */
+const PUSH_WORDS =
+  "An Agent's call reaches this device while you are not looking at Banda."
+
+/** What it says where the switch cannot be turned here, and why. */
+const PUSH_FIXED: Partial<Record<Stand, string>> = {
+  home: "On an iPhone, Banda takes pushes once it is on the Home Screen: tap Share, then Add to Home Screen, and open it from there.",
+  denied:
+    "The browser blocks notifications from this page. Allow them in its settings, then turn this on.",
+}
+
+/** Whether this device takes pushes, and a push from `at` to try it by.
+ * Nothing in Banda's app, which takes none. */
+function Pushes({ at, all }: { at: Reached; all: readonly Reached[] }) {
+  const stand = useStand()
+  const { busy, problem, act } = useAct()
+  if (stand === "none") return null
+  const engines = all.map((one) => one.engine)
+  const turn = (on: boolean) =>
+    act<unknown>(() => (on ? turnOn(engines) : turnOff(engines)), "Pushes")
+  const send = () =>
+    act(async () => {
+      await at.engine.command("devices.push_try", {})
+      toast(`${at.name} pushed to this device`)
+    }, "Send")
+  const fixed = PUSH_FIXED[stand]
+  return (
+    <Group title="This device">
+      <Rows>
+        <RowFrame
+          dataKey="push"
+          title="Pushes"
+          about={fixed ?? PUSH_WORDS}
+          wrong={problem ? [problem] : undefined}
+        >
+          {fixed ? (
+            <Switch label="Pushes" on={false} disabled />
+          ) : (
+            <Switch
+              label="Pushes"
+              on={stand === "on"}
+              onChange={(on) => !busy && void turn(on)}
+            />
+          )}
+        </RowFrame>
+        {stand === "on" && (
+          <RowFrame
+            dataKey="push-try"
+            title="Send a test push"
+            about={`From ${at.name}, to this device.`}
+          >
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void send()}
+            >
+              Send
+            </Button>
+          </RowFrame>
+        )}
+      </Rows>
+    </Group>
   )
 }
 

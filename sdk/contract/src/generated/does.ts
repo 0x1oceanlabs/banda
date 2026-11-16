@@ -159,7 +159,6 @@ export const DOES = {
   "devices.refuse": "act",
   "devices.hand": "act",
   "devices.machines": "read",
-  "devices.push_key": "read",
   "devices.push_to": "act",
   "devices.push_try": "act",
   "harnesses.list": "read",

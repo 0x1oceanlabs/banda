@@ -7,6 +7,16 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>Banda</title>
+    <!-- A browser may keep the page as an app (SE7): an iPhone takes
+         pushes only for one on its Home Screen. -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
   </head>
   <body>
     <div id="root"></div>
