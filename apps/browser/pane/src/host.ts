@@ -1,14 +1,22 @@
 /**
  * The desktop's side of the browser, on `window.banda.browser`
- * (client/desktop/src/preload.ts); none outside Banda's desktop window. Its
+ * (client/desktop/src/preload.ts), reached by the one door a module's part
+ * of the bridge has (`hostOf`); none outside Banda's desktop window. Its
  * news goes to the pages and to the downloads here.
  */
-import type { Actions, BrowserHost, BrowserNews, Download } from "./desktop"
+import { hostOf } from "@banda/ui/desktop"
+import type {
+  Actions,
+  BROWSER_BRIDGE,
+  BrowserHost,
+  BrowserNews,
+  Download,
+} from "./desktop"
 
+/** The table's part, with the extensions' buttons the preload adds to it
+ * (`BrowserHost`). */
 export function browserHost(): BrowserHost | undefined {
-  if (typeof window === "undefined") return undefined
-  return (window as unknown as { banda?: { browser?: BrowserHost } }).banda
-    ?.browser
+  return hostOf<typeof BROWSER_BRIDGE>("browser") as BrowserHost | undefined
 }
 
 /** Calls `listener` with the desktop's news; returns how to stop. */

@@ -4,12 +4,10 @@
  * `--frame-inset` is the room the system's window buttons take at the
  * bar's start (`frame:` in globals.css).
  */
-import { follow } from "@banda/core"
-import type { Host } from "@banda/desktop/bridge"
+import type { Device } from "@banda/core"
 
-export function followFrame(host: Host | undefined): void {
-  if (!host) return
-  follow(host.frame, (inset) => {
+export function followFrame(frame: Device["frame"]): void {
+  frame.follow((inset) => {
     const root = document.documentElement
     root.toggleAttribute("data-frame", inset !== null)
     root.style.setProperty("--frame-inset", `${inset ?? 0}px`)

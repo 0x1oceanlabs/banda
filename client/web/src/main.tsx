@@ -22,10 +22,12 @@ import { OFFER_AFTER, starting } from "./safe/starts"
 import { device } from "./boot"
 import { DIRECTORY } from "./directory"
 
-const host = window.banda
+// Whether the page is in Banda's desktop window, which alone draws a page
+// in it: a browser's is at a machine's door.
+const desktop = device.has("webview")
 // The look the desktop reads (ADR 0007), else the system's light or dark.
-followLook(host)
-followFrame(host)
+followLook(device.look)
+followFrame(device.frame)
 // What loops forever steps 12 times a second, rather than keep the window
 // drawing on every refresh of the screen (ADR 0117).
 stepLoops(document)
@@ -61,7 +63,7 @@ function open(engine: Engine) {
   watchProblems(engine)
   // Its files' bytes come through the device, which relays them to it.
   relayBytesFrom(engine)
-  if (host) void moveEnterKey(host).catch(() => undefined)
+  if (desktop) void moveEnterKey(device).catch(() => undefined)
   // A Pane in a window of its own draws alone (ADR 0025, decision 9).
   const popped = poppedOf(location.hash)
   const show = () => {
@@ -102,7 +104,7 @@ function open(engine: Engine) {
   else show()
 }
 
-if (host) open(ownEngine(device.engine))
+if (desktop) open(ownEngine(device.engine))
 else
   void import("./door")
     .then(({ atDoor }) =>
@@ -119,11 +121,7 @@ function broke(what: Broke) {
   if (!engine) return
   setTimeout(() =>
     root.render(
-      <BrokeCard
-        engine={engine}
-        broke={what}
-        onOpen={() => (host ? void host.problems.reopen() : location.reload())}
-      />
+      <BrokeCard engine={engine} broke={what} onOpen={device.problems.reopen} />
     )
   )
 }

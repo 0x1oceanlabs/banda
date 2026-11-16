@@ -31,8 +31,11 @@ PR.
   an Esc takes away and where the keys go back as it goes is one stack,
   `window/top/` (ADR 0110, step 3). The Window reaches the desktop only
   through the device's desktop adapter, `boot/desktop.ts`, by
-  `boot/index.ts`; at last the adapter is the only reader of
-  `window.banda` (ADR 0089, decisions 2 and 11). The port itself is
+  `boot/index.ts`: the page's start (`main.tsx`) too, which hands the
+  look, the frame and the rest their parts of `device`. The adapter is
+  the Window's only reader of `window.banda`; a module's Pane part
+  reaches its part of the bridge through `hostOf` in `@banda/ui/desktop`,
+  the only other (ADR 0089, decisions 2 and 11). The port itself is
   written once, `Device` in `client/core/src/device.ts`, and the
   adapter's `device` is the one object that satisfies it, a browser's
   parts in it. What every client shares is `client/core` (`@banda/core`,
@@ -199,7 +202,7 @@ PR.
     and the bell on the bar shows them again, across a restart.
   - A system notification is the desktop's, through the module's desktop
     part (`platform/notifications/desktop/src/notices.ts`):
-    the module asks for it through `window.banda.notifications`, its bridge, with the mark
+    the module asks for it through `window.banda.notifications`, its bridge (by `hostOf`), with the mark
     still in its state as its icon (`stillMark`, drawn to a PNG), and the
     desktop shows it silent, takes it back once the Person sees the
     Thread, and says when they click it; the window comes to the front and
@@ -255,11 +258,11 @@ PR.
   lines listed (decision 8); and the calls part reads no page and, of the
   Tiling, imports only its model (decision 9). The parts the Window draws on
   every move, each Tile and its Pane, each Strip and the widgets, stay
-  memoized (ADR 0088, decision 7). The Window and the Tiling read
-  `window.banda` only in `boot/desktop.ts`, and what else in the page reads
-  it, its own code, the core's, `@banda/ui`'s and the modules' Pane parts,
-  the test lists by file, a list that only falls (ADR 0089, decisions 2 and
-  11); only the adapter's `device` satisfies the port. The core imports only itself, the contract and, in its bindings,
+  memoized (ADR 0088, decision 7). The page reads `window.banda` in two
+  places, `boot/desktop.ts` for the Window and `hostOf` in
+  `@banda/ui/desktop` for a module's Pane part, and only the adapter
+  takes the bridge's type (ADR 0089, decisions 2 and 11); only the
+  adapter's `device` satisfies the port. The core imports only itself, the contract and, in its bindings,
   React, reads no device, names no App and keeps no state at a module's top
   level but the constants listed; only the Window makes and gives the hosts
   and gives the machines; the desktop imports nothing of the page, which

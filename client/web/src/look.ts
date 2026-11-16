@@ -36,7 +36,7 @@ import { currentLook, takeLook, useLook } from "@banda/ui/lib/look"
 import { DEFAULT_SOUND, type SoundSettings } from "@banda/ui/sound"
 import { device } from "./boot"
 import { DEFAULT_NOTIFY } from "./calls/settings"
-import type { Host } from "@banda/desktop/bridge"
+import type { Device } from "@banda/core"
 
 // Outside a window, as in tests, nothing is asked of the system.
 const ask = (query: string) =>
@@ -105,19 +105,19 @@ function paint() {
   )
 }
 
-/** Follows the desktop's look, and the system's light or dark. */
-export function followLook(host: Host | undefined): void {
+/** Follows the desktop's look, the device's `look`, and the system's
+ * light or dark. */
+export function followLook(look: Device["look"]): void {
   paint()
   system?.addEventListener("change", paint)
-  if (!host) return
   const take = (next: Look) => {
     takeLook(next)
     paint()
   }
-  void host.look.current().then((first) => {
+  void look.current().then((first) => {
     if (first && !currentLook()) take(first)
   })
-  host.look.listen(take)
+  look.listen(take)
 }
 
 /** How `event` moves now: as the look says, Banda's own before it comes,

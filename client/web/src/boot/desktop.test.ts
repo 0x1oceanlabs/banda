@@ -25,6 +25,9 @@ test("without the desktop each part does nothing, and the settings say why they 
   expect(device.files.exists("/a")).toBeUndefined()
   expect(() => device.quit()).not.toThrow()
   expect(() => device.sidebar.edit()).not.toThrow()
+  expect(await device.look.current()).toBeNull()
+  expect(device.look.listen(() => undefined)).toBeUndefined()
+  expect(() => device.frame.follow(() => undefined)).not.toThrow()
   expect(await device.settings.set("look.toml", "a", "1")).toEqual([
     "Only Banda's app writes the settings.",
   ])
@@ -121,4 +124,28 @@ test("the hosts come now and as they change, a change before the first answer wi
   await expect(device.hosts.engine("arc")).rejects.toThrow("not let in")
   await expect(device.hosts.remove("arc")).rejects.toThrow(ELSEWHERE)
   expect(() => device.hosts.start("arc")).not.toThrow()
+})
+
+test("the frame comes now and as it changes, and a change told first wins", async () => {
+  let tell: (inset: number | null) => void = () => undefined
+  vi.stubGlobal("window", {
+    banda: {
+      frame: {
+        current: () => Promise.resolve(78),
+        listen: (listener: (inset: number | null) => void) => {
+          tell = listener
+        },
+      },
+    },
+  })
+  const taken: (number | null)[] = []
+  device.frame.follow((inset) => taken.push(inset))
+  await Promise.resolve()
+  tell(0)
+  expect(taken).toEqual([78, 0])
+  const late: (number | null)[] = []
+  device.frame.follow((inset) => late.push(inset))
+  tell(null)
+  await Promise.resolve()
+  expect(late).toEqual([null])
 })

@@ -5,6 +5,7 @@
  * (`@banda/notifications-desktop`); none outside Banda's desktop window.
  */
 import { type HostOf, invoke, push, send } from "@banda/contract/bridge"
+import { hostOf } from "@banda/ui/desktop"
 
 /** A system notification the module asks the desktop for (ADR 0011,
  * decision 3). */
@@ -51,7 +52,5 @@ export type Desktop = HostOf<typeof NOTIFY_BRIDGE>
 
 /** The desktop's notifications; none outside Banda's desktop window. */
 export function desktopOf(): Desktop | undefined {
-  if (typeof window === "undefined") return undefined
-  return (window as unknown as { banda?: { notifications?: Desktop } }).banda
-    ?.notifications
+  return hostOf<typeof NOTIFY_BRIDGE>("notifications")
 }

@@ -413,21 +413,16 @@ test("the calls part reads no layout, and of the Tiling only its model", () => {
 /**
  * Where the page reads the desktop's bridge, `window.banda`, by file from
  * the repository's root, with how many places (`desktopReads`): this
- * page's code, the core's, `@banda/ui`'s and each module's Pane part. The
- * Window and the Tiling read it only through the device's desktop
- * adapter, `boot/desktop.ts` (B4b, W0a1); the rest are listed here until
- * the device port takes them, and at last only the adapter reads it (ADR
- * 0089, decisions 2 and 11). `hostOf` in `@banda/ui/desktop` is one
- * place: the Pane parts that reach their part of the bridge through it
- * are counted there. None joins the list, and a place that goes leaves
- * it.
+ * page's code, the core's, `@banda/ui`'s and each module's Pane part. Two
+ * doors read it, and nothing else in the page does (ADR 0089, decisions
+ * 2 and 11): the Window's, the device's desktop adapter `boot/desktop.ts`
+ * (B4b, W0a1; WS10 part 12 took `main.tsx` in), and a module's, `hostOf`
+ * in `@banda/ui/desktop`, the one place a Pane part reaches its part of
+ * the bridge through. None joins the list.
  */
 const DEVICE = "client/web/src/boot/desktop.ts"
 const DESKTOP_READS: Record<string, number> = {
-  "apps/browser/pane/src/host.ts": 1,
   "client/ui/src/desktop.ts": 1,
-  "client/web/src/main.tsx": 1,
-  "platform/notifications/pane/src/desktop.ts": 1,
 }
 
 const pageCode = [
@@ -461,7 +456,7 @@ test("the page reads the desktop's bridge no more than the list holds", () => {
     )
 })
 
-test("a place that no longer reads it comes off the list", () => {
+test("only the device's adapter and hostOf read the desktop's bridge", () => {
   expect(reading).toEqual(DESKTOP_READS)
 })
 
@@ -2311,15 +2306,11 @@ test("the desktop imports nothing of the page", () => {
  * The page takes the bridge's table only as a type, `Host` (ADR 0089,
  * decision 4), so none of main's code nor the modules' parts of the table
  * come into its build: `import type` or `export type`, never an import
- * that stays, as `import { type Host }` does. The files that take it are
- * listed, and the list only falls: at last only the device's adapter.
+ * that stays, as `import { type Host }` does. Only the device's adapter
+ * takes it (WS10 part 12): what else needs of the desktop is a part of
+ * the port, `Device`.
  */
-const BRIDGE_TYPES = [
-  "web/src/boot/desktop.ts",
-  "web/src/enter-key.ts",
-  "web/src/frame.ts",
-  "web/src/look.ts",
-]
+const BRIDGE_TYPES = ["web/src/boot/desktop.ts"]
 
 test("the page takes the bridge's table only as a type, in the files listed", () => {
   const fromDesktop = (node: ts.Expression | undefined) =>
