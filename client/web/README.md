@@ -98,6 +98,10 @@ PR.
     window kept before moves over once (`tiling/store.ts`). A Pane an
     Agent opened is marked until the Person has it in focus; the window
     keeps which of them they have looked at (`banda.looked`).
+    What an Agent on another machine opens is placed here too, by this
+    machine's engine: the window follows that machine's `pane.asked`
+    while it shows one of its Threads (`tiling/asked.ts`; ADR 0120,
+    decision 6).
 - **One list of actions** (`client/web/src/window/actions.ts`) holds what the
   window does, each with a name, its key sheet section and a default key,
   by its physical place. Each is declared by its owner: an App's in its

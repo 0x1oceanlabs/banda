@@ -76,6 +76,7 @@ import { attachChips, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
 import { tilingShows } from "./shows"
 import { useNarrow } from "./narrow"
+import { Asked } from "../tiling/AskedPanes"
 import { floorsOf, type Reveal, shownOf } from "../tiling/layout"
 import { useTiling } from "../tiling/useTiling"
 import {
@@ -727,6 +728,7 @@ export function Shell({
             <PushTap projects={projects} />
             <div className="flex h-svh flex-col bg-desk text-foreground">
               <Watches engine={engine} modules={modules} projects={open} />
+              <Asked engine={engine} />
               <Bar
                 engine={engine}
                 widgets={bar.parts}

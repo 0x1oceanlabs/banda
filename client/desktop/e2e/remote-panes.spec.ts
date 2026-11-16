@@ -18,7 +18,13 @@ import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, SHOTS, shot, withArc } from "./arc"
-import { bandaMenu, headerShows, type Window } from "./window"
+import {
+  agentAnswers,
+  bandaMenu,
+  headerShows,
+  plateOf,
+  type Window,
+} from "./window"
 
 let window: Window | undefined
 let arc: Arc | undefined
@@ -432,4 +438,63 @@ test("a new Thread on arc starts on arc's account, by arc's agents.toml, in a Pr
   expect(
     ok.threads.find((one) => one.title === "Started on Work")?.harness
   ).toBe("work")
+})
+
+test("what arc's Agent opens shows beside its Thread in this window, marked and out of focus, and a kind this Banda does not show for arc opens nothing (ADR 0120, decision 6)", async () => {
+  const { page, thread, composer } = await onArc()
+  // A turn from this window, so the Agent's session is its Thread's.
+  await composer.fill("go on")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: go on")).toBeVisible()
+  const tiles = page.locator("section[data-tile]")
+  const before = await tiles.count()
+
+  // A browser at an address is no Pane this Banda shows for arc's
+  // Project yet: arc's own arrangement takes it, and nothing opens here.
+  await agentAnswers(arc!, "open_pane", {
+    kind: "browser.browser",
+    args: { url: "https://example.invalid/" },
+  })
+  // The Diff the Agent opens on arc: arc placed it in its own
+  // arrangement, with a window or none, and said that it asked. Asked
+  // until this window, which follows arc from when it shows the Thread,
+  // has heard it: one shown already opens nothing twice.
+  const diff = page.locator('section[data-tile][data-marked="true"]')
+  await expect(async () => {
+    const { pane } = await agentAnswers(arc!, "open_pane", {
+      kind: "git.diff",
+      args: { scope: { kind: "changes" } },
+    })
+    expect(pane).toBeTruthy()
+    await expect(diff).toHaveCount(1, { timeout: 2_000 })
+  }).toPass()
+
+  // This window heard it, and its own engine placed it: right of the
+  // Thread, in its Group, marked as an Agent's, and the Thread keeps the
+  // focus. It is arc's Diff, on arc's engine.
+  await expect(tiles).toHaveCount(before + 1)
+  await expect(diff.locator("header").first()).toContainText("arc")
+  const group = await plateOf(thread).getAttribute("data-group-plate")
+  expect(group).toBeTruthy()
+  await expect(plateOf(diff)).toHaveAttribute("data-group-plate", group!)
+  await expect(diff).not.toHaveAttribute("data-focused", "true")
+  await shot(page, "arc-agent-opens-a-diff")
+
+  // Asked again, it is shown already: nothing opens twice.
+  await agentAnswers(arc!, "open_pane", {
+    kind: "git.diff",
+    args: { scope: { kind: "changes" } },
+  })
+  const { pane: file } = await agentAnswers(arc!, "open_pane", {
+    kind: "files.file",
+    args: { path: "README.md" },
+  })
+  expect(file).toBeTruthy()
+  // The file goes into the Diff's Deck: its tab is there beside the
+  // Diff's.
+  const tabs = page
+    .locator("[data-column]")
+    .filter({ has: diff })
+    .getByRole("tab")
+  await expect(tabs).toHaveCount(2)
 })
