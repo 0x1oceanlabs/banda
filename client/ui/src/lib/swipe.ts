@@ -1,5 +1,6 @@
 /**
- * Wheel events as swipes, the way niri reads a touchpad. A touchpad sends
+ * Wheel events as swipes, the way niri reads a touchpad, for the window
+ * and for a browser's page alike. A touchpad sends
  * one swipe as a run of wheel events, its glide after the fingers lift
  * included; a mouse wheel sends one event a notch. Each swipe goes one way,
  * sideways or up and down, picked as it starts and kept to its end, so a
@@ -63,28 +64,64 @@ export class Swipe {
   }
 }
 
+/** How far something can still scroll sideways: back (to the left) and on
+ * (to the right). */
+export type Room = { back: number; on: number }
+
 /**
- * How far what lies between `target` and `stop` can still scroll sideways
- * by itself, back (to the left) and on (to the right), as a wide table or
- * a long line of code does: the most of them, each way. A sideways swipe
- * begun over room its way is that thing's own.
+ * How far what a wheel event went through on its way, its `path`, can
+ * still scroll sideways by itself, up to `stop`, as a wide table or a long
+ * line of code does: the most of them, each way. With no `stop`, up to
+ * the page itself and what its view scrolls. A sideways swipe begun over
+ * room its way is that thing's own (ADR 0025).
  */
-export function sidewaysRoom(target: EventTarget | null, stop: Element) {
+export function sidewaysRoom(
+  path: readonly EventTarget[],
+  stop: Element | null
+): Room {
   const room = { back: 0, on: 0 }
-  for (
-    let element = target instanceof Element ? target : null;
-    element && element !== stop;
-    element = element.parentElement
-  ) {
-    const { overflowX, direction } = getComputedStyle(element)
-    if (overflowX !== "auto" && overflowX !== "scroll") continue
+  for (const element of path) {
+    if (element === stop) break
+    if (!(element instanceof Element)) continue
+    const style = getComputedStyle(element)
+    if (!scrolls(element, style.overflowX)) continue
     // From its start: the left edge, or the right one in a right-to-left
     // text, where `scrollLeft` counts down from zero.
     const gone = Math.abs(element.scrollLeft)
     const rest = element.scrollWidth - element.clientWidth - gone
-    const [back, on] = direction === "rtl" ? [rest, gone] : [gone, rest]
+    const [back, on] = style.direction === "rtl" ? [rest, gone] : [gone, rest]
     room.back = Math.max(room.back, back)
     room.on = Math.max(room.on, on)
   }
   return room
+}
+
+/** Whether a swipe that has gone `x` sideways began over `room` its way:
+ * more of it than a pixel's rounding. */
+export function hasRoom(room: Room, x: number): boolean {
+  return (x < 0 ? room.back : room.on) > 1
+}
+
+/**
+ * Whether `element`, whose `overflow-x` is `overflow`, scrolls sideways. A
+ * page's view scrolls by its root, or by its body in a page of the old
+ * kind, and says so as `visible`; it takes the body's `overflow-x` when
+ * the root sets none. The other of the two scrolls nothing by itself,
+ * but a body under a root that sets its own.
+ */
+function scrolls(element: Element, overflow: string): boolean {
+  const own = overflow === "auto" || overflow === "scroll"
+  const {
+    documentElement: root,
+    body,
+    scrollingElement,
+  } = element.ownerDocument
+  if (element !== root && element !== body) return own
+  const ofRoot = getComputedStyle(root).overflowX
+  if (element !== (scrollingElement ?? root)) {
+    return own && element === body && ofRoot !== "visible"
+  }
+  const ofView =
+    ofRoot === "visible" && body ? getComputedStyle(body).overflowX : ofRoot
+  return ofView === "visible" || ofView === "auto" || ofView === "scroll"
 }

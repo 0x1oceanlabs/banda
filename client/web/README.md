@@ -62,7 +62,7 @@ PR.
     Ctrl-click (⌘ on a Mac) always opens a new column.
   - Every workspace stays drawn, so its Panes keep running; only the
     current one takes clicks and keys.
-  - A touchpad's swipe is read as niri reads one (`tiling/swipe.ts`).
+  - A touchpad's swipe is read as niri reads one (`@banda/ui/lib/swipe`).
     Each swipe goes one way, picked as it starts. Up and down belongs to
     the Pane under the pointer, and the Strip never drifts sideways under
     it. A sideways swipe moves the Strip with the fingers, wherever the

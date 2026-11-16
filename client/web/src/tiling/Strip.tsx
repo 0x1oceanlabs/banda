@@ -48,7 +48,13 @@ import { type Frame, PaneFrame } from "./PaneFrame"
 import { aimed, drawnStrip, leftStrip } from "./tiles"
 
 import { Tabs } from "./Tabs"
-import { pixels, sidewaysRoom, Swipe, type Way } from "./swipe"
+import {
+  hasRoom,
+  pixels,
+  sidewaysRoom,
+  Swipe,
+  type Way,
+} from "@banda/ui/lib/swipe"
 import { THRESHOLD } from "./sizing"
 import { useSizing } from "./useSizing"
 import { usePlates } from "./usePlates"
@@ -304,14 +310,14 @@ export const Strip = memo(function Strip({
     const onWheel = (event: WheelEvent) => {
       const { x, y } = pixels(event)
       if (swipe.add(x, y, event.timeStamp)) {
-        room = sidewaysRoom(event.target, strip)
+        room = sidewaysRoom(event.composedPath(), strip)
         mine = false
       }
       if (swipe.way !== "sideways" || !now.current.on) return
       // Whose the swipe is, is said once, as it picks its way: the Strip's,
       // unless it began over what could still scroll that way by itself.
       if (swipe.picked) {
-        mine = holdsMod(event) || (swipe.x < 0 ? room.back : room.on) <= 1
+        mine = holdsMod(event) || !hasRoom(room, swipe.x)
       }
       if (!mine) return
       // The Strip never scrolls by the system's hand (`overflow-hidden`),

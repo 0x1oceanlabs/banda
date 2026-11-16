@@ -463,7 +463,7 @@ test("a sideways swipe scrolls the Strip freely and stops where it does; a scrol
   await page.keyboard.press("Alt+PageUp")
   await expect(one).toHaveAttribute("aria-current", "true")
   // The page tells one swipe from the next by its wheel events' times
-  // (swipe.ts). Each is stamped 60 ms after the last, and sent no sooner:
+  // (`Swipe`). Each is stamped 60 ms after the last, and sent no sooner:
   // a page still busy with the moves above, slow to take one, reads one
   // swipe all the same.
   const touchpad = await page.context().newCDPSession(page)

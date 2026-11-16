@@ -2,10 +2,10 @@
  * The browser's profiles (ADR 0013, decision 8): the Person's, and one of
  * each Project's Agents, apart from it (ADR 0083, decision 4). Each is
  * kept alike. A page attaches only in one of them, sandboxed, with no Node
- * and no preload but the prompt's, at an address its profile loads. Sites
- * see Chrome; a site asks the Person before it uses the camera, the
- * location or another program, and the answer holds in that profile;
- * downloads go to the Person's Downloads. An Agents' profile loads the web
+ * and no preload but the browser's own (`preload.ts`), at an address its
+ * profile loads. Sites see Chrome; a site asks the Person before it uses
+ * the camera, the location or another program, and the answer holds in
+ * that profile; downloads go to the Person's Downloads. An Agents' profile loads the web
  * alone, never a file, and shows a site none of the Person's client
  * certificates.
  */

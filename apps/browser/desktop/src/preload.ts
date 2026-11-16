@@ -1,7 +1,17 @@
 /** Electron replaces prompt() with an exception. This sandboxed shim
- * supplies its synchronous return value, and exposes no other API. */
+ * supplies its synchronous return value, and exposes no other API. It
+ * also tells main of the sideways swipes the page has no use for, which
+ * the page itself cannot send. */
 import { contextBridge, ipcRenderer } from "electron"
-import { PROMPT_CHANNEL } from "@banda/browser-pane/desktop"
+import {
+  passSwipes,
+  PROMPT_CHANNEL,
+  SWIPE_CHANNEL,
+} from "@banda/browser-pane/desktop"
+
+passSwipes(window, ({ deltaX, deltaY }) =>
+  ipcRenderer.send(SWIPE_CHANNEL, deltaX, deltaY)
+)
 
 contextBridge.exposeInMainWorld(
   "__bandaPrompt",

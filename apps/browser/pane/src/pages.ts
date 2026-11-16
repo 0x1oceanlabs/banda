@@ -25,6 +25,7 @@ import {
   type Driver,
   type Lend,
   PARTITION,
+  type Swiped,
   type Wait,
 } from "./desktop"
 import { browserHost, hearNews } from "./host"
@@ -230,6 +231,21 @@ export class Page {
   /** Presses a key main took from the page, on its element (ADR 0071). */
   press(key: KeyboardEvent): void {
     this.box.dispatchEvent(key)
+  }
+
+  /** Sends a wheel event of a swipe the page had no use for on the slot
+   * it lies over, in its Pane: the window's Strip hears it there, as a
+   * swipe over any Pane (ADR 0025). The page says how far in its own
+   * pixels, which its zoom makes larger or smaller than the window's. */
+  swipe({ deltaX, deltaY }: Swiped): void {
+    const zoom = this.view.getZoomFactor()
+    this.slot?.element.dispatchEvent(
+      new WheelEvent("wheel", {
+        deltaX: deltaX * zoom,
+        deltaY: deltaY * zoom,
+        bubbles: true,
+      })
+    )
   }
 
   load(url: string): void {
@@ -749,6 +765,12 @@ browserHost()?.key(({ up, page, ...pressed }) => {
   if (held) held.press(key)
   else window.dispatchEvent(key)
 })
+
+// A sideways swipe a page had no use for is the window's, as over any
+// other Pane: its wheel events are sent on the page's slot.
+browserHost()?.swipe(({ page, ...swiped }) =>
+  byContents.get(page)?.swipe(swiped)
+)
 
 // A page's icon, the pages it opens, which its Pane makes tabs of, and
 // the tabs extensions open, show and close.

@@ -11,6 +11,7 @@ import type { Key, Mod, Pressed } from "@banda/ui/lib/keys"
 
 export { isModKey, type Pressed } from "@banda/ui/lib/keys"
 export { taken } from "./keys"
+export { passSwipes } from "./passes"
 
 /** What the row shows of a page's address: its site, without `www.`. */
 export function siteOf(address: string): string {
@@ -64,8 +65,16 @@ export function opens(url: string, agents: ProjectId | null): boolean {
   return agents === null && /^(about|file):/i.test(url)
 }
 
-/** The sandboxed prompt shim has no other capability. */
+/** The sandboxed preload's one call that waits for an answer: `prompt`'s. */
 export const PROMPT_CHANNEL = "banda:browser-prompt"
+
+/** A page's sideways swipe it has no use for, to main: how far a wheel
+ * event of it went, sideways and down, in the page's pixels
+ * (`passSwipes`). */
+export const SWIPE_CHANNEL = "banda:browser-swipe"
+
+/** A wheel event's part of a swipe: how far, each way, in pixels. */
+export type Swiped = { deltaX: number; deltaY: number }
 
 /** A download, as the row shows it while it runs and once it ended. */
 export type Download = {
@@ -244,6 +253,10 @@ export const BROWSER_BRIDGE = {
    * actions and the browser's hear it as their own; a key of the mod let
    * go is `up`. */
   key: push<Pressed & { up?: true; page: number }>(),
+  /** A wheel event of a sideways swipe a browser page had no use for, by
+   * its web contents' ID: the window sends it on the page's slot
+   * (`pages.ts`), where the Strip hears it as any swipe over a Pane. */
+  swipe: push<Swiped & { page: number }>(),
 }
 
 /** The keys in force in a page: the mod, and every key of the window's
