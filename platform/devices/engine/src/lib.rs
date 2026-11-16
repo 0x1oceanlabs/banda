@@ -642,9 +642,6 @@ banda_kernel::methods! {
         /// as this machine's devices change: where it reaches each, and
         /// as which device. None for a program on the machine.
         stream machines(Nothing) -> Vec<Machine>, Manage, read;
-        /// This machine's push key, public: what a browser names as it
-        /// subscribes to pushes (`applicationServerKey`).
-        call push_key(Nothing) -> PushKey, Manage, read;
         /// Says where a push reaches the device that asks while it is
         /// not looking, as its browser's subscription has it; with none,
         /// this machine pushes to it no more.
@@ -677,14 +674,6 @@ pub struct Listed {
     /// The devices that take pushes from this machine.
     #[serde(default)]
     pub pushed: Vec<DeviceId>,
-}
-
-/// What `devices.push_key` answers.
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "devices/")]
-pub struct PushKey {
-    /// P-256, uncompressed, as base64url.
-    pub key: String,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, TS)]
@@ -782,12 +771,6 @@ impl DevicesModule {
 }
 
 impl DevicesModule {
-    async fn push_key(&self, _: Call, _: Nothing) -> Result<PushKey, Refusal> {
-        Ok(PushKey {
-            key: self.paired.0.pushes.key(),
-        })
-    }
-
     async fn push_to(&self, call: Call, to: PushTo) -> Result<(), Refusal> {
         let (paired, device) = (self.paired.clone(), asks(&call)?);
         written(move || paired.0.pushes.keep(device, to.subscription)).await

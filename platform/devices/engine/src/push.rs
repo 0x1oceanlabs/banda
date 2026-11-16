@@ -3,22 +3,25 @@
 //! the device's browser named, with no Banda Cloud between.
 //!
 //! A device that wants pushes says where they go ([`Subscription`]): the
-//! push service's address for it, and the two keys its browser made. This
-//! machine keeps them in `push.json` in the engine's state, by device, and
-//! says them to no one: `devices.list` has none of it.
+//! push service's address for it, the two keys its browser made, and the
+//! key a push to it is signed with. This machine keeps them in
+//! `push.json` in the engine's state, by device, and says them to no one:
+//! `devices.list` has none of it.
 //!
 //! What is pushed is sealed to the device's keys (RFC 8291, `aes128gcm`),
-//! so the push service carries a blob; and the request is signed with this
-//! machine's own push key (VAPID, RFC 8292), an ECDSA P-256 key in
-//! `push.key`, made on first use, whose public half the device named when
-//! it subscribed. A push service that says the device is gone (404, 410)
-//! has its subscription forgotten.
+//! so the push service carries a blob; and the request is signed with the
+//! device's push key (VAPID, RFC 8292), an ECDSA P-256 key the device made
+//! and named as it subscribed. A browser has one subscription, under one
+//! such key, and the machines are peers: so the key is the device's, and
+//! it hands the same subscription to each machine that may push to it. A
+//! push service that says the device is gone (404, 410) has its
+//! subscription forgotten.
 
 use banda_kernel::{DeviceId, Refusal};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ring::rand::{SecureRandom as _, SystemRandom};
-use ring::signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair, KeyPair as _};
+use ring::signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair};
 use ring::{aead, agreement, hmac};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -26,10 +29,6 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use ts_rs::TS;
-
-/// This machine's push key's file in the engine's state: ECDSA P-256, as
-/// PKCS#8.
-const PUSH_KEY: &str = "push.key";
 
 /// The subscriptions' file in the engine's state.
 const PUSH: &str = "push.json";
@@ -55,6 +54,13 @@ pub struct Subscription {
     pub p256dh: String,
     /// Its authentication secret: 16 bytes, as base64url.
     pub auth: String,
+    /// The device's push key, public, which its browser named as it
+    /// subscribed (`applicationServerKey`): P-256, uncompressed, as
+    /// base64url.
+    pub key: String,
+    /// That key's private half, which signs each push to this device: 32
+    /// bytes, as base64url.
+    pub signs: String,
 }
 
 /// What a push says, as the device's service worker reads it.
@@ -73,17 +79,15 @@ pub struct Pushed {
     pub to: Option<String>,
 }
 
-/// This machine's push key and the devices' subscriptions.
+/// The devices' subscriptions.
 pub(crate) struct Pushes {
-    key: EcdsaKeyPair,
     file: PathBuf,
     kept: Mutex<BTreeMap<DeviceId, Subscription>>,
 }
 
 impl Pushes {
-    /// Reads the push key and the subscriptions from `state`, and makes
-    /// the key on first use. A file that does not read is put aside: the
-    /// devices subscribe again.
+    /// Reads the subscriptions from `state`. A file that does not read is
+    /// put aside: the devices subscribe again.
     pub(crate) fn open(state: &Path) -> std::io::Result<Pushes> {
         let file = state.join(PUSH);
         let kept = match std::fs::read(&file) {
@@ -96,16 +100,9 @@ impl Pushes {
             Err(error) => return Err(error),
         };
         Ok(Pushes {
-            key: push_key(&state.join(PUSH_KEY))?,
             file,
             kept: Mutex::new(kept),
         })
-    }
-
-    /// The push key's public half, which a device names as it subscribes:
-    /// P-256, uncompressed, as base64url.
-    pub(crate) fn key(&self) -> String {
-        URL_SAFE_NO_PAD.encode(self.key.public_key().as_ref())
     }
 
     /// Keeps where `device`'s pushes go, or with none forgets it.
@@ -148,11 +145,14 @@ impl Pushes {
     pub(crate) async fn push(&self, device: DeviceId, pushed: &Pushed) -> Result<(), Refusal> {
         let subscription = (self.kept.lock().unwrap().get(&device).cloned())
             .ok_or_else(|| Refusal::not_found("This device takes no pushes from this machine."))?;
-        let (ua_public, auth) = read(&subscription)?;
+        let Keys {
+            public,
+            auth,
+            signs,
+        } = read(&subscription)?;
         let plain = serde_json::to_vec(pushed).map_err(crate::internal)?;
-        let body = seal(&ua_public, &auth, &plain).map_err(crate::internal)?;
-        let signed = self
-            .signed(&subscription.endpoint, banda_kernel::now_ms() / 1000)
+        let body = seal(&public, &auth, &plain).map_err(crate::internal)?;
+        let signed = signed(&subscription, &signs, banda_kernel::now_ms() / 1000)
             .map_err(crate::internal)?;
         let client = banda_kernel::https::client().map_err(crate::internal)?;
         let sent = client
@@ -184,30 +184,30 @@ impl Pushes {
             "The push service refused the push ({status})."
         )))
     }
+}
 
-    /// The `Authorization` header of a request to `endpoint` at `now`
-    /// seconds: a token this machine's push key signed (RFC 8292).
-    fn signed(&self, endpoint: &str, now: i64) -> Result<String, String> {
-        let audience = origin(endpoint).ok_or("the endpoint has no origin")?;
-        let part = |json: serde_json::Value| URL_SAFE_NO_PAD.encode(json.to_string());
-        let token = format!(
-            "{}.{}",
-            part(serde_json::json!({ "typ": "JWT", "alg": "ES256" })),
-            part(serde_json::json!({
-                "aud": audience,
-                "exp": now + SIGNED_FOR,
-                // Whom the push service may write to about this sender.
-                "sub": "https://banda.so",
-            })),
-        );
-        let signature = (self.key.sign(&SystemRandom::new(), token.as_bytes()))
-            .map_err(|error| error.to_string())?;
-        Ok(format!(
-            "vapid t={token}.{}, k={}",
-            URL_SAFE_NO_PAD.encode(signature.as_ref()),
-            self.key()
-        ))
-    }
+/// The `Authorization` header of a push to `subscription` at `now`
+/// seconds: a token the device's push key signed (RFC 8292).
+fn signed(subscription: &Subscription, signs: &EcdsaKeyPair, now: i64) -> Result<String, String> {
+    let audience = origin(&subscription.endpoint).ok_or("the endpoint has no origin")?;
+    let part = |json: serde_json::Value| URL_SAFE_NO_PAD.encode(json.to_string());
+    let token = format!(
+        "{}.{}",
+        part(serde_json::json!({ "typ": "JWT", "alg": "ES256" })),
+        part(serde_json::json!({
+            "aud": audience,
+            "exp": now + SIGNED_FOR,
+            // Whom the push service may write to about this sender.
+            "sub": "https://banda.so",
+        })),
+    );
+    let signature =
+        (signs.sign(&SystemRandom::new(), token.as_bytes())).map_err(|error| error.to_string())?;
+    Ok(format!(
+        "vapid t={token}.{}, k={}",
+        URL_SAFE_NO_PAD.encode(signature.as_ref()),
+        subscription.key.trim_end_matches('=')
+    ))
 }
 
 /// The scheme and host of `endpoint`, an `https://` address.
@@ -217,50 +217,48 @@ fn origin(endpoint: &str) -> Option<&str> {
     (!host.is_empty() && !host.contains('@')).then(|| &endpoint[.."https://".len() + host.len()])
 }
 
-/// A subscription's two keys, as bytes; or why it is none.
-fn read(subscription: &Subscription) -> Result<(Vec<u8>, Vec<u8>), Refusal> {
-    let bytes = |text: &str| URL_SAFE_NO_PAD.decode(text.trim_end_matches('=')).ok();
-    let keys = (bytes(&subscription.p256dh)).zip(bytes(&subscription.auth));
-    match keys {
-        Some((public, auth))
-            if public.len() == 65
-                && public[0] == 4
-                && auth.len() == 16
-                && subscription.endpoint.len() <= 2048
-                && origin(&subscription.endpoint).is_some() =>
-        {
-            Ok((public, auth))
-        }
-        _ => Err(Refusal::invalid(
-            "A push subscription has an https endpoint, a P-256 public key and a 16-byte secret, as the browser gives them.",
-        )),
-    }
+/// A subscription's keys, read.
+struct Keys {
+    /// The device's public key for pushes.
+    public: Vec<u8>,
+    auth: Vec<u8>,
+    /// Its push key, which signs.
+    signs: EcdsaKeyPair,
 }
 
-/// The push key in `file`, made there on first use. One that does not
-/// read is put aside and made again: the devices subscribe again.
-fn push_key(file: &Path) -> std::io::Result<EcdsaKeyPair> {
-    let other = |error: &dyn std::fmt::Display| std::io::Error::other(error.to_string());
-    let rng = SystemRandom::new();
-    let read = |bytes: &[u8]| {
-        EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, bytes, &rng)
-            .map_err(|error| other(&error))
+/// A subscription's keys; or why it is none.
+fn read(subscription: &Subscription) -> Result<Keys, Refusal> {
+    let bytes = |text: &str| URL_SAFE_NO_PAD.decode(text.trim_end_matches('=')).ok();
+    let none = || {
+        Refusal::invalid(
+            "A push subscription has an https endpoint, a P-256 public key and a 16-byte secret, as the browser gives them, and the P-256 key pair it was made under.",
+        )
     };
-    match std::fs::read(file) {
-        Ok(bytes) => match read(&bytes) {
-            Ok(key) => return Ok(key),
-            Err(error) => {
-                tracing::warn!(%error, "the push key does not read: it is put aside, and made again");
-                let _ = std::fs::rename(file, file.with_extension("unread"));
-            }
-        },
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
+    let public = bytes(&subscription.p256dh).ok_or_else(none)?;
+    let auth = bytes(&subscription.auth).ok_or_else(none)?;
+    let whole = public.len() == 65
+        && public[0] == 4
+        && auth.len() == 16
+        && subscription.endpoint.len() <= 2048
+        && origin(&subscription.endpoint).is_some();
+    if !whole {
+        return Err(none());
     }
-    let made = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &rng)
-        .map_err(|error| other(&error))?;
-    banda_kernel::host::write_private(file, made.as_ref())?;
-    read(made.as_ref())
+    let key = bytes(&subscription.key).ok_or_else(none)?;
+    let signs = bytes(&subscription.signs).ok_or_else(none)?;
+    // Refuses a private half that is not the public one's.
+    let signs = EcdsaKeyPair::from_private_key_and_public_key(
+        &ECDSA_P256_SHA256_FIXED_SIGNING,
+        &signs,
+        &key,
+        &SystemRandom::new(),
+    )
+    .map_err(|_| none())?;
+    Ok(Keys {
+        public,
+        auth,
+        signs,
+    })
 }
 
 /// `plain`, sealed to a device's keys (RFC 8291): a key pair and a salt
@@ -374,26 +372,36 @@ mod tests {
         assert_ne!(one, other);
     }
 
+    /// A subscription under a push key made here, as a device makes
+    /// one.
     fn subscription(endpoint: &str) -> Subscription {
+        let rng = SystemRandom::new();
+        let made = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
+        // PKCS#8 of a P-256 key, as ring writes it: the private half at
+        // 36, the public one last.
+        let (signs, key) = (
+            &made.as_ref()[36..68],
+            &made.as_ref()[made.as_ref().len() - 65..],
+        );
         Subscription {
             endpoint: endpoint.to_owned(),
             p256dh: "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4".to_owned(),
             auth: "BTBZMqHH6r4Tts7J_aSIgg".to_owned(),
+            key: URL_SAFE_NO_PAD.encode(key),
+            signs: URL_SAFE_NO_PAD.encode(signs),
         }
     }
 
     #[test]
-    fn a_request_is_signed_with_this_machine_s_push_key_for_the_push_service_alone() {
-        let state = tempfile::tempdir().unwrap();
-        let pushes = Pushes::open(state.path()).unwrap();
-        let signed = pushes
-            .signed("https://web.push.apple.com/QGk3?x=1", 1_000)
-            .unwrap();
+    fn a_push_is_signed_with_the_device_s_push_key_for_the_push_service_alone() {
+        let subscription = subscription("https://web.push.apple.com/QGk3?x=1");
+        let keys = read(&subscription).unwrap();
+        let signed = signed(&subscription, &keys.signs, 1_000).unwrap();
         let (token, key) = signed
             .strip_prefix("vapid t=")
             .and_then(|rest| rest.split_once(", k="))
             .unwrap();
-        assert_eq!(key, pushes.key());
+        assert_eq!(key, subscription.key);
         let (said, signature) = token.rsplit_once('.').unwrap();
         UnparsedPublicKey::new(&ECDSA_P256_SHA256_FIXED, bytes(key))
             .verify(said.as_bytes(), &bytes(signature))
@@ -402,8 +410,6 @@ mod tests {
             serde_json::from_slice(&bytes(said.split_once('.').unwrap().1)).unwrap();
         assert_eq!(claims["aud"], "https://web.push.apple.com");
         assert_eq!(claims["exp"], 1_000 + SIGNED_FOR);
-        // The key is kept: the next start signs with the same.
-        assert_eq!(Pushes::open(state.path()).unwrap().key(), pushes.key());
     }
 
     #[test]
@@ -422,6 +428,11 @@ mod tests {
         let mut short = subscription("https://push.example/1");
         short.auth = "BTBZ".to_owned();
         assert!(pushes.keep(device, Some(short)).is_err());
+
+        // A private half that is another key's.
+        let mut other = subscription("https://push.example/1");
+        other.signs = subscription("https://push.example/1").signs;
+        assert!(pushes.keep(device, Some(other)).is_err());
 
         pushes
             .keep(device, Some(subscription("https://push.example/1")))

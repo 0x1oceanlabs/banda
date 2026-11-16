@@ -125,7 +125,7 @@ const NOT_A_DOOR: Refusal = {
 }
 
 /** The bytes of `text`, base64url with or without padding. */
-function bytesOf(text: string): Uint8Array<ArrayBuffer> {
+export function bytesOf(text: string): Uint8Array<ArrayBuffer> {
   const base64 = text.replaceAll("-", "+").replaceAll("_", "/")
   return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
 }

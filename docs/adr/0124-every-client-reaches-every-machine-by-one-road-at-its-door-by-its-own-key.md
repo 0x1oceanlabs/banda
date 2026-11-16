@@ -337,18 +337,32 @@ repository), with an adversarial check.
   works and nothing is written, Send once something is (Roma, 2026-11-15;
   a second button, tried in this PR, was taken out). Not yet: how many Threads call, at the way back, which the
   sidebar's door has no word for.
-- **A machine pushes to a device (SE7, PR 1).** A device says where a
-  push reaches it while it is not looking (`devices.push_to`, with its
-  browser's subscription, made with this machine's push key,
-  `devices.push_key`), and the machine keeps that in `push.json` in its
-  state, by device, saying it to no one: `devices.list` names only which
-  devices take pushes. A push is Web Push straight from the machine to the
-  device's push service: sealed to the device's keys (RFC 8291), signed
-  with the machine's own push key (RFC 8292), an ECDSA key in `push.key`.
-  A push service that says the device is gone has its subscription
-  forgotten, and so has a device removed. `devices.push_try` pushes a few
-  words to the device that asks. Not yet: the page that subscribes; what
-  is pushed, and when (who is looking); one signal over several devices.
+- **A machine pushes to a device (SE7, PRs 1 and 2).** A device says
+  where a push reaches it while it is not looking (`devices.push_to`,
+  with its browser's subscription), and the machine keeps that in
+  `push.json` in its state, by device, saying it to no one:
+  `devices.list` names only which devices take pushes. A push is Web Push
+  straight from the machine to the device's push service: sealed to the
+  device's keys (RFC 8291), and signed with the device's own push key
+  (RFC 8292). A browser has one subscription, under one such key, and
+  the machines are peers: so the device makes the key, keeps it beside
+  its other one, and hands the same subscription, with the half that
+  signs, to every machine it reaches. (PR 1 gave each machine a push key
+  of its own, which one subscription cannot serve.) A push service that
+  says the device is gone has its subscription forgotten, and so has a
+  device removed. `devices.push_try` pushes a few words to the device
+  that asks.
+  The page (`client/web/src/devices/push.ts`): a browser may keep it as
+  an app (a manifest, icons), and its worker (`sw.js`) shows a push and
+  brings the page up on a tap. A phone's list asks once, in a card over
+  it: in an iPhone's Safari it says to put Banda on the Home Screen,
+  where alone iOS gives a page pushes (and where the page is a device of
+  its own, which joins once more); elsewhere, one tap and the browser
+  asks. Settings → Devices has the same switch for any browser, and a
+  push to try it by. While pushes are on, the page tells each machine it
+  reaches where one finds it, as it starts and as it reaches another.
+  Banda's app takes none. Not yet: what is pushed, and when (who is
+  looking); a tap that opens the Thread; one signal over several devices.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

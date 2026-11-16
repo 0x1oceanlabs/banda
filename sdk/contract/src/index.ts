@@ -57,7 +57,13 @@ export {
   type Read,
   type Status,
 } from "./engine"
-export { ask as askAtDoor, type Asker, type Asking, base64url } from "./door"
+export {
+  ask as askAtDoor,
+  type Asker,
+  type Asking,
+  base64url,
+  bytesOf,
+} from "./door"
 export { newId } from "./ids"
 export { quitAsks, type QuitAsks } from "./quit"
 export type {
