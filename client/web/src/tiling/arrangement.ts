@@ -440,68 +440,136 @@ type Asked = {
   via: Via
 }
 
-/** As `placing::place`: where the Pane goes by the Flow; none, where a
- * Pane with no place goes. `leads` are the kinds of Pane that lead a
- * Group, a Thread's. */
+/** A line of the table, as `placing::Line`: what it asks, where none is
+ * any, and where it sends the Pane. `from`: a Pane in front; one in a
+ * Group or that leads one (`group`); one in a Group (`in-group`). `home`,
+ * it asks a kind that stands on its Project's workspace. `anywhere`, it
+ * holds on a workspace another Project owns too. */
+type Line = {
+  via?: Via
+  from?: "pane" | "group" | "in-group"
+  home?: true
+  to:
+    | "beside"
+    | "below"
+    | "group"
+    | "beside-group"
+    | "project"
+    | "project-start"
+    | "here"
+  anywhere?: true
+}
+
+const CLICK: Line = { via: "click", from: "group", to: "group", anywhere: true }
+const KEY: Line = { via: "key", from: "in-group", to: "beside-group" }
+const BESIDE: Line = { from: "pane", to: "beside" }
+/** Banda's lines in the Flow `free`, as `placing::FREE`. */
+const FREE: readonly Line[] = [CLICK, KEY, BESIDE, { to: "here" }]
+/** Banda's lines in the row, as `placing::ROW`. */
+const ROW: readonly Line[] = [
+  CLICK,
+  { home: true, to: "project" },
+  KEY,
+  BESIDE,
+  { to: "project-start" },
+]
+
+/** As `placing::place`: where the Pane goes, by the laws and then the
+ * first line that holds and whose place can be made (ADR 0135); none,
+ * where a Pane with no place goes. `leads` are the kinds of Pane that lead
+ * a Group, a Thread's. */
 function placeAsked(
   list: Arrangement,
   leads: readonly string[],
   asked: Asked
 ): Place | undefined {
   const { flow, project, home, opens, scratch, from, on, agents, via } = asked
-  const right = (pane: string): Place => ({ to: "beside", pane, side: "right" })
+  const row = flow === "row"
   const itsWorkspace: Place = scratch
     ? { to: "free" }
     : { to: "project", project }
-  if (agents && flow === "row") return itsWorkspace
+  // An Agent's Pane, whose Thread no workspace shows.
+  if (agents && row) return itsWorkspace
   // A Pane in front that has gone since counts as none, and so does a
   // workspace.
   const at = spotOr(list, from)
+  const front =
+    at && from !== undefined ? frontOf(list, leads, at, from) : undefined
+  const owner = at && list[at.workspace].project
+  const theirs = row && !scratch && owner !== undefined && owner !== project
   const here = (): Place | undefined =>
     on !== undefined && list.some((w) => w.id === on)
       ? { to: "column", workspace: on, index: LAST }
       : undefined
-  // Its kind's rule, by the Pane in front; it gives way in the row where
-  // that Pane stands on a workspace another Project owns.
-  const owner = at && list[at.workspace].project
-  const theirs =
-    flow === "row" && !scratch && owner !== undefined && owner !== project
-  if (at && from !== undefined && !theirs) {
-    if (opens === "beside") return right(from)
-    if (opens === "below") return { to: "beside", pane: from, side: "below" }
-    if (opens === "group") return { to: "group", pane: from }
-  }
-  // On an empty workspace no Project owns, on screen, what the Person asks
-  // for with no Pane in front opens there; in the row a Project that owns
-  // no workspace goes as before (ADR 0134, decision 6).
+  // An empty free workspace (ADR 0134, decision 6).
   const empty = list.some(
     (w) => w.id === on && w.project === undefined && w.columns.length === 0
   )
-  if (!at && !agents && empty) {
+  if (!front && !agents && empty) {
     const owns = list.some((w) => w.project === project)
-    if (flow !== "row" || scratch || owns) return here()
+    if (!row || scratch || owns) return here()
   }
-  const homeward = flow === "row" && home
-  if (at && from !== undefined && !agents) {
-    const { columns } = list[at.workspace]
-    const column = columns[at.column]
-    const grouped = column.group !== undefined
-    const leadsOne = leads.includes(column.panes[at.pane].kind)
-    if (via === "click" && (grouped || leadsOne))
-      return { to: "group", pane: from }
-    if (via === "key" && grouped && !theirs && !homeward) {
-      // Right of its last column, which no column of it flanks.
-      const last = columns[run(columns, at.column).end - 1]
-      return right(last.panes[0].id)
+  const holds = (line: Line): boolean =>
+    (!line.home || home) &&
+    (line.via === undefined || (!agents && line.via === via)) &&
+    (line.from === undefined ||
+      (front !== undefined &&
+        (line.from === "pane" ||
+          (line.from === "in-group" && front.inGroup) ||
+          (line.from === "group" && (front.inGroup || front.leads)))))
+  const made = (line: Line): Place | undefined => {
+    // The row's workspaces.
+    const by = line.anywhere || !theirs ? front : undefined
+    switch (line.to) {
+      case "beside":
+        return by && { to: "beside", pane: by.pane, side: "right" }
+      case "below":
+        return by && { to: "beside", pane: by.pane, side: "below" }
+      case "group":
+        return by && { to: "group", pane: by.pane }
+      case "beside-group":
+        // Right of its last column, which no column of it flanks.
+        return by?.inGroup
+          ? { to: "beside", pane: by.last, side: "right" }
+          : undefined
+      case "project":
+        return itsWorkspace
+      case "project-start":
+        // Of no Project.
+        return scratch ? here() : { to: "start", project }
+      case "here":
+        return here()
     }
   }
-  if (homeward) return itsWorkspace
-  if (flow === "free") return at && from !== undefined ? right(from) : here()
-  if (!at || from === undefined)
-    return scratch ? here() : { to: "start", project }
-  // From another Project's workspace, first on its own (ADR 0134,
-  // decision 3); else right of the Pane in front.
-  return theirs ? { to: "start", project } : right(from)
+  // The Person's line for the kind, then Banda's for the Flow.
+  const persons: Line[] =
+    opens === undefined || opens === "project"
+      ? []
+      : [{ from: "pane", to: opens }]
+  for (const line of [...persons, ...(row ? ROW : FREE)]) {
+    const place = holds(line) ? made(line) : undefined
+    if (place) return place
+  }
+  return undefined
+}
+
+/** The Pane in front, as the lines ask of it: whether its column is in a
+ * Group, whether its kind leads one, and its Group's last column's first
+ * Pane. */
+function frontOf(
+  list: Arrangement,
+  leads: readonly string[],
+  at: Spot,
+  pane: string
+) {
+  const { columns } = list[at.workspace]
+  const column = columns[at.column]
+  return {
+    pane,
+    inGroup: column.group !== undefined,
+    leads: leads.includes(column.panes[at.pane].kind),
+    last: columns[run(columns, at.column).end - 1].panes[0].id,
+  }
 }
 
 /** As `placing::moves_away`: whether a Pane opened in place of `instead`,

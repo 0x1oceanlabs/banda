@@ -131,70 +131,184 @@ pub struct Asked {
     pub by: By,
 }
 
-/// Where the Pane goes by the Flow; none, where a Pane with no place goes
-/// (ADR 0102, decision 3). `leads` are the kinds of Pane that lead a
-/// Group, a Thread's (`Facts::leads`).
+/// What a line of the table asks of the Pane in front (ADR 0135, decision
+/// 4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Front {
+    /// There is one.
+    Pane,
+    /// It is in a Group, or leads one, as a Thread does.
+    Group,
+    /// It is in a Group.
+    InGroup,
+}
+
+/// Where a line of the table sends a Pane.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum To {
+    /// Right of the Pane in front, in a column of its own.
+    Beside,
+    /// Under the Pane in front, in its column.
+    Below,
+    /// Into the Group of the Pane in front, which starts one when it is in
+    /// none.
+    Group,
+    /// Right of the whole Group of the Pane in front.
+    BesideGroup,
+    /// Last on its Project's workspace.
+    Project,
+    /// First on its Project's workspace, right of its columns in no Group.
+    ProjectStart,
+    /// Last on the workspace on screen.
+    Here,
+}
+
+/// A line of the table: what it asks, where none is any, and where it
+/// sends the Pane.
+#[derive(Clone, Copy, Debug)]
+struct Line {
+    via: Option<Via>,
+    from: Option<Front>,
+    /// It asks a kind that stands on its Project's workspace.
+    home: bool,
+    to: To,
+    /// It holds on a workspace another Project owns too, where the row's
+    /// law has every other line give way: Banda's click into a Group.
+    anywhere: bool,
+}
+
+const fn line(via: Option<Via>, from: Option<Front>, to: To) -> Line {
+    Line {
+        via,
+        from,
+        home: false,
+        to,
+        anywhere: false,
+    }
+}
+
+const CLICK: Line = Line {
+    anywhere: true,
+    ..line(Some(Via::Click), Some(Front::Group), To::Group)
+};
+const KEY: Line = line(Some(Via::Key), Some(Front::InGroup), To::BesideGroup);
+const BESIDE: Line = line(None, Some(Front::Pane), To::Beside);
+
+/// Banda's lines in the Flow `free` (ADR 0135, decision 4).
+const FREE: [Line; 4] = [CLICK, KEY, BESIDE, line(None, None, To::Here)];
+
+/// Banda's lines in the row. A kind that stands on its Project's
+/// workspace goes there before a key from a Group sends it beside the
+/// Group.
+const ROW: [Line; 5] = [
+    CLICK,
+    Line {
+        home: true,
+        ..line(None, None, To::Project)
+    },
+    KEY,
+    BESIDE,
+    line(None, None, To::ProjectStart),
+];
+
+impl Opens {
+    /// The Person's line for a kind whose rule says this, by the Pane in
+    /// front; none for `project`, which the row's own line for such a
+    /// kind does, as `Asked::home` says it (`Facts::at_home`).
+    fn line(self) -> Option<Line> {
+        let to = match self {
+            Opens::Beside => To::Beside,
+            Opens::Below => To::Below,
+            Opens::Group => To::Group,
+            Opens::Project => return None,
+        };
+        Some(line(None, Some(Front::Pane), to))
+    }
+}
+
+/// The Pane in front, as the laws and the lines ask of it.
+struct InFront<'a> {
+    pane: PaneId,
+    columns: &'a [model::Column],
+    column: usize,
+    /// Its column is in a Group.
+    in_group: bool,
+    /// Its kind leads a Group.
+    leads: bool,
+    /// In the row, it stands on a workspace another Project owns, where
+    /// no Pane of this one goes by it (the row's law).
+    theirs: bool,
+}
+
+/// Where the Pane goes; none, where a Pane with no place goes (ADR 0102,
+/// decision 3). `leads` are the kinds of Pane that lead a Group, a
+/// Thread's (`Facts::leads`).
 ///
-/// What an Agent opens goes into its Thread's Group, while a workspace
-/// shows the Thread; in the row, else, last on its Project's workspace, or,
-/// of no Project, on the top free one. For the rest, a Pane whose kind's
-/// rule says where it opens goes there, by the Pane in front: right of
-/// it, under it or into its Group (`tiling.toml`; ADR 0127, decision 4).
-/// The rule gives way where there is no Pane in front, and in the row
-/// where that Pane stands on a workspace another Project owns: a rule
-/// never puts a Pane where the row would refuse it.
+/// It is laws, then a table (ADR 0135, decisions 3 and 4): the first line
+/// that holds, and whose place can be made, says where. The laws that
+/// place, over every line:
 ///
-/// On an empty workspace no Project owns, on screen, what the Person asks
-/// for with no Pane in front opens there, but in the row a Project's that
-/// owns no workspace yet (ADR 0134, decision 6).
+/// - **An Agent's Pane.** What an Agent opens goes into its Thread's
+///   Group, while a workspace shows the Thread; in the row, else, last on
+///   its Project's workspace.
+/// - **The row's workspaces.** In the row no Pane goes, by the Pane in
+///   front, onto a workspace another Project owns: the line gives way to
+///   the next. A click in a Thread that stands there still opens into its
+///   Group (`Line::anywhere`).
+/// - **An empty free workspace.** One no Project owns, on screen, takes
+///   what the Person opens with no Pane in front; in the row a Project
+///   that owns no workspace yet still gets its own (ADR 0134, decision 6).
+/// - **A place that cannot be made gives way:** beside a Pane, with none
+///   in front, or one that has gone since.
+/// - **Of no Project,** its Project's workspace is the top free one, and
+///   the start of its Project's workspace the workspace on screen.
 ///
-/// Then by how the Person asked, in every Flow (ADR 0134, decisions 1
-/// and 2). A click in a Thread, or in a Pane in a Thread's Group, opens
-/// into that Group. In the row, a Pane whose kind stands on its Project's
-/// workspace, a Thread, goes last there, or, of no Project, on the top
-/// free one. A key from a Pane in a Thread's Group opens as a column of
-/// its own right of the whole Group, but where the row would refuse it.
-/// Else, in the Flow `free`: right of the Pane in front, else last on the
-/// workspace on screen. In the row:
-/// - with no Pane in front, first on its Project's workspace, right of
-///   the columns in no Group at its start (ADR 0134, decision 3); of no
-///   Project, last on the workspace on screen;
-/// - another Pane of no Project, right of the Pane in front;
-/// - on a workspace no Project owns, right of the Pane in front;
-/// - on its Project's workspace, from a column in no Group, right of the
-///   Pane in front;
-/// - from another Project's workspace, first on its own, as with none.
+/// The lines: the Person's for the kind (`tiling.toml`; ADR 0127, decision
+/// 4), then Banda's for the Flow, [`FREE`] or [`ROW`].
 pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Option<Place> {
     let Asked {
         flow,
         project,
         grouped,
-        home,
-        opens,
         scratch,
         from,
         on,
         by,
+        ..
     } = asked;
-    let beside = |pane, side| Place::Beside { pane, side };
-    let right = |pane| beside(pane, Side::Right);
+    let row = flow == Flow::Row;
     let its_workspace = if scratch {
         Place::Free
     } else {
         Place::Project { project }
     };
+    // An Agent's Pane.
     if let By::Agent { thread } = by {
         let group = (thread.filter(|_| !grouped)).and_then(|t| agents_place(list, project, t));
         if group.is_some() {
             return group;
         }
-        if flow == Flow::Row {
+        if row {
             return Some(its_workspace);
         }
     }
     // A Pane in front that has gone since counts as none, and so does a
     // workspace.
-    let at = from.and_then(|pane| Some((pane, model::spot(list, pane).ok()?)));
+    let front = from.and_then(|pane| {
+        let at = model::spot(list, pane).ok()?;
+        let workspace = &list[at.workspace];
+        let column = &workspace.columns[at.column];
+        let owner = workspace.project;
+        Some(InFront {
+            pane,
+            columns: &workspace.columns,
+            column: at.column,
+            in_group: column.group.is_some(),
+            leads: leads.contains(&column.panes[at.pane].shows.kind),
+            theirs: row && !scratch && owner.is_some_and(|owner| owner != project),
+        })
+    });
+    let front = front.as_ref();
     let here = || {
         let workspace = on.filter(|on| list.iter().any(|w| w.id == *on))?;
         Some(Place::Column {
@@ -202,68 +316,57 @@ pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Opti
             index: usize::MAX,
         })
     };
-    // In the row, the Pane in front stands on a workspace another Project
-    // owns, where none of this one's goes.
-    let theirs = at.as_ref().is_some_and(|(_, at)| {
-        let owner = list[at.workspace].project;
-        flow == Flow::Row && !scratch && owner.is_some_and(|owner| owner != project)
-    });
-    if let (Some(opens), Some((pane, _))) = (opens, &at) {
-        match opens {
-            _ if theirs => {}
-            Opens::Beside => return Some(right(*pane)),
-            Opens::Below => return Some(beside(*pane, Side::Below)),
-            Opens::Group => return Some(Place::Group { pane: *pane }),
-            // Its Project's workspace is the row's to find (`home`).
-            Opens::Project => {}
-        }
-    }
-    // On an empty workspace no Project owns, on screen, what the Person
-    // asks for with no Pane in front opens there, and the screen stays
-    // (ADR 0134, decision 6). In the row a Project that owns no workspace
-    // goes as before, to the one the row gives it (`model::project_workspace`).
+    // An empty free workspace.
     let empty = (on.and_then(|on| list.iter().find(|w| w.id == on)))
         .is_some_and(|w| w.project.is_none() && w.columns.is_empty());
-    if let (By::Person { .. }, None, true) = (by, &at, empty) {
+    if let (By::Person { .. }, None, true) = (by, front, empty) {
         let owns = list.iter().any(|w| w.project == Some(project));
-        if flow != Flow::Row || scratch || owns {
+        if !row || scratch || owns {
             return here();
         }
     }
-    let homeward = flow == Flow::Row && home;
-    if let (By::Person { via }, Some((pane, at))) = (by, &at) {
-        let columns = &list[at.workspace].columns;
-        let in_group = columns[at.column].group.is_some();
-        let leads_one = leads.contains(&columns[at.column].panes[at.pane].shows.kind);
-        if via == Via::Click && (in_group || leads_one) {
-            return Some(Place::Group { pane: *pane });
+    let beside = |pane, side| Place::Beside { pane, side };
+    let made = |line: &Line| {
+        // The row's workspaces.
+        let front = front.filter(|front| line.anywhere || !front.theirs);
+        match line.to {
+            To::Beside => front.map(|front| beside(front.pane, Side::Right)),
+            To::Below => front.map(|front| beside(front.pane, Side::Below)),
+            To::Group => front.map(|front| Place::Group { pane: front.pane }),
+            To::BesideGroup => front.filter(|front| front.in_group).map(|front| {
+                // Right of its last column, which no column of it flanks.
+                let columns = front.columns;
+                let last = &columns[model::run(columns, front.column).end - 1];
+                beside(last.panes[0].id, Side::Right)
+            }),
+            To::Project => Some(its_workspace.clone()),
+            // Of no Project.
+            To::ProjectStart if scratch => here(),
+            To::ProjectStart => Some(Place::Start { project }),
+            To::Here => here(),
         }
-        if via == Via::Key && in_group && !theirs && !homeward {
-            // Right of its last column, which no column of it flanks.
-            let last = &columns[model::run(columns, at.column).end - 1];
-            return Some(right(last.panes[0].id));
-        }
-    }
-    if homeward {
-        return Some(its_workspace);
-    }
-    if flow == Flow::Free {
-        return at.map(|(pane, _)| right(pane)).or_else(here);
-    }
-    let Some((pane, _)) = at else {
-        return if scratch {
-            here()
-        } else {
-            Some(Place::Start { project })
-        };
     };
-    // From another Project's workspace, first on its own (ADR 0134,
-    // decision 3); else right of the Pane in front.
-    Some(if theirs {
-        Place::Start { project }
-    } else {
-        right(pane)
-    })
+    let persons = asked.opens.and_then(Opens::line);
+    let banda: &[Line] = if row { &ROW } else { &FREE };
+    (persons.iter().chain(banda))
+        .filter(|line| holds(line, &asked, front))
+        .find_map(made)
+}
+
+/// Whether `line` asks what `asked` and the Pane in `front` are.
+fn holds(line: &Line, asked: &Asked, front: Option<&InFront>) -> bool {
+    let via = match asked.by {
+        By::Person { via } => Some(via),
+        By::Agent { .. } => None,
+    };
+    let from = match (line.from, front) {
+        (None, _) => true,
+        (Some(_), None) => false,
+        (Some(Front::Pane), Some(_)) => true,
+        (Some(Front::Group), Some(front)) => front.in_group || front.leads,
+        (Some(Front::InGroup), Some(front)) => front.in_group,
+    };
+    (!line.home || asked.home) && (line.via.is_none() || line.via == via) && from
 }
 
 /// Whether a Pane opened in place of `instead`, which shows there what
@@ -634,6 +737,24 @@ mod tests {
             ..asked_row(other, thread)
         };
         assert_eq!(place(&list, &leads(), home), on_its_workspace(other));
+    }
+
+    #[test]
+    fn in_the_row_a_thread_asked_by_a_key_from_a_group_goes_home_not_beside_the_group() {
+        let (list, work, [thread, deck, _]) = a_threads_group(on_its_workspace);
+        for pane in [thread, deck] {
+            let home = Asked {
+                home: true,
+                ..asked_row(work, pane)
+            };
+            assert_eq!(place(&list, &leads(), home), on_its_workspace(work));
+            // In the Flow `free` no kind goes home: right of the Group.
+            let free = Asked {
+                home: true,
+                ..asked(work, Flow::Free, from(pane))
+            };
+            assert_eq!(place(&list, &leads(), free), right(deck));
+        }
     }
 
     #[test]
