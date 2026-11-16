@@ -9,8 +9,13 @@
  * - Having started over, it shows nothing until the machine sends back
  *   one letter as it was typed. So where the program does not send them
  *   back, as at a password or in a pager, nothing is ever shown.
- * - What the machine sends that is not the next letter waited for takes
- *   everything back: the machine is always right.
+ * - The machine confirms a letter by leaving it where it was typed, with
+ *   the cursor after it, however it got there: a shell that paints what
+ *   is typed, or offers the rest of the line after the cursor, as bash
+ *   with ble.sh does, writes the line again on each key. While it hides
+ *   the cursor it is still writing, and nothing is judged.
+ * - Anything else the machine sends takes everything back: the machine
+ *   is always right.
  * - It draws only while the machine's answers are slow enough to feel:
  *   the time from a key to its letter coming back, which is what the
  *   Person waits for, and no other measure of the link.
@@ -28,14 +33,45 @@ export const LOST = 1_500
 
 const ESCAPE = "\u001b"
 
-/** Where the colour or style change at `at` of `text` ends, as a shell
- * that paints what is typed sends around a letter: it moves nothing.
- * `at` itself where there is none. */
-function pastPaint(text: string, at: number): number {
-  if (text[at] !== ESCAPE || text[at + 1] !== "[") return at
+/** What a shell sends on a key besides letters, that this follows: how
+ * far it moves the cursor along its row (`by`), whether it clears the row
+ * from the cursor on (`clears`), whether it hides or shows the cursor
+ * (`hides`), and where it ends in `text`. A change of colour or style
+ * does none of these. Undefined for anything else, and for one cut short. */
+function control(
+  text: string,
+  at: number
+): { by: number; clears?: true; hides?: boolean; end: number } | undefined {
+  // The plain character set, as a shell ends its paint with.
+  if (text.startsWith("(B", at + 1)) return { by: 0, end: at + 3 }
+  if (text[at + 1] !== "[") return undefined
   let end = at + 2
-  while (end < text.length && "0123456789;:".includes(text[end]!)) end += 1
-  return text[end] === "m" ? end + 1 : at
+  while (end < text.length && "0123456789;:?".includes(text[end]!)) end += 1
+  const given = text.slice(at + 2, end)
+  const last = text[end]
+  end += 1
+  if (given === "?25" && (last === "h" || last === "l"))
+    return { by: 0, hides: last === "l", end }
+  if (given.includes("?")) return undefined
+  if (last === "m") return { by: 0, end }
+  if (last === "K" && Number(given) === 0) return { by: 0, clears: true, end }
+  if (last !== "C" && last !== "D") return undefined
+  // None and 0 are one, as a terminal takes them.
+  const count = Number(given) || 1
+  if (!Number.isInteger(count)) return undefined
+  return { by: last === "C" ? count : -count, end }
+}
+
+/** Whether `char` takes one cell as it is written: what prints of ASCII,
+ * and the letters of the alphabets after it, as a shell may offer from
+ * what was typed before. */
+function oneCell(char: string): boolean {
+  return (
+    prints(char) ||
+    (char >= "\u00a1" && char < "\u0300") ||
+    (char >= "\u0370" && char < "\u0483") ||
+    (char >= "\u048a" && char < "\u0530")
+  )
 }
 
 /** Whether `data` is one letter that prints in one cell. */
@@ -48,6 +84,12 @@ export class Ahead {
    * each was typed. */
   #waiting = ""
   #typedAt: number[] = []
+  /** The machine's row from where the first of them goes, as it wrote it
+   * since, and its cursor's column from there. */
+  #row: string[] = []
+  #column = 0
+  /** It hid the cursor and has not shown it: it is writing still. */
+  #hidden = false
   /** The machine sent one back since it last started over. */
   #trusted = false
   /** The time from a key to its letter, smoothed, in ms; none before one. */
@@ -57,25 +99,51 @@ export class Ahead {
   /** What the Person typed, as it goes to the machine, at `now`. */
   typed(data: string, now: number): void {
     if (!prints(data)) return this.over()
+    // What the machine sent while nothing waited was not followed.
+    if (this.#waiting === "") {
+      this.#row = []
+      this.#column = 0
+      this.#hidden = false
+    }
     this.#waiting += data
     this.#typedAt.push(now)
   }
 
   /** What the machine sent, before it is drawn, at `now`. */
   heard(text: string, now: number): void {
-    let at = 0
-    while (this.#waiting !== "" && at < text.length) {
-      const past = pastPaint(text, at)
-      if (past !== at) {
-        at = past
+    if (this.#waiting === "") return
+    for (let at = 0; at < text.length;) {
+      const char = text[at]!
+      if (char === ESCAPE) {
+        const does = control(text, at)
+        if (!does) return this.over()
+        this.#column += does.by
+        if (does.clears) this.#row.length = Math.max(this.#column, 0)
+        this.#hidden = does.hides ?? this.#hidden
+        at = does.end
         continue
       }
-      if (text[at] !== this.#waiting[0]) return this.over()
-      this.#time(now - this.#typedAt.shift()!)
-      this.#waiting = this.#waiting.slice(1)
-      this.#trusted = true
+      if (char === "\b") this.#column -= 1
+      else if (!oneCell(char)) return this.over()
+      // Before the letters that wait is what the machine confirmed already.
+      else if (this.#column++ >= 0) this.#row[this.#column - 1] = char
       at += 1
     }
+    // The cursor after the letters as typed confirms them, and only that.
+    const sent = this.#column
+    if (sent === 0 || this.#hidden) return
+    if (
+      sent < 0 ||
+      sent > this.#waiting.length ||
+      this.#row.slice(0, sent).join("") !== this.#waiting.slice(0, sent)
+    )
+      return this.over()
+    for (const typedAt of this.#typedAt.splice(0, sent))
+      this.#time(now - typedAt)
+    this.#waiting = this.#waiting.slice(sent)
+    this.#row = this.#row.slice(sent)
+    this.#column = 0
+    this.#trusted = true
   }
 
   /** Starts over: nothing waits, and nothing shows until the machine
