@@ -187,6 +187,39 @@ test("an App's screen of every node: numbers, tabs, a table found and ordered, a
   await expect(add).toBeHidden()
   await expect(rows.nth(1)).toContainText("Emil Sørensen")
 
+  // A click on a row opens the deal's own screen in the list's place,
+  // and the Pane keeps the way back.
+  await find.fill("emil")
+  await rows.filter({ hasText: "Emil Sørensen" }).getByText("Emil").click()
+  const one = page.getByRole("region", { name: "Emil Sørensen" })
+  await expect(
+    one.getByText("9,000", { exact: true }).filter({ visible: true })
+  ).toBeVisible()
+  await expect(one.getByRole("row")).toHaveCount(0)
+  // Its form changes the deal it shows, by the id the App wrote for it.
+  await one.getByRole("textbox", { name: "Amount" }).fill("9500")
+  await one.getByRole("button", { name: "Save" }).click()
+  await expect(
+    one.getByText("9,500", { exact: true }).filter({ visible: true })
+  ).toBeVisible()
+  // And the form starts again from what the deal is now.
+  await expect(one.getByRole("textbox", { name: "Amount" })).toHaveValue("9500")
+  await shot("app-deals-deal")
+  await one.getByRole("button", { name: "Deals" }).click()
+  // The list is as it was left, with what was found, and shows the change.
+  await expect(pane.getByRole("tab", { name: "Open" })).toBeVisible()
+  await expect(find).toHaveValue("emil")
+  await expect(rows.filter({ hasText: "Emil Sørensen" })).toContainText("9500")
+  await find.fill("")
+  // A click on what is done with a row does not open it.
+  await rows
+    .filter({ hasText: "Emil Sørensen" })
+    .getByRole("button", { name: "Edit" })
+    .click()
+  await expect(page.getByRole("dialog", { name: "Edit" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(pane.getByRole("tab", { name: "Open" })).toBeVisible()
+
   // Another tab draws the charts, and an Accordion opens.
   await pane.getByRole("tab", { name: "By stage" }).click()
   await expect(pane.getByText("Amount by stage, €")).toBeVisible()

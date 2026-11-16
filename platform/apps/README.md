@@ -84,7 +84,10 @@ this machine (ADR 0126).
   the App's screen as data: a title and nodes of a catalogue
   (`platform/apps/engine/src/tree.rs`): Card, Grid, Tabs, Accordion and
   Dialog hold nodes; Table, List, Chart, Stat, Progress, Badge, Alert,
-  Empty, Separator and Markdown show; Form and Button send. A Table's row
+  Empty, Separator and Markdown show; Form and Button send. A Table's
+  row, a List's item and a Link open another of the App's views in the
+  screen's place, and the Pane keeps the screens come through, each as
+  it was left, for the way back, while it lives. A Table's row
   and a List's item have actions, each one of the App's commands sent at
   once, after a question, or from a form filled from the row. The skill
   (`skill/apps.md`) is the catalogue an Agent writes from, and the deals

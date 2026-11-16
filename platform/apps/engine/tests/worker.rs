@@ -329,7 +329,7 @@ async fn what_goes_wrong_in_an_app_stays_in_that_app() {
     assert_eq!(mess.code, Code::Internal);
     assert_eq!(
         mess.message,
-        "trouble.mess failed: its Tree does not read. children[0] (Tabel): there is no such node: the nodes are Card, Grid, Tabs, Accordion, Dialog, Table, List, Chart, Stat, Progress, Form, Button, Badge, Alert, Empty, Separator and Markdown."
+        "trouble.mess failed: its Tree does not read. children[0] (Tabel): there is no such node: the nodes are Card, Grid, Tabs, Accordion, Dialog, Table, List, Chart, Stat, Progress, Form, Button, Link, Badge, Alert, Empty, Separator and Markdown."
     );
 }
 
@@ -380,7 +380,8 @@ async fn an_apps_view_answers_its_screen_as_a_tree_the_engine_read() {
             "title": "Clients",
             "about": "The people I work with: who they are, where, and notes on each.",
             "children": [
-                { "node": "Table", "empty": "No clients yet", "search": false, "actions": [],
+                { "node": "Table", "empty": "No clients yet", "search": false, "open": null,
+                  "actions": [],
                   "columns": [column("name", "Name", "text"), column("city", "City", "text"),
                               column("email", "Email", "text"), column("notes", "Notes", "badge")],
                   "rows": [
@@ -388,6 +389,7 @@ async fn an_apps_view_answers_its_screen_as_a_tree_the_engine_read() {
                     { "name": "Boris", "city": null, "email": null, "notes": null } ] },
                 { "node": "Card", "title": "Add a client", "about": null, "children": [
                     { "node": "Form", "title": null, "command": "add", "submit": "Add client",
+                      "params": {},
                       "fields": [field("name", "Name", true), field("city", "City", false),
                                  field("email", "Email", false)] } ] },
             ]

@@ -1,6 +1,6 @@
 import type { TreeAction, TreeColumn } from "@banda/contract/apps"
 import { expect, test } from "vitest"
-import { found, nextOrder, ordered, type Row, taken } from "./rows"
+import { found, nextOrder, opensWith, ordered, type Row, taken } from "./rows"
 
 const COLUMNS: TreeColumn[] = [
   { key: "name", title: "Name", as: "text", tones: {} },
@@ -62,9 +62,21 @@ test("an action sends what it writes and what it takes from its row", () => {
   expect(taken(action, ROWS[1]!)).toEqual({ sent: all, given: all })
   // What its form fills is the form's to send.
   const town = { name: "town" } as NonNullable<TreeAction["form"]>["fields"][0]
-  const form = { title: null, command: "move", submit: "Move", fields: [town] }
+  const form = {
+    title: null,
+    command: "move",
+    submit: "Move",
+    params: {},
+    fields: [town],
+  }
   expect(taken({ ...action, form }, ROWS[1]!)).toEqual({
     sent: { stage: "won", client: 2 },
     given: all,
   })
+})
+
+test("a view is opened with what is written and what its row has", () => {
+  const open = { view: "card", params: { tab: "notes" }, take: { id: "id" } }
+  expect(opensWith(open, ROWS[1]!)).toEqual({ tab: "notes", id: 2 })
+  expect(opensWith(open)).toEqual({ tab: "notes" })
 })

@@ -1,6 +1,7 @@
 import type { Tree } from "@banda/contract/apps"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
+import { Opening } from "./nav"
 import { TreeView } from "./TreeView"
 
 const send = () => Promise.resolve()
@@ -121,6 +122,7 @@ test("the nodes that hold nodes draw them, a number stands large, and a row has 
     title: null,
     command: "update",
     submit: "Edit",
+    params: {},
     fields: [],
   }
   const tree: Tree = {
@@ -152,6 +154,7 @@ test("the nodes that hold nodes draw them, a number stands large, and a row has 
                 node: "Table",
                 empty: null,
                 search: true,
+                open: null,
                 columns: [
                   { key: "name", title: "Name", as: "text", tones: {} },
                   {
@@ -221,4 +224,47 @@ test("the nodes that hold nodes draw them, a number stands large, and a row has 
   expect(html).toContain("text-added")
   expect(html).toContain('aria-label="Yes"')
   expect(html).toContain('aria-label="Find rows"')
+})
+
+test("a Link, and an item that opens a view, are drawn as what is pressed", () => {
+  const open = { view: "card", params: { id: 1 }, take: {} }
+  const tree: Tree = {
+    at: 7,
+    title: "Clients",
+    about: null,
+    children: [
+      {
+        node: "Link",
+        label: "All clients",
+        view: "home",
+        params: {},
+        take: {},
+      },
+      {
+        node: "List",
+        empty: null,
+        items: [
+          {
+            title: "Anna",
+            about: null,
+            badge: null,
+            tone: "plain",
+            open,
+            actions: [],
+          },
+        ],
+      },
+    ],
+  }
+  const opened: unknown[] = []
+  const html = renderToStaticMarkup(
+    <Opening value={(view, params) => opened.push([view, params])}>
+      <TreeView tree={tree} send={send} />
+    </Opening>
+  )
+  expect(words(html)).toEqual(["All clients", "Anna"])
+  expect(html.match(/<button/g)).toHaveLength(2)
+  // With no Pane to open it in, an item is its words alone.
+  const alone = renderToStaticMarkup(<TreeView tree={tree} send={send} />)
+  expect(alone.match(/<button/g)).toHaveLength(1)
 })

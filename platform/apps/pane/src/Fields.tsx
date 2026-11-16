@@ -31,6 +31,7 @@ import {
   createContext,
   type FormEvent,
   useContext,
+  useEffect,
   useId,
   useRef,
   useState,
@@ -96,6 +97,12 @@ export function FormNode({
   }
 
   const first = useRef<HTMLDivElement>(null)
+  // The form as the Tree read last says it: once its command went and
+  // the screen shows it, it starts again from what the App writes now.
+  const latest = useRef(form)
+  useEffect(() => {
+    latest.current = form
+  }, [form])
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -108,9 +115,9 @@ export function FormNode({
       return
     }
     void act(async () => {
-      await send(form.command, { ...sent, ...read.params })
+      await send(form.command, { ...form.params, ...sent, ...read.params })
       if (close) return close()
-      setFilled(startOf(form.fields, given))
+      setFilled(startOf(latest.current.fields, given))
       // Ready for the next one, from its first field.
       first.current?.querySelector<HTMLElement>("input, textarea")?.focus()
     }, form.submit)

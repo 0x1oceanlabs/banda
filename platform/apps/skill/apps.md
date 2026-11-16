@@ -206,8 +206,25 @@ Nodes that send one of the App's `ui` commands:
 
 | `node` | Its props |
 |---|---|
-| `Form` | `command`. `title`. `submit`: the words on its button. Its fields are the command's params, in the order `methods.json` writes them; a param's `title` is its label. `fields` chooses and orders them: each `{ "name" }`, with `label`, `placeholder`, `about` and `kind`. `values`: what its fields hold as it opens, by param |
+| `Form` | `command`. `title`. `submit`: the words on its button. `params`: what it sends as written beside what its fields fill, as the id of what it changes. Its fields are the command's params, in the order `methods.json` writes them; a param's `title` is its label. `fields` chooses and orders them: each `{ "name" }`, with `label`, `placeholder`, `about` and `kind`. `values`: what its fields hold as it opens, by param |
 | `Button` | `label`, `command`, and `params`: it sends the command with them. `confirm`: a question it asks first. `"tone": "bad"` for what cannot be undone |
+
+More than one screen: declare each as a `view`, with the `params` it
+takes, as `{ "id": { "type": "integer" } }` for one record's own screen.
+A screen opens another in its place, and the Pane shows the way back by
+the title of the one before, so write no "Back":
+
+- A Table's `open`: `{ "view": "client", "take": { "id": "id" } }`. A
+  click on a row opens that view, with params taken from the row and
+  `params` as written.
+- A List item's `open`: `{ "view", "params" }`.
+- The node `Link`: `label`, `view`, `params`. For the same list by
+  another filter, or a page further on.
+
+So a list and a record are two views: `home` answers the Table, and
+`client` reads `id` and answers that client's numbers, notes and a Form
+with `"params": { "id": id }`. A view that finds nothing answers an
+`Empty` and a `Link` home.
 
 A field's kind follows its param in `methods.json`, and `kind` may ask
 for another of the same line:
@@ -241,7 +258,8 @@ removed by `{ "label": "Delete", "command": "remove", "take": { "id":
 "id" }, "confirm": "Delete this client?", "tone": "bad" }`.
 
 A screen that reads well: what must be seen first, then a `Grid` of
-`Stat`s, then `Tabs` of its tables, and its forms in a `Dialog`. A Tree
+`Stat`s, then `Tabs` of its tables, and its forms in a `Dialog`; a row
+opens its record's own view. A Tree
 holds at most 500 nodes. A prop not named here is refused: ask for less,
 not for a prop Banda does not have. What a screen cannot be made of,
 tell your Person rather than work around.
