@@ -18,8 +18,10 @@ place, the engine decides) and principle 9 of
 the head of `tiling.rs`, `arrange.ts`, `opening.ts`, the head of
 `flow.ts`, the names of the tests of `model.rs` and of the traces. Not
 read: how `model.rs` tidies and arranges line by line, `Popped.tsx`,
-`useMoving.ts`, `Overview.tsx`. Nothing here was run: the table below was
-made by reading, and the traces were not replayed over it.
+`useMoving.ts`, `Overview.tsx`; what the table of who decides says of
+them is track 3's lead's, from his reading of #1850. One thing was run:
+shape B below, beside `place`, over every test and trace of the crate
+([the replay](#the-replay)).
 
 ## What is wrong today
 
@@ -51,11 +53,18 @@ each change a bug hunt:
 | Whether a new Pane takes the focus | **the window** | `unheard.ts` `predict`: it wants the Pane its own command opens, unless `focus: false` |
 | Whether the screen goes to a new Pane's workspace | **the window** | `arrange.ts` `aim`: the screen goes where the wanted Pane is |
 | What takes the focus after a close | **the window** | `arrange.ts` `held`: after a Pane in a stack, the next; after a column, the one before |
+| Which part of the Strip is on screen as the focus moves: the focused column fitted, or centred | **the window** | `layout.ts`, `Strip.tsx` (not read); niri's `center-focused-column`, the most felt default there |
+| What the screen shows when its workspace goes | **the window** | `arrange.ts` `closingWorkspace`, `closableAt` |
+| A Pane over the whole window, and back (zoom) | **the window** | the engine keeps sizes, the window the zoom |
+| The next width or height a key steps a column to | the engine keeps the size, the window picks the step | `useSizing.ts`, `[columns]` `presets` |
+| A narrow kind's column opens at the narrowest preset | the engine | `Facts::narrow` (#1761) |
+| Tidying, only from the window in front | the window says whether to ask, the engine tidies | WS5a (#1729); "who is in front" is missing here too (#1727) |
+| Arrange's Undo; a new Thread comes to the front | **the window** | #1342, #1336 |
 | Solo | **the window**, each device for itself | `flow.ts` |
 | An empty workspace at the bottom, tidying, Arrange by Project | the engine; the window copies it | `model.rs` `tidy`, `settle`, `standing` |
-| A Pane in a window of its own | **the window** | `Popped.tsx` (not read) |
+| A Pane in a window of its own | **the window** and main | the page keeps its place, main its window (`client/desktop/src/os-window/popped.ts`, #1824) |
 
-Five of eleven are the window's alone. The engine holds no focus: it is
+Nine of eighteen are the window's alone. The engine holds no focus: it is
 told the Pane in front as a fact of each call, and it does not know which
 device is in front (#1727).
 
@@ -109,6 +118,13 @@ Project's Pane goes to its Project's workspace.
 conditions in a value: a small language in the table would be a third
 copy of the logic.
 
+There are two shapes of it to choose between.
+
+### Shape A: every case is a line
+
+All thirteen cases are lines, in today's order, and the Person's file is
+laid into a fixed place among them.
+
 | A line asks | Its values |
 |---|---|
 | `kind` | an App's kind of Pane |
@@ -120,40 +136,117 @@ copy of the logic.
 | `from-workspace` | `own`, `other`, `free` |
 | `screen` | `empty-free` |
 
+Eight things to ask for thirteen lines, and three of them
+(`from-workspace`, `screen`, and "its Project owns a workspace" of case
+4) are there for one or two lines each. It is the tree written down: a
+Person will never change "what an Agent opens goes into its Thread's
+Group".
+
+### Shape B: laws in code, the table for what a Person may want otherwise
+
+Some cases are laws, of an Agent's Pane and of the row. They outrank the
+Person's lines and are not the Person's to reorder. They stay code in the
+mechanism, each named and tested:
+
+1. **An Agent's Pane.** What an Agent opens goes into its Thread's Group;
+   in the row, with no Thread shown, last on its Project's workspace
+   (cases 1 and 2).
+2. **The row keeps a Project's Panes off another Project's workspace.** A
+   line that would put a Pane there by the Pane in front gives way to the
+   next (cases 3 and 12).
+3. **An empty workspace no Project owns** takes what the Person opens with
+   no Pane in front; in the row a Project that owns no workspace yet still
+   gets its own (case 4; ADR 0134, decision 6).
+4. **A place that cannot be made gives way to the next line:** beside a
+   Pane, with none in front; into a Group, for a kind that leads one.
+5. **Of no Project:** "its Project's workspace" is the top free one, and
+   "first on its Project's workspace" is the workspace on screen (case
+   10).
+
+The table then asks three things, `kind`, `via` and `from`, and each Flow
+has its own short set of defaults:
+
+| The Flow free | It goes |
+|---|---|
+| a click, from a Thread or a Pane in a Group | into that Group |
+| a key, from a Pane in a Group | right of the whole Group |
+| from a Pane | right of it |
+| else | last on the workspace on screen |
+
+| The row | It goes |
+|---|---|
+| a click, from a Thread or a Pane in a Group | into that Group |
+| a kind that stands on its Project's workspace (a Thread) | last on its Project's workspace |
+| a key, from a Pane in a Group | right of the whole Group |
+| from a Pane | right of it |
+| else | first on its Project's workspace |
+
+The Person's lines, `[rule.<app>.<kind>]` as today, go over these, under
+the laws. So the Person's file is truly "on top" of Banda's defaults, and
+a line for a kind does not move what an Agent opens.
+
+| | Shape A | Shape B |
+|---|---|---|
+| Lines of defaults | 13 | 4 in free, 5 in the row |
+| What a line asks | 8 things | 3: `kind`, `via`, `from` |
+| Cases left as code | the row's refusal, as a rule gives way (in case 3) | five laws, which hold cases 1, 2, 4, 10 and 12 and part of 3 |
+| The Person's file | at a fixed place in the order | over all defaults |
+| Change to `tiling.toml` | new keys and an order | `[rule.<app>.<kind>]` gains `via` and `from` |
+
+Track 3's lead picks B, and so does this page: it is the smaller change
+on the road there is, and what stays code is what no Person would edit.
+
+What a line says is the same in both:
+
 | A line says | Its values |
 |---|---|
-| `opens` | `beside`, `below`, `group`, `beside-group`, `thread-group`, `project`, `project-start`, `here` |
+| `opens` | `beside`, `below`, `group`, `beside-group`, `project`, `project-start`, `here` |
 | `width` | a preset's name |
-| `focus` | `true`, `false` |
-| `follow` | `true`, `false`: whether the screen goes to it |
+| `focus`, `follow` | `true`, `false`: whether it takes the focus, and whether the screen goes to it. **Not in the first step**: see what the table cannot hold |
 
-The thirteen cases above become thirteen lines of it, in the same order.
-`thread-group`, `beside-group`, `project-start` and `here` are places
-`placing.rs` has today (`agents_place`, right of a Group's last column,
-`Place::Start`, `here`).
+## The replay
+
+Shape B was written as a test-only reader beside `place`, and every
+placing the crate's tests and traces make was run through both (branch
+`test/placing-table-replay`, `f7701cce`, not to merge; no product code
+changed).
+
+- **298 placings, the same `Place` each time:** 96 in `placing.rs`'s and
+  the model's tests, 111 in the twenty golden traces
+  (`tests/traces.rs`), 91 in `tests/workspaces.rs`. No test and no trace
+  was changed.
+- **The replay bites.** With the "owns a workspace" exception of law 3
+  taken out, it fails. With a click into a Group made to give way on
+  another Project's workspace, as a rule does, it fails: a click is held
+  to today's behaviour there.
+- **One order no test holds.** In the row, the line for a kind that
+  stands on its Project's workspace is over the line for a key from a
+  Group: a new Thread asked by a key from a Thread's Group goes last on
+  its Project's workspace, not right of the Group. With the two lines
+  swapped every test and trace still passes. It needs a test before the
+  table replaces the tree.
+
+Shape A was not replayed: it is the tree line for line, so it would pass
+by construction, and it is not the pick.
 
 ## What did not fit cleanly
 
-By reading, every case is a line. Three need something a plain table does
-not give:
+In shape A three things did not fit a plain table: the Person's rule is
+not "on top" but third in the order, under what an Agent opens; case 4
+asks once whether the Pane's Project owns a workspace; and a rule gives
+way where the row would refuse it. The first and the third are one fact:
+those cases are laws, not policy. Shape B takes all three out of the
+table, as laws 1, 2 and 3.
 
-1. **The Person's rule is not "on top".** Today it stands third: under
-   what an Agent opens (cases 1 and 2), over the rest. A file laid simply
-   over the defaults would send an Agent's terminal where
-   `[rule.terminal.terminal]` says, which is not today's behaviour. Either
-   the Person's lines take a fixed place in the order, or the order is the
-   Person's to see and change.
-2. **Case 4 asks whether the Pane's Project owns a workspace yet.** It is
-   asked once, for one exception (ADR 0134, decision 6: in the row a
-   Project with no workspace still gets its own). It needs a value of its
-   own, or the exception goes.
-3. **A rule gives way** with no Pane in front and, in the row, from
-   another Project's workspace (case 3). That is the mechanism's law, "a
-   rule never puts a Pane where the row would refuse it": it stays code,
-   and a line that names such a place falls to the next.
+In shape B, by the replay, nothing was rewritten. What it leaves open:
 
-Not tried: whether the traces replay unchanged. Until they do, "it fits"
-is a reading, not a result.
+1. **Law 3's exception** (a Project that owns no workspace) is one branch
+   kept for one case. It stays, or the exception goes: Roma's to say, with
+   the ADR.
+2. **A click is not held by law 2** as a key and a rule are: a click in a
+   Thread that stands on another Project's workspace opens into its Group
+   there. A test holds that today, so the replay keeps it. It is a law
+   with one exception, to name in the ADR.
 
 ## What the table cannot hold
 
@@ -189,22 +282,35 @@ Agreed with track 3's lead, 2026-11-16:
 
 ## What is Roma's to say
 
+Answered, 2026-11-16:
+
+- **The file's form: TOML.** `tiling.toml` as it is, no Lua.
+- **The focus after a close:** the one a Person can predict, as this page
+  recommends: the focus goes back to what had it before. The ADR says
+  the rule in full.
+- **The order of work:** one predictable behaviour for every Pane first,
+  what a Person changes in the file after it.
+
+Open:
+
 1. **The two Flows.** Free and the row as two sets of defaults of one
    table (recommended, and `flow` is a key of the file already), or one
-   Flow.
-2. **The file's form.** On 2026-11-13 Roma leaned to Lua for the Tiling's
-   file. A closed table fits TOML as it is. If Lua is meant, the form is
-   decided before the ADR.
-3. **The focus after a close.** Today: after a Pane in a stack, the next;
-   after a column, the one before. niri, as recalled and not checked
-   here, gives the focus back to the column that had it before when the
-   closed one was opened last. Which one is Banda's.
-4. **The Person's rule and an Agent's Pane** (the first point of what did
-   not fit): does the Person's line for a kind hold for what an Agent
-   opens too.
+   Flow. Solo is a view of the row, each device's own, and not a third
+   set.
+2. **The Person's rule and an Agent's Pane:** does the Person's line for
+   a kind hold for what an Agent opens too. Shape B says no: law 1 is
+   over the table.
 
 ## The order, if Roma takes it
 
-This page → an ADR → a trial of T1 for its cost → the table in the engine
-→ the focus and the screen as the module's rule. Track 3's WS5b waits for
-the ADR, and its WS7d for the answer on T1.
+1. This page, with the replay.
+2. An ADR, on the replay's result.
+3. The table in the engine for `opens` and `width`, where the engine
+   decides already: `place` becomes the laws, then the first line that
+   holds, and the tree goes in the same PR.
+4. A trial of T1, for its cost.
+5. The focus and the screen as the module's rule, `focus` and `follow`
+   in the table: only with the answer on T1, as the rule must run in the
+   window.
+
+Track 3's WS5b waits for the ADR, and its WS7d for the answer on T1.
