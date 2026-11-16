@@ -286,6 +286,9 @@ export function arrangedSource(engine: Engine): Source<Arranged> {
 }
 
 export function applyChange(state: Arranged, event: Event): Arranged {
+  // That an Agent asked for a Pane is said for other machines' windows
+  // (ADR 0120, decision 6): it changes nothing of this arrangement.
+  if (event.kind === "pane.asked") return { ...state, at: event.seq }
   const changed = event.payload as Changed
   // What is set aside changes only as the workspaces are set aside or
   // come back (ADR 0039, decision 2).

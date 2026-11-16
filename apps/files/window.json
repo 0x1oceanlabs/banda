@@ -2,10 +2,12 @@
   "panes": [
     {
       "kind": "files.tree",
-      "narrow": true
+      "narrow": true,
+      "elsewhere": true
     },
     {
-      "kind": "files.file"
+      "kind": "files.file",
+      "elsewhere": true
     }
   ],
   "actions": [

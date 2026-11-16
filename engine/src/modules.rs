@@ -133,6 +133,10 @@ struct PaneKind {
     /// decision 4).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     narrow: bool,
+    /// This build shows it for a Project of another machine
+    /// (`PaneKind.elsewhere`; ADR 0120, decision 6).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    elsewhere: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -228,6 +232,13 @@ pub fn home_kinds() -> BTreeSet<String> {
 /// parts in the list of Apps say; read as `grouped_kinds` is.
 pub fn narrow_kinds() -> BTreeSet<String> {
     kinds_in(APPS, |pane| pane.narrow)
+}
+
+/// The kinds of Pane this build shows for a Project of another machine,
+/// as the window parts in the list of Apps say; read as `grouped_kinds`
+/// is.
+pub fn elsewhere_kinds() -> BTreeSet<String> {
+    kinds_in(APPS, |pane| pane.elsewhere)
 }
 
 fn grouped_in(parts: &[Part]) -> BTreeSet<String> {
@@ -493,6 +504,19 @@ mod tests {
     #[test]
     fn a_threads_pane_alone_stands_on_its_projects_workspace() {
         assert_eq!(home_kinds(), BTreeSet::from(["agents.thread".to_owned()]));
+    }
+
+    /// What this build shows for a Project of another machine is what the
+    /// window's code says, and a browser is not of them yet: it loads
+    /// from this device, where another machine's own addresses are not
+    /// (ADR 0120, decision 6).
+    #[test]
+    fn the_kinds_shown_for_another_machines_project_are_those_the_window_says() {
+        let kinds = elsewhere_kinds();
+        for kind in ["agents.thread", "git.diff", "files.file", "apps.view"] {
+            assert!(kinds.contains(kind), "{kind}");
+        }
+        assert!(!kinds.contains("browser.browser"));
     }
 
     /// What opens at the narrowest of the Tiling's widths is what the

@@ -1,7 +1,8 @@
 {
   "panes": [
     {
-      "kind": "apps.view"
+      "kind": "apps.view",
+      "elsewhere": true
     }
   ],
   "actions": [],

@@ -19,6 +19,14 @@
 //! the args that choose what each shows (ADR 0083, decision 3), and moves
 //! and closes only those it opened.
 //!
+//! An Agent's Pane is placed by each window that shows its Thread (ADR
+//! 0120, decision 6). `open_pane` says in the machine's log that the
+//! Agent asked, `pane.asked`, beside placing the Pane here. A window on
+//! another machine that shows the Agent's Thread follows that fact and
+//! asks its own engine to place the Pane, `place_asked`: checked there as
+//! an Agent's, placed into the Thread's Group, and once, by the position
+//! of the other machine's log each arrangement keeps.
+//!
 //! What a command makes, a Pane, a column, a Group or a workspace, takes
 //! an ID derived from the command's ID (`model::Seed`, ADR 0088, decision
 //! 11). So the client that sends it knows the IDs before the answer and
@@ -32,8 +40,8 @@ pub mod placing;
 pub mod tiling;
 
 use banda_kernel::{
-    AgentId, Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool, Tx,
-    Wall,
+    AgentId, Call, Error, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Scope,
+    Tool, Tx, Wall,
 };
 pub use commands::{
     Arrange, Fill, Height, Maximize, MoveColumn, MovePane, MoveWorkspace, OneColumn, OnePane, Open,
@@ -41,12 +49,14 @@ pub use commands::{
 };
 use model::{Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Sight, WorkspaceId};
 use placing::{Asked, By, Facts};
+use rusqlite::OptionalExtension;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use tiling::Tiling;
 use ts_rs::TS;
+use uuid::Uuid;
 
 /// The version of every event this module writes.
 pub const VERSION: u32 = 1;
@@ -70,6 +80,9 @@ pub struct Workspaces {
     /// The Pane kinds that are lists beside other Panes, as their window
     /// parts say (`PaneKind.narrow`).
     narrow: BTreeSet<String>,
+    /// The Pane kinds this build shows for a Project of another machine,
+    /// as their window parts say (`PaneKind.elsewhere`).
+    elsewhere: BTreeSet<String>,
     /// Reads this machine's copy of the Tiling's file; none, the Flow
     /// `free` and no rule.
     tiling: Option<Box<dyn Fn() -> Tiling + Send + Sync>>,
@@ -120,6 +133,14 @@ impl Workspaces {
             // `default` and `alone`, by what stands beside it.
             narrowest: columns.presets.into_iter().next(),
         }
+    }
+
+    /// The kinds of Pane this build shows for a Project of another
+    /// machine: only such a one is placed for another machine's Agent
+    /// (ADR 0120, decision 6).
+    pub fn elsewhere_kinds(mut self, kinds: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.elsewhere = kinds.into_iter().map(Into::into).collect();
+        self
     }
 
     /// The kinds of Pane that are lists beside other Panes: a new column
@@ -249,6 +270,19 @@ banda_kernel::methods! {
         command move_own(MoveOwn) -> Done, Write, tool "move_pane";
         /// Closes a Pane you opened.
         command close_own(OnePane) -> Done, Write, tool "close_pane";
+        /// Places here a Pane an Agent of another machine opened there,
+        /// as that machine's `pane.asked` says it: a window that shows the
+        /// Agent's Thread sends it, for the Person. Checked as an Agent's
+        /// own `open_pane` is, and the kind must be one this build shows
+        /// for another machine's Project. It goes into the Thread's Group
+        /// by the Flow, takes no focus and is marked. Nothing is placed
+        /// where the Thread is not shown, nor for a position of that
+        /// machine's log placed through already: the last is kept per
+        /// machine, so two windows that hear one fact place it once. A
+        /// window follows another machine's facts from the moment it
+        /// shows one of its Threads, and asks for none before it (ADR
+        /// 0120, decision 6).
+        command place_asked(PlaceAsked) -> Placed, Write;
     }
 }
 
@@ -451,6 +485,72 @@ pub struct Arranged {
     pub aside: Option<Aside>,
 }
 
+/// The fact `pane.asked`: an Agent opened a Pane with `open_pane`, said
+/// in the machine's log for the windows of other machines that show its
+/// Thread (ADR 0120, decision 6).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "workspaces/")]
+pub struct PaneAsked {
+    /// The Thread the Agent's pass was made for.
+    #[ts(type = "string")]
+    pub thread: Uuid,
+    pub project: ProjectId,
+    pub kind: String,
+    pub args: Value,
+    /// The Pane of this machine's arrangement it was opened beside, when
+    /// the Agent named one: another machine's arrangement has no such
+    /// Pane, and places by the Flow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub beside: Option<AskedBeside>,
+}
+
+/// Where an Agent asked for its Pane, as `pane.asked` keeps it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct AskedBeside {
+    pub pane: PaneId,
+    pub side: Side,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct PlaceAsked {
+    /// The machine whose log said it, by its ID.
+    pub from: ProjectId,
+    /// The fact's position in that machine's log.
+    #[ts(type = "number")]
+    pub at: i64,
+    /// The Agent that asked: the fact's author.
+    pub by: AgentId,
+    /// The Agent's Thread: the Pane goes into its Group.
+    #[ts(type = "string")]
+    pub thread: Uuid,
+    /// The Agent's Project, of that machine.
+    pub project: ProjectId,
+    pub kind: String,
+    pub args: Value,
+    /// Its Project is of no Project on that machine: the window says it
+    /// of another machine's, as `open` takes it (ADR 0110, decision 6).
+    /// Left out, a Project's.
+    #[serde(default)]
+    #[ts(optional)]
+    pub scratch: Option<bool>,
+}
+
+/// What `place_asked` answers.
+#[derive(Serialize, Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct Placed {
+    /// The Pane placed or shown already; left out where its Thread is not
+    /// shown here, or the position was placed through before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub pane: Option<PaneId>,
+    /// Whether it is a new one.
+    pub new: bool,
+}
+
 /// The workspaces set aside, as the Person is told of them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
@@ -531,6 +631,12 @@ impl Module for Workspaces {
             // The last Arrange by Project, before it and after it, while
             // Undo may put it back.
             "ALTER TABLE workspaces_arrangement ADD COLUMN arranged TEXT",
+            // The position of each other machine's log its Agents' Panes
+            // were placed through (ADR 0120, decision 6).
+            "CREATE TABLE workspaces_asked (
+               machine TEXT PRIMARY KEY,
+               at INTEGER NOT NULL
+           )",
         ]
     }
 
@@ -819,6 +925,93 @@ impl Workspaces {
     }
 }
 
+/// Refuses a Pane no Agent may open: one of another kind than
+/// `AGENT_KINDS`, or with args its kind's rule refuses.
+fn an_agents(kind: &str, args: &Value) -> Result<(), Refusal> {
+    let Some((_, refuses)) = AGENT_KINDS.iter().find(|(agents, _)| *agents == kind) else {
+        let kinds: Vec<_> = AGENT_KINDS.iter().map(|(kind, _)| *kind).collect();
+        return Err(Refusal::forbidden(format!(
+            "An Agent opens only {}: they run nothing as your Person.",
+            kinds.join(", ")
+        )));
+    };
+    refuses(args)
+}
+
+/// A Pane an Agent opened, and what it opens by (`Workspaces::for_agent`).
+struct ForAgent {
+    shows: Shown,
+    /// What this machine places by, read before the change.
+    facts: Facts,
+    /// Its kind opens as a Group of its own.
+    grouped: bool,
+    /// Its Project is of no Project.
+    scratch: bool,
+    /// The Thread its Agent's pass was made for.
+    thread: Option<Uuid>,
+    by: AgentId,
+}
+
+impl ForAgent {
+    /// Opens it at `place`, or where the Flow says with none: one shown
+    /// already stays where it is. The Pane, and whether it is a new one.
+    fn open(
+        self,
+        list: &mut Arrangement,
+        place: Option<Place>,
+        seed: &Seed,
+    ) -> Result<(PaneId, bool), Refusal> {
+        let ForAgent {
+            shows,
+            facts,
+            grouped,
+            scratch,
+            thread,
+            by,
+        } = self;
+        if let Some(shown) = model::showing_asked(list, &shows) {
+            return Ok((shown.id, false));
+        }
+        // A kind that opens as a Group of its own does so here too, unless
+        // it goes into another Pane's column, which stays as it is.
+        let stacks = matches!(
+            place,
+            Some(Place::Beside {
+                side: Side::Above | Side::Below,
+                ..
+            })
+        );
+        // What its Agent opens with no place goes where the Flow says: into
+        // the Group of the Thread its pass was made for (ADR 0065, decisions
+        // 6 and 7), else on its Project's workspace (ADR 0102, decision 4).
+        let asked = Asked {
+            flow: facts.flow,
+            project: shows.project,
+            grouped,
+            home: facts.at_home(&shows.kind),
+            opens: facts.opens(&shows.kind),
+            when: facts.when(&shows.kind),
+            scratch,
+            from: None,
+            on: None,
+            by: By::Agent { thread },
+        };
+        let place = place.or_else(|| placing::place(list, &facts.leads, asked));
+        let opening = Opening {
+            place,
+            // Its new column is as wide as its kind's rule says.
+            width: facts.width(&shows.kind),
+            by: Some(by),
+            ..Opening::of(shows)
+        };
+        let pane = model::open(list, opening, seed)?;
+        if grouped && !stacks {
+            model::group_pane(list, pane, seed)?;
+        }
+        Ok((pane, true))
+    }
+}
+
 impl Workspaces {
     async fn panes(&self, call: Call, _: Nothing) -> Result<Vec<SeenWorkspace>, Refusal> {
         let wall = call.wall();
@@ -854,67 +1047,118 @@ impl Workspaces {
 
     async fn open_pane(&self, call: Call, open: OpenPane) -> Result<Opened, Refusal> {
         let (wall, me) = walled(&call)?;
-        let Some((_, refuses)) = AGENT_KINDS.iter().find(|(kind, _)| *kind == open.kind) else {
-            let kinds: Vec<_> = AGENT_KINDS.iter().map(|(kind, _)| *kind).collect();
-            return Err(Refusal::forbidden(format!(
-                "An Agent opens only {}: they run nothing as your Person.",
-                kinds.join(", ")
-            )));
-        };
-        refuses(&open.args)?;
+        an_agents(&open.kind, &open.args)?;
         let shows = Shown {
             project: wall.project,
             kind: open.kind,
             args: open.args,
         };
+        // Said in the machine's log, for the windows of other machines
+        // that show the Agent's Thread: each places it in its own
+        // arrangement (ADR 0120, decision 6). A pass that names no Thread
+        // has no Group there to go into.
+        let said = call.thread().map(|thread| PaneAsked {
+            thread,
+            project: shows.project,
+            kind: shows.kind.clone(),
+            args: shows.args.clone(),
+            beside: (open.beside.as_ref()).map(|beside| AskedBeside {
+                pane: beside.pane,
+                side: beside.side,
+            }),
+        });
+        let author = call.participant();
         let beside = open.beside;
-        // A kind that opens as a Group of its own does so here too, unless
-        // it goes into another Pane's column, which stays as it is.
-        let grouped = self.grouped.contains(&shows.kind);
-        let stacks = (beside.as_ref()).is_some_and(|b| matches!(b.side, Side::Above | Side::Below));
-        // What its Agent opens with no place goes where the Flow says: into
-        // the Group of the Thread its pass was made for (ADR 0065, decisions
-        // 6 and 7), else on its Project's workspace (ADR 0102, decision 4).
-        // Its new column is as wide as its kind's rule says.
-        let facts = self.facts();
-        let width = facts.width(&shows.kind);
-        let scratch = match beside {
-            None => self.scratch(&call, shows.project).await == Some(true),
-            Some(_) => false,
-        };
-        let thread = call.thread();
-        let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
+        let opening = (self.for_agent(&call, shows, call.thread(), me, None)).await;
+        let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, tx, seed| {
             let place = beside.map(|b| b.place(list, wall)).transpose()?;
-            if let Some(shown) = model::showing_asked(list, &shows) {
-                return Ok((shown.id, false));
+            if let Some(said) = &said {
+                let thread = said.thread.to_string();
+                tx.emit("pane.asked", VERSION, Some(&thread), author, said)?;
             }
-            let asked = Asked {
-                flow: facts.flow,
-                project: shows.project,
-                grouped,
-                home: facts.at_home(&shows.kind),
-                opens: facts.opens(&shows.kind),
-                when: facts.when(&shows.kind),
-                scratch,
-                from: None,
-                on: None,
-                by: By::Agent { thread },
-            };
-            let place = place.or_else(|| placing::place(list, &facts.leads, asked));
-            let opening = Opening {
-                place,
-                width,
-                by: Some(me),
-                ..Opening::of(shows)
-            };
-            let pane = model::open(list, opening, seed)?;
-            if grouped && !stacks {
-                model::group_pane(list, pane, seed)?;
-            }
-            Ok((pane, true))
+            Ok(opening.open(list, place, seed)?)
         })
         .await?;
         Ok(Opened { pane, new })
+    }
+
+    async fn place_asked(&self, call: Call, asked: PlaceAsked) -> Result<Placed, Refusal> {
+        // Checked as an Agent's, though the window asks: what the other
+        // machine's log says is no more than its Agent could ask here.
+        an_agents(&asked.kind, &asked.args)?;
+        if !self.elsewhere.contains(&asked.kind) {
+            return Err(Refusal::invalid(format!(
+                "This Banda does not show {} for another machine's Project yet.",
+                asked.kind
+            )));
+        }
+        let PlaceAsked {
+            from,
+            at,
+            by,
+            thread,
+            project,
+            kind,
+            args,
+            scratch,
+        } = asked;
+        let shows = Shown {
+            project,
+            kind,
+            args,
+        };
+        let opening = (self.for_agent(&call, shows, Some(thread), by, scratch)).await;
+        let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, tx, seed| {
+            let machine = from.to_string();
+            let kept: Option<i64> = (tx.sql())
+                .query_row(
+                    "SELECT at FROM workspaces_asked WHERE machine = ?1",
+                    [&machine],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            // Placed through already: a reload or a second window places
+            // nothing twice.
+            if kept.is_some_and(|kept| at <= kept) {
+                return Ok((None, false));
+            }
+            tx.sql().execute(
+                "INSERT INTO workspaces_asked (machine, at) VALUES (?1, ?2)
+                 ON CONFLICT (machine) DO UPDATE SET at = excluded.at",
+                rusqlite::params![machine, at],
+            )?;
+            // A Thread not shown here places nothing (ADR 0101, call 2).
+            if placing::agents_place(list, project, thread).is_none() {
+                return Ok((None, false));
+            }
+            let (pane, new) = opening.open(list, None, seed)?;
+            Ok((Some(pane), new))
+        })
+        .await?;
+        Ok(Placed { pane, new })
+    }
+
+    /// What a Pane an Agent opened, here or on another machine, opens by:
+    /// read before the change, as it cannot wait.
+    async fn for_agent(
+        &self,
+        call: &Call,
+        shows: Shown,
+        thread: Option<Uuid>,
+        by: AgentId,
+        scratch: Option<bool>,
+    ) -> ForAgent {
+        // Of its own machine's Projects the engine says it itself, and
+        // takes the window's word only of another's.
+        let known = self.scratch(call, shows.project).await;
+        ForAgent {
+            facts: self.facts(),
+            grouped: self.grouped.contains(&shows.kind),
+            scratch: known.or(scratch) == Some(true),
+            shows,
+            thread,
+            by,
+        }
     }
 
     async fn move_own(&self, call: Call, moving: MoveOwn) -> Result<Done, Refusal> {
@@ -1015,8 +1259,9 @@ async fn done(
 }
 
 /// Runs a command on the arrangement, and keeps and says it when it
-/// changed; one no change touched says nothing, so the kernel answers it
-/// with no place in the log. What it makes takes IDs derived from its
+/// changed; one no change touched says nothing of it, so the kernel
+/// answers it with no place in the log, unless `how` said a fact of its
+/// own, as `open_pane` says that its Agent asked. What it makes takes IDs derived from its
 /// command's ID, and one whose IDs the workspaces hold already ran.
 async fn change<T>(
     call: &Call,

@@ -17,6 +17,8 @@ import type { OnePane } from "./OnePane";
 import type { Open } from "./Open";
 import type { OpenPane } from "./OpenPane";
 import type { Opened } from "./Opened";
+import type { PlaceAsked } from "./PlaceAsked";
+import type { Placed } from "./Placed";
 import type { Regroup } from "./Regroup";
 import type { SeenWorkspace } from "./SeenWorkspace";
 import type { ShowAs } from "./ShowAs";
@@ -177,4 +179,19 @@ move_own: CommandMethod<MoveOwn, Done>,
 /**
  * Closes a Pane you opened.
  */
-close_own: CommandMethod<OnePane, Done>, };
+close_own: CommandMethod<OnePane, Done>, 
+/**
+ * Places here a Pane an Agent of another machine opened there,
+ * as that machine's `pane.asked` says it: a window that shows the
+ * Agent's Thread sends it, for the Person. Checked as an Agent's
+ * own `open_pane` is, and the kind must be one this build shows
+ * for another machine's Project. It goes into the Thread's Group
+ * by the Flow, takes no focus and is marked. Nothing is placed
+ * where the Thread is not shown, nor for a position of that
+ * machine's log placed through already: the last is kept per
+ * machine, so two windows that hear one fact place it once. A
+ * window follows another machine's facts from the moment it
+ * shows one of its Threads, and asks for none before it (ADR
+ * 0120, decision 6).
+ */
+place_asked: CommandMethod<PlaceAsked, Placed>, };

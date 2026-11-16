@@ -377,7 +377,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Move the Pane to workspace 8 (`pane.send-8`), Alt+Shift+8
 - Move the Pane to workspace 9 (`pane.send-9`), Alt+Shift+9
 
-Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `arrange`, `take`, `set_aside`, `bring_back`, `unarrange`, `panes`, `open_pane`, `move_own`, `close_own`.
+Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `arrange`, `take`, `set_aside`, `bring_back`, `unarrange`, `panes`, `open_pane`, `move_own`, `close_own`, `place_asked`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 

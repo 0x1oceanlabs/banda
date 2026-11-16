@@ -234,4 +234,5 @@ export const DOES = {
   "workspaces.open_pane": "act",
   "workspaces.move_own": "act",
   "workspaces.close_own": "act",
+  "workspaces.place_asked": "act",
 } as const satisfies { readonly [M in keyof Methods]: Does }
