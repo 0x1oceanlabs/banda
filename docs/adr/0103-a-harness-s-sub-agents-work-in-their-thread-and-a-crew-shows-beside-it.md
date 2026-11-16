@@ -1181,6 +1181,16 @@ Decided for steps 4–6, and what the recording
   (`Question.crew`, asker "Crew ‹title›"), and its call is the Crew's.
   Otherwise it is the Agent's own, in a turn by itself, as before
   (decision 28).
+  - _Amended 2026-11-16, after a real Crew run (#1846):_ the agent that
+    asks shows as asking (`asks`) in the Crew Pane, its filter and its
+    Timeline, until the Person answers or the Question closes. No frame
+    names it, so it is the agent at work whose last call Claude sums up
+    as the Question's command (`Bash · echo a > a.txt`). Claude says that
+    only once the call runs, so the Questions left over go to the agents
+    at work that ask nothing yet when there are no more of those than of
+    them (three agents, three Questions: each asks); otherwise none. The
+    Crew's open Questions in the store decide it, written as one opens,
+    is answered or closes.
 - **Progress is written only on a change**: an agent's state, label,
   model, attempt, result or why; a phase; a new agent; or the log line.
   Tokens and times ride along with the next change. The recording's 55

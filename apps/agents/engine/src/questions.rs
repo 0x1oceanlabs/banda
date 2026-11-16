@@ -174,6 +174,12 @@ pub fn answer(
         values: filled.as_ref().map(|f| f.kept.clone()),
     };
     emit(tx, author, thread, &fact)?;
+    if let Body::Question {
+        crew: Some(crew), ..
+    } = &found.body
+    {
+        crate::crews::asks_moved(tx, *crew)?;
+    }
     let (values, secret) = match filled {
         Some(Filled { mut kept, secret }) => {
             kept.retain(|id, _| !secret.contains_key(id));
@@ -291,7 +297,13 @@ fn shut(
         return Ok(());
     }
     store::set_body(tx.sql(), item.id, &item.body)?;
-    emit(tx, author, thread, &Fact::QuestionClosed { item: item.id })
+    emit(tx, author, thread, &Fact::QuestionClosed { item: item.id })?;
+    match &item.body {
+        Body::Question {
+            crew: Some(crew), ..
+        } => crate::crews::asks_moved(tx, *crew),
+        _ => Ok(()),
+    }
 }
 
 /// Answers a Question with one of its choices. A choice that submits a
