@@ -4,4 +4,8 @@ import type { TreeNode } from "./TreeNode";
 /**
  * A box around other nodes, with a title when it has one.
  */
-export type TreeCard = { title: string | null, children: Array<TreeNode>, };
+export type TreeCard = { title: string | null, 
+/**
+ * A line under its title.
+ */
+about: string | null, children: Array<TreeNode>, };

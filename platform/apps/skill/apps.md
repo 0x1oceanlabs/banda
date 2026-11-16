@@ -174,21 +174,77 @@ runs in the window.
 
 A Tree is `{ "title", "about", "children": [ … ] }`: `title` names its
 Pane, `about` is a line under it. Each child is a node, an object with
-`"node"` and its props:
+`"node"` and its props. A `tone` is `"good"`, `"warn"` or `"bad"`.
+
+Nodes that hold nodes:
 
 | `node` | Its props |
 |---|---|
-| `Table` | `columns`: each `{ "key", "title" }`, with `"as": "badge"` to set its cells apart. `rows`: objects by the columns' keys, a cell text, a number, true, false or null. `empty`: the words for no rows. At most 12 columns and 1,000 rows |
-| `List` | `items`: each `{ "title", "about", "badge" }`, for what reads badly in columns. `empty` |
-| `Card` | `title`, and `children`: nodes in a box |
-| `Form` | `command`: one of the App's `ui` commands. `title`. `submit`: the words on its button. Its fields are the command's params, in the order `methods.json` writes them: text, a number, a select for an `enum` of strings, a checkbox for a boolean; a param's `title` is its label. `fields` chooses and orders them: each `{ "name" }`, with `label`, `placeholder`, or `"kind": "textarea"` for long text |
-| `Button` | `label`, `command`, and `params`: it sends the command with them |
-| `Badge` | `text` |
+| `Card` | `title`, `about`, and `children`: nodes in a box |
+| `Grid` | `children` side by side, and `columns`, 1 to 6: as many as fit when unsaid. For a row of `Stat`s, or two charts |
+| `Tabs` | `tabs`: each `{ "title", "children" }`, one shown at a time |
+| `Accordion` | `items`: each `{ "title", "children" }`, opened by its title |
+| `Dialog` | `label`: the words on its button. `title`, `about`, `children`: opened over the screen, for a Form that would crowd it. It closes once its Form's command went |
+
+Nodes that show:
+
+| `node` | Its props |
+|---|---|
+| `Table` | `columns`: each `{ "key", "title" }`. `rows`: objects by the columns' keys, a cell text, a number, true, false or null. `empty`: the words for no rows. `"search": true` for a field that finds rows. `actions`: what can be done with a row (below). A click on a column's title orders the rows, and more than 50 go by pages. At most 12 columns and 1,000 rows |
+| a column's `as` | `"badge"` sets its cells apart, with `tones` for a colour by the cell's text: `{ "won": "good" }`. `"check"` shows true as a tick. `"progress"` shows a number from 0 to 100 as a bar |
+| `List` | `items`: each `{ "title", "about", "badge", "tone", "actions" }`, for what reads badly in columns. `empty` |
+| `Chart` | `kind`: `"bar"`, `"line"`, `"area"` or `"pie"`. `rows`, as a Table's. `x`: the key that names a row. `series`: each `{ "key", "title" }`, a number of each row, 1 to 6 of them; a pie draws the first. `title` |
+| `Stat` | `label`, and `value`, text or a number, shown large. `about`: a line under it, in its `tone` |
+| `Progress` | `value` out of `max`, 100 when unsaid, as a bar. `label` |
+| `Badge` | `text`, `tone` |
+| `Alert` | `title`, `about`, `tone`: words that must be seen |
 | `Empty` | `title`, `about`: what to say where there is nothing yet |
+| `Separator` | A line between what is above and below |
 | `Markdown` | `text` |
 
-A Tree holds at most 500 nodes. A prop not named here is refused: ask
-for less, not for a prop Banda does not have.
+Nodes that send one of the App's `ui` commands:
+
+| `node` | Its props |
+|---|---|
+| `Form` | `command`. `title`. `submit`: the words on its button. Its fields are the command's params, in the order `methods.json` writes them; a param's `title` is its label. `fields` chooses and orders them: each `{ "name" }`, with `label`, `placeholder`, `about` and `kind`. `values`: what its fields hold as it opens, by param |
+| `Button` | `label`, `command`, and `params`: it sends the command with them. `confirm`: a question it asks first. `"tone": "bad"` for what cannot be undone |
+
+A field's kind follows its param in `methods.json`, and `kind` may ask
+for another of the same line:
+
+| The param | Its field, and what `kind` may ask for instead |
+|---|---|
+| `"type": "string"` | `text`; or `textarea`, `date`, `time`, `datetime`, `email`, `url`, `password`. A `"format"` of `date`, `time`, `date-time`, `email`, `uri` or `password` chooses it without `kind` |
+| `"type": "string"` with `"enum"` | `select`; or `radio` |
+| `"type": "integer"` or `"number"` | `number`; or `slider`, which needs the param's `minimum` and `maximum` |
+| `"type": "boolean"` | `checkbox`; or `switch` |
+
+An action of a Table's row or a List's item is `{ "label", "command" }`
+with:
+
+- `params`: what it sends as written.
+- `take`: what it sends from its row, each param by the row's key:
+  `{ "id": "id" }`. A row may hold keys that are no column, as its id.
+  Only a Table's rows have keys: an item's action writes its `params`.
+- `confirm`: a question it asks first, as before a delete.
+- `"form": true`, or `fields` as a Form's: it opens a form first, whose
+  fields start from what it takes from the row, and it sends what it
+  writes and takes with what was filled. `submit` names its button.
+  Text the row had that your Person emptied is sent as `""`, so write
+  the command to take that as "no more". An action asks or opens a form,
+  not both.
+- `tone`.
+
+So a row is changed by `{ "label": "Edit", "command": "update", "take":
+{ "id": "id", "name": "name" }, "fields": [{ "name": "name" }] }`, and
+removed by `{ "label": "Delete", "command": "remove", "take": { "id":
+"id" }, "confirm": "Delete this client?", "tone": "bad" }`.
+
+A screen that reads well: what must be seen first, then a `Grid` of
+`Stat`s, then `Tabs` of its tables, and its forms in a `Dialog`. A Tree
+holds at most 500 nodes. A prop not named here is refused: ask for less,
+not for a prop Banda does not have. What a screen cannot be made of,
+tell your Person rather than work around.
 
 ## When it goes wrong
 

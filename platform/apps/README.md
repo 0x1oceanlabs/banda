@@ -81,9 +81,14 @@ this machine (ADR 0126).
   what a Project holds still turns it off there alone.
 - **Its screen is a view that answers a Tree** (ADR 0062, decision 7).
   A method of kind `view` is a read, routed as a call, whose answer is
-  the App's screen as data: a title and nodes of a small catalogue, Card,
-  Table, List, Form, Button, Badge, Empty and Markdown
-  (`platform/apps/engine/src/tree.rs`). The engine reads the Tree before
+  the App's screen as data: a title and nodes of a catalogue
+  (`platform/apps/engine/src/tree.rs`): Card, Grid, Tabs, Accordion and
+  Dialog hold nodes; Table, List, Chart, Stat, Progress, Badge, Alert,
+  Empty, Separator and Markdown show; Form and Button send. A Table's row
+  and a List's item have actions, each one of the App's commands sent at
+  once, after a question, or from a form filled from the row. The skill
+  (`skill/apps.md`) is the catalogue an Agent writes from, and the deals
+  App of the tests (`engine/tests/folders/deals`) uses all of it. The engine reads the Tree before
   any client sees it: a client is trusted and a Tree is not. What it
   gets wrong is `internal`, by where in the Tree and why, and a Tree is
   held to 500 nodes and a Table to 1,000 rows. A control names only one

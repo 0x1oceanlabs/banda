@@ -3,4 +3,4 @@
 /**
  * How a Table shows a cell.
  */
-export type TreeShown = "text" | "badge";
+export type TreeShown = "text" | "badge" | "check" | "progress";

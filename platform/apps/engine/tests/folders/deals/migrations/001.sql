@@ -1,0 +1,9 @@
+CREATE TABLE deals_all (
+  id INTEGER PRIMARY KEY,
+  client TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  stage TEXT NOT NULL,
+  due TEXT,
+  chance INTEGER NOT NULL,
+  paid INTEGER NOT NULL DEFAULT 0
+);
