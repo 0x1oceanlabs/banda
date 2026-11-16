@@ -335,8 +335,10 @@ repository), with an adversarial check.
   (`viewport-fit=cover`) and keeps clear of its notch and home bar. The
   composer keeps its one button, as on the desktop: Stop while the Agent
   works and nothing is written, Send once something is (Roma, 2026-11-15;
-  a second button, tried in this PR, was taken out). Not yet: how many Threads call, at the way back, which the
-  sidebar's door has no word for.
+  a second button, tried in this PR, was taken out). Beside the way back
+  to the list is how many call the Person, as the list's Your turn counts
+  them (`useYourTurn`, at the sidebar's door): a phone has no Bar to say
+  so over a Thread.
 - **A machine pushes to a device (SE7, PRs 1 and 2).** A device says
   where a push reaches it while it is not looking (`devices.push_to`,
   with its browser's subscription), and the machine keeps that in

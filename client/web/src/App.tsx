@@ -24,7 +24,6 @@ import { RoutingContext } from "./tiling/mount"
 import { AskToShare } from "./sharing/AskToShare"
 import { DevicesAsking } from "./devices/AskingDialog"
 import { PushKept } from "./devices/PushAsk"
-import { PhoneForm } from "./phone"
 import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
 import { Updates } from "./bar/update/heard"
 
@@ -112,7 +111,6 @@ export function App({ engine }: { engine: Engine }) {
               </Updates>
               <DevicesAsking engine={engine} />
               <PushKept engine={engine} />
-              <PhoneForm />
             </Machines>
           </RoutingContext>
         </HostsContext>
