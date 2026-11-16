@@ -7,6 +7,18 @@ arranged: workspaces one under another, each a Strip of columns.
 
 - **`engine/`**, its part in the engine. The head of `engine/src/lib.rs`
   says what it does and why, and its `methods!` table there is its contract.
+- **The Tiling's model** is a crate of its own beside this part,
+  [`platform/tiling`](../tiling/src/lib.rs) (`banda-tiling`): the
+  arrangement and its rules (`model.rs`), where a Pane with no place goes
+  (`placing.rs`), the commands as functions of the arrangement
+  (`commands.rs`), and the words of `tiling.toml` they read (`rule.rs`,
+  `columns.rs`). It is a leaf, with no store, file or clock, so it also
+  builds for a client as WebAssembly (`cargo build -p banda-tiling
+  --target wasm32-unknown-unknown`; ADR 0088, decision 11), and its
+  `tests/leaf.rs` holds it one. The engine's part keeps the arrangement
+  and calls it. Its `tests/traces.rs` records the golden traces in
+  `traces/` here, which the window's copy replays until it runs the model
+  itself.
 - Its settings: `~/.config/banda/tiling.toml`.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).

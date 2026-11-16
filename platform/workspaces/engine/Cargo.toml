@@ -11,13 +11,14 @@ publish.workspace = true
 async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }
+banda-tiling = { path = "../../tiling" }
 rusqlite.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 ts-rs.workspace = true
-uuid.workspace = true
+uuid = { workspace = true, features = ["v7"] }
 
 [dev-dependencies]
 tempfile.workspace = true

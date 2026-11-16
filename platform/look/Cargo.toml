@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 banda-theme = { path = "../theme" }
+banda-tiling = { path = "../tiling" }
 dunce.workspace = true
 image.workspace = true
 tracing.workspace = true

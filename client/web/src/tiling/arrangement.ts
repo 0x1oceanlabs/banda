@@ -1,6 +1,6 @@
 /**
  * The arrangement's commands as the engine runs them, copied: what
- * `platform/workspaces/engine/src/model.rs`, `commands.rs` and
+ * `platform/tiling/src/model.rs`, `commands.rs` and
  * `placing.rs` do, function for function, so a client works out what a
  * command does before the engine answers (ADR 0088, decision 11). Where a
  * Pane with no place opens, and which move the row refuses, is the
@@ -1667,7 +1667,7 @@ function checkShare(value: string | undefined, what: string, of: string) {
   }
 }
 
-// A share, as `share` in `platform/look/src/columns.rs` reads it.
+// A share, as `share` in `platform/tiling/src/columns.rs` reads it.
 
 /** What Rust's `str::trim` trims: Unicode's white space. */
 const SPACE =

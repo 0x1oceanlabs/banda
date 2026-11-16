@@ -7,8 +7,8 @@
 //! decision 11).
 
 use crate::model::{self, Arrangement, ColumnId, PaneId, Place, Shown, Side, WorkspaceId};
-use crate::tiling::{self, Opens, Rule, When};
-use banda_kernel::{ProjectId, Refusal};
+use crate::rule::{self, Opens, Rule, When};
+use banda_base::{ProjectId, Refusal};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -151,11 +151,11 @@ enum Is {
     InGroup,
 }
 
-impl From<tiling::Front> for Is {
-    fn from(front: tiling::Front) -> Is {
+impl From<rule::Front> for Is {
+    fn from(front: rule::Front) -> Is {
         match front {
-            tiling::Front::Pane => Is::Pane,
-            tiling::Front::Group => Is::Group,
+            rule::Front::Pane => Is::Pane,
+            rule::Front::Group => Is::Group,
         }
     }
 }
@@ -520,7 +520,7 @@ fn moves_as(
 /// Group, as a Diff opened from the Thread goes (ADR 0065, decision 7),
 /// and a Thread in no Group starts one for it. Only the Thread's Pane of
 /// `project` counts; with none on a workspace, it has no place here.
-pub(crate) fn agents_place(list: &Arrangement, project: ProjectId, thread: Uuid) -> Option<Place> {
+pub fn agents_place(list: &Arrangement, project: ProjectId, thread: Uuid) -> Option<Place> {
     let asked = Shown {
         project,
         kind: "agents.thread".into(),
@@ -532,8 +532,8 @@ pub(crate) fn agents_place(list: &Arrangement, project: ProjectId, thread: Uuid)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::tests::{opened, seed, shown};
-    use crate::model::{group_pane, start};
+    use crate::model::group_pane;
+    use crate::model::tests::{opened, seed, shown, start};
 
     /// What is opened from: the Pane in front, the workspace on screen, and
     /// who opens it.
@@ -785,7 +785,7 @@ mod tests {
         let when = [
             When {
                 via: Some(Via::Key),
-                from: Some(tiling::Front::Group),
+                from: Some(rule::Front::Group),
                 opens: Opens::Group,
             },
             When {
@@ -1314,7 +1314,7 @@ mod tests {
         let (list, _, [_, _, loose]) = two_projects();
         let refused = refuses(&list, &row(), Moved::Pane(loose), &last_on(list[1].id));
         let refusal = Refusal::from(refused.unwrap());
-        assert_eq!(refusal.code, banda_kernel::Code::Conflict);
+        assert_eq!(refusal.code, banda_base::Code::Conflict);
         assert!(
             refusal
                 .message

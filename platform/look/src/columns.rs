@@ -19,6 +19,7 @@
 //! one of `presets` or `heights` (ADR 0025, decision 5); 0 never holds.
 
 use crate::keyed::Retired;
+pub use banda_tiling::columns::{Display, share};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::ops::RangeInclusive;
@@ -97,30 +98,6 @@ pub enum Center {
     OnOverflow,
 }
 
-/// How a column shows its Panes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
-#[ts(export, export_to = "look/")]
-pub enum Display {
-    /// One above another, sharing the column's height.
-    Stack,
-    /// A Deck: one at a time, the others' names in a row over it, as niri's
-    /// tabbed column (ADR 0065).
-    Deck,
-}
-
-/// Reads `"tabs"` as a Deck too, its old name, as a `look.toml` or a kept
-/// arrangement may still say (ADR 0065).
-impl<'de> Deserialize<'de> for Display {
-    fn deserialize<D: serde::Deserializer<'de>>(read: D) -> Result<Self, D::Error> {
-        match String::deserialize(read)?.as_str() {
-            "stack" => Ok(Self::Stack),
-            "deck" | "tabs" => Ok(Self::Deck),
-            other => Err(serde::de::Error::unknown_variant(other, &["stack", "deck"])),
-        }
-    }
-}
-
 /// `tiling.toml`'s `[columns]` resolved: valid widths only, narrowest
 /// first.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
@@ -161,20 +138,6 @@ const MINS: RangeInclusive<f64> = 0.0..=200.0;
 /// sizes between free.
 const SNAP: f64 = 8.0;
 const SNAPS: RangeInclusive<f64> = 0.0..=64.0;
-
-/// A width's share of the screen: more than 0, at most 1.
-pub fn share(width: &str) -> Option<f64> {
-    let width = width.trim();
-    let value = match width.split_once('/') {
-        Some((top, bottom)) => {
-            let top: f64 = top.trim().parse().ok()?;
-            let bottom: f64 = bottom.trim().parse().ok()?;
-            (bottom != 0.0).then(|| top / bottom)?
-        }
-        None => width.parse().ok()?,
-    };
-    (value.is_finite() && value > 0.0 && value <= 1.0).then_some(value)
-}
 
 /// The valid shares of `list`, smallest first and each once; `or` when
 /// none is.
@@ -334,17 +297,6 @@ impl ColumnsSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_width_is_a_oneof_the_screen() {
-        assert_eq!(share("1/3"), Some(1.0 / 3.0));
-        assert_eq!(share("1"), Some(1.0));
-        assert_eq!(share(" 3 / 5 "), Some(0.6));
-        assert_eq!(share("3/2"), None);
-        assert_eq!(share("0"), None);
-        assert_eq!(share("1/0"), None);
-        assert_eq!(share("half"), None);
-    }
 
     #[test]
     fn presets_come_narrowest_first_and_wrong_ones_are_named() {

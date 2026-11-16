@@ -22,7 +22,7 @@ sys-locale.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 ts-rs.workspace = true
-uuid.workspace = true
+uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 tempfile.workspace = true

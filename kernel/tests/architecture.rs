@@ -63,10 +63,13 @@ const NOT_THE_MODULE: [(&str, &str); 2] = [
 #[test]
 fn the_kernel_names_no_module() {
     let mut files = Vec::new();
-    sources(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
-        &mut files,
-    );
+    // `base` is the kernel's too: its words that run without it.
+    for part in ["src", "base/src"] {
+        sources(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join(part),
+            &mut files,
+        );
+    }
     for file in files {
         let code = std::fs::read_to_string(&file).unwrap();
         for folder in modules() {
@@ -97,7 +100,10 @@ fn the_kernel_names_no_module() {
 /// too, as in SQL it would run on a connection of its own.
 #[test]
 fn no_module_touches_the_kernels_tables() {
-    for folder in modules() {
+    // The Tiling's model is the workspaces module's code in a crate of its
+    // own, with no `app.toml`.
+    let model = repository().join("platform/tiling");
+    for folder in modules().into_iter().chain([model]) {
         let mut files = Vec::new();
         sources(&folder, &mut files);
         for file in files {
@@ -243,9 +249,9 @@ const PLATFORM_NAMES: &[(&str, usize)] = &[
     // The four Pane kinds an Agent may open, and a browser tab's wall.
     ("platform/workspaces/engine/src/lib.rs", 7),
     // A Thread's Pane kind, and the old agents.diff made git.diff.
-    ("platform/workspaces/engine/src/model.rs", 3),
+    ("platform/tiling/src/model.rs", 3),
     // A Thread's Pane kind.
-    ("platform/workspaces/engine/src/placing.rs", 1),
+    ("platform/tiling/src/placing.rs", 1),
     // agents.toml, where two of the Tiling's settings are kept.
     ("platform/workspaces/engine/src/tiling.rs", 2),
 ];

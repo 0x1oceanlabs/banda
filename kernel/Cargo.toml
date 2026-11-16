@@ -18,6 +18,7 @@ ring.workspace = true
 axum.workspace = true
 futures.workspace = true
 getrandom.workspace = true
+banda-base = { path = "base", features = ["engine"] }
 rusqlite = { workspace = true, features = ["hooks"] }
 rustix = { workspace = true, features = ["fs"] }
 schemars.workspace = true
@@ -28,7 +29,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 ts-rs.workspace = true
-uuid.workspace = true
+uuid = { workspace = true, features = ["v4", "v7"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus.workspace = true

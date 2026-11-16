@@ -542,3 +542,10 @@ all of them or does not start (ADR 0085, decision 8). Our IDs are UUIDv7, but th
 from another, as UUIDv5: a command's ID from what sent it, and what a
 workspaces command makes from its command's ID (ADR 0088, decision 11). A
 Harness's IDs are stored as references.
+
+The IDs, the `id!` macro and a call's refusal (`Refusal`, `Code`) are
+written in `kernel/base`, a crate of its own (`banda-base`), and
+the kernel hands them on under its own name: an engine's crate takes them
+from `banda-kernel`. Code that runs in a client too, the Tiling's model,
+depends on that crate alone. Its feature `engine`, which the kernel turns
+on, is what makes an ID text in SQLite and `new()` make one by the clock.

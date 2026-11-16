@@ -21,12 +21,12 @@
 //! decisions 5, 8 and 9). So a move runs here, behind that rule, for the
 //! window, an Agent and `banda` alike.
 
+use crate::columns::Display;
 use crate::model::{
     self, Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Toward, WorkspaceId,
 };
 use crate::placing::{self, Asked, By, Facts, Moved, Via};
-use banda_kernel::{ProjectId, Refusal, decode};
-use banda_look::columns::Display;
+use banda_base::{ProjectId, Refusal};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -503,7 +503,7 @@ pub fn apply(
 /// the command ran before (`Seed::unused`), as the kernel reads them before
 /// the module's handler runs.
 fn read<T: DeserializeOwned>(list: &Arrangement, seed: &Seed, params: Value) -> Result<T, Refusal> {
-    let read = decode(params)?;
+    let read = banda_base::decode(params)?;
     seed.unused(list)?;
     Ok(read)
 }

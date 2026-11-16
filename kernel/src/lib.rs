@@ -86,6 +86,7 @@ mod working;
 
 pub use access::{Caller, Right};
 pub use apps::{App, AppMethods};
+pub use banda_base::{decode, id};
 pub use cursors::{Ack, Listener};
 pub use environment::{Environment, Holes, Input, Program, SSH_AGENT, Whose};
 pub use error::{Code, Error, Refusal};
@@ -95,7 +96,7 @@ pub use fence::{Fence, FenceLayer, FenceWhy};
 pub use foreign::{Foreign, ForeignWhy};
 pub use hands::{Hands, InHand, TYPED_TOLD_EVERY_MS};
 pub use ids::{AgentId, CommandId, DeviceId, EventId, Participant, PersonId, ProjectId};
-pub use kernel::{Kernel, ProjectSummary, decode, present};
+pub use kernel::{Kernel, ProjectSummary, present};
 pub use methods::{Does, Kind, Method, Nothing, Picture, Tool};
 pub use module::Other;
 pub use module::{Call, Module, Scope, Stream, Wall, watching, watching_as};
@@ -107,7 +108,7 @@ pub use projects::{PROJECT_CHANGED, ProjectChange, ProjectChanged, ProjectList};
 pub use pty::{Pty, PtyControl, PtySize};
 pub use reach::Reach;
 pub use registry::{Registry, TurnedOff};
-/// For `methods!` and `id!`, which name it from a module's crate.
+/// For `methods!`, which names it from a module's crate.
 pub use schemars;
 pub use scopes::KernelBuilder;
 pub use sign::{PictureKind, Sign, SignColor, SignKind, SignPick};
