@@ -430,7 +430,11 @@ export async function agentSays(
 }
 
 /** What a tool of `banda mcp` answers as JSON, which it did not refuse. */
-export async function agentAnswers(window: Window, name: string, args: object) {
+export async function agentAnswers(
+  window: Pick<Window, "dir">,
+  name: string,
+  args: object
+) {
   return JSON.parse(await agentSays(window, name, args))
 }
 
