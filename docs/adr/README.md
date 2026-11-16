@@ -65,7 +65,7 @@ The engine, its store, the contract, and where data lives.
 | [0026](0026-a-space-is-added-from-any-folder-as-a-project-is-in-t3-code.md) | A Space is added from any folder, as a project is in T3 Code | **standing** | Space renamed Project by 0069; lists follow kernel facts by 0127; Git URL (7) not built |
 | [0046](0046-a-thread-starts-in-no-space-and-may-become-one.md) | A Thread starts in No Space, and may become a Space | **standing** | decision 2's grouping replaced by 0053; named No Project since 0069 |
 | [0069](0069-a-space-is-called-a-project-and-the-person-archives-a-thread.md) | A Space is called a Project, and the Person archives a Thread | **standing** | decision 5 changed by 0096; Archive is a tab, not a shelf, by 0098 |
-| [0086](0086-the-engine-is-the-machine-s-and-outlives-the-window.md) | The engine is the machine's, and outlives the window | **standing** | decision 1 amended by 0097; decision 6 built in 0119; Windows login start not built |
+| [0086](0086-the-engine-is-the-machine-s-and-outlives-the-window.md) | The engine is the machine's, and outlives the window | **standing** | decision 1 amended by 0097; 3, 4 by 0136; 6 built in 0119; Windows login start not built |
 
 ### Borders
 
@@ -191,6 +191,7 @@ The Tiling, the sidebar, the bar, the menu, the keys, Settings, and the client.
 | [0127](0127-the-window-shows-and-asks-and-each-thing-has-one-place.md) | The window shows and asks, and each thing has one place | **standing** | six rules in docs/window.md; decision 6 intent and per-device arrangement not built yet |
 | [0134](0134-a-thread-s-group-holds-what-its-thread-opens-and-the-person-s-keys-open-beside-it.md) | A Thread's Group holds what its Thread opens, and the Person's keys open beside it | **standing** | changes 0102 decisions 3, 4 and 0065 decision 7; BANDA_PANE built, an Agent's `banda files` still refused |
 | [0135](0135-every-pane-behaves-by-the-same-laws-and-one-short-table.md) | Every Pane behaves by the same laws and one short table | **standing** | carries on 0110 and 0127 decision 4; adds the focus, the screen and what a close leaves; step 1 next |
+| [0136](0136-banda-s-icon-is-in-the-tray-on-linux-and-windows-and-a-closed-window-hides-where-a-tray-host-is-known.md) | Banda's icon is in the tray on Linux and Windows, and a closed window hides where a tray host is known | **standing** | amends 0086 decisions 3, 4; the icon and its menu, and the tray host's answer built; closing hides not built; plan in #1870 |
 
 ### One App each
 
