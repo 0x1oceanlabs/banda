@@ -79,7 +79,7 @@ function projectReads(source: string, file: string): string[] {
  * file more than `SLACK` lines below it lowers it; what main gains goes
  * into a part, not the root.
  */
-const MAIN_LINES = 732
+const MAIN_LINES = 532
 const SLACK = 20
 
 test("main's root keeps under its ceiling, and the ceiling follows it down", () => {
@@ -118,7 +118,6 @@ const MAIN_ANSWERS = [
   "hostStop",
   "sshSuggestions",
   "menu",
-  "quit",
   "update",
 ]
 
@@ -174,6 +173,9 @@ test("main's code is found: the window's, the kit's and the Apps' parts in main"
     "client/desktop/src/os-window/material.ts",
     "client/desktop/src/os-window/windows.ts",
     "client/desktop/src/os-window/popped.ts",
+    "client/desktop/src/os-window/quitting.ts",
+    "client/desktop/src/os-window/dock.ts",
+    "client/desktop/src/os-window/asked.ts",
     "client/desktop/src/device/files.ts",
     "client/desktop-kit/src/files.ts",
     "apps/agents/desktop/src/index.ts",

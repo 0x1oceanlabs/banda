@@ -53,12 +53,19 @@ page is one part of. A change to main changes this page in the same PR.
   works; where some do, the page's Quit Banda asks first while its
   window shows, or a system dialog does when no window shows, the page
   crashed or loads, or the Person quits again within 10 s. A logout,
-  restart or shutdown quits without asking.
+  restart or shutdown quits without asking. In main, whether Banda quits
+  and Quit Banda itself are one service, `os-window/quitting.ts`, which
+  the windows close or hide by and the bridge's `quit` is answered from;
+  what the app is asked from outside its windows (to quit, for its
+  window by the Dock's icon, its last window closed) is answered in
+  `os-window/asked.ts`, over the windows; the rules both follow are
+  `closing.ts`'s.
 - **On macOS Banda lives in the menu bar** (ADR 0086, decision 4; the
   accepted mock, mac-menubar-v1). With no window open, Banda.app keeps
   running with no Dock icon, only its icon in the menu bar: the Dock's
   icon is there only while a window is open, shown or minimized, and
-  stays as it is while Banda is hidden (⌘H). The icon is Banda's mark, a
+  stays as it is while Banda is hidden (⌘H); what it was last set to is
+  kept in `os-window/dock.ts`. The icon is Banda's mark, a
   template in the menu bar's own colour: its hat a square at rest, a
   circle while Agents work, a triangle lit in orange while one asks the
   Person or failed, happy eyes while what waits is done, asleep and dimmed

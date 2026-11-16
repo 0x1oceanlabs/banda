@@ -6,10 +6,10 @@
  * is, is answered from here.
  *
  * On macOS the main window hides as it closes, unless Banda quits, and
- * leaves full screen first (closing.ts; ADR 0086, decision 4). What
- * quitting is and the Dock are main's root's still: it hands them in
- * (`Root`), and with them how the Panes' own windows close, which are
- * kept over the windows (popped.ts).
+ * leaves full screen first (closing.ts; ADR 0086, decision 4), by whether
+ * Banda quits (quitting.ts); the Dock's icon follows the windows there
+ * are (dock.ts). Main's root hands in how the Panes' own windows close,
+ * which are kept over the windows (popped.ts).
  *
  * A part of the device's window (ADR 0089, decision 9), made of what the
  * look says (material.ts).
@@ -24,19 +24,15 @@ import {
   shell,
   type WebContents,
 } from "electron"
-import { type Closing, hidesOnClose } from "../closing"
+import { hidesOnClose } from "../closing"
 import { revive } from "../revive"
+import { Dock } from "./dock"
 import { Material } from "./material"
 import { PAGE } from "./page"
+import { Quitting } from "./quitting"
 
 /** What the windows ask of main's root, which keeps it. */
 export type Root = {
-  /** Where the app is, for what closing does (closing.ts). */
-  readonly closing: () => Closing
-  /** The Dock's icon follows the windows there are (macOS). */
-  readonly followDock: () => void
-  /** Brings the Dock's icon back (macOS): the show, when it shows now. */
-  readonly showDock: () => Promise<void> | null
   /** The modules' parts hear of each window that shows the page. */
   readonly opened: (contents: WebContents) => void
   /** Closes the Panes' own windows, back to their places: they are the
@@ -56,6 +52,9 @@ export class Windows extends Context.Service<
   {
     /** The main window now; none while it is closed. */
     readonly main: () => BrowserWindow | null
+    /** Whether the main window was ever opened: before that, main's root
+     * opens the first. */
+    readonly began: () => boolean
     /** The main window, or `shown`, brought to the front; none when it is
      * closed. On macOS, from the menu bar alone, the Dock's icon comes
      * back first, and Banda comes to the front. */
@@ -81,7 +80,10 @@ export class Windows extends Context.Service<
 const make = (root: Root) =>
   Effect.gen(function* () {
     const material = yield* Material
+    const quitting = yield* Quitting
+    const dock = yield* Dock
     let window: BrowserWindow | null = null
+    let began = false
     /** Set while the window, closed in full screen on macOS, leaves it to
      * hide; showing it again meanwhile keeps it shown. */
     let hiding = false
@@ -89,7 +91,7 @@ const make = (root: Root) =>
     const inFront = (shown = window): BrowserWindow | null => {
       if (!shown) return null
       if (shown === window) hiding = false
-      void root.showDock()?.then(() => app.focus({ steal: true }))
+      void dock.show()?.then(() => app.focus({ steal: true }))
       if (shown.isMinimized()) shown.restore()
       shown.show()
       shown.focus()
@@ -126,10 +128,10 @@ const make = (root: Root) =>
           if (shows) opened.once("ready-to-show", () => opened.show())
           // The Dock's icon is there while a window is open, however it
           // shows.
-          opened.on("show", root.followDock)
-          opened.on("hide", root.followDock)
-          opened.on("minimize", root.followDock)
-          opened.on("closed", root.followDock)
+          opened.on("show", dock.follow)
+          opened.on("hide", dock.follow)
+          opened.on("minimize", dock.follow)
+          opened.on("closed", dock.follow)
           opened.on("focus", () => opened.flashFrame(false))
           const contents = opened.webContents
           // A page whose process died loads again, as it was (#343).
@@ -176,7 +178,7 @@ const make = (root: Root) =>
           // (closing.ts). Its Panes in windows of their own close, back to
           // their places, as they do when it closes.
           opened.on("close", (event) => {
-            if (!hidesOnClose(root.closing())) return
+            if (!hidesOnClose(quitting.closing())) return
             event.preventDefault()
             root.closePopped()
             if (!opened.isFullScreen()) {
@@ -198,12 +200,14 @@ const make = (root: Root) =>
             root.closePopped()
           })
           window = opened
+          began = true
           return opened
         }
       )
 
     return {
       main: () => window,
+      began: () => began,
       inFront,
       open,
       openBanda: Effect.suspend(() => {

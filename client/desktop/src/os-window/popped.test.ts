@@ -70,6 +70,7 @@ function windowsWith(main: Fake | null = fake()) {
     Layer.provide(
       Layer.succeed(Windows)({
         main: () => main,
+        began: () => main !== null,
         inFront: (shown = main) => {
           front.push(shown)
           return shown

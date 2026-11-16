@@ -77,8 +77,10 @@ import { Window } from "@banda/desktop-kit"
 import { Effect, Layer } from "effect"
 import type { BrowserWindow, WebContents } from "electron"
 import type { Closing } from "../closing"
+import { Dock } from "./dock"
 import { Material } from "./material"
 import { PAGE } from "./page"
+import { Quitting } from "./quitting"
 import { type Root, Windows } from "./windows"
 
 /** A window of the fake Electron above. */
@@ -92,23 +94,38 @@ type Fake = BrowserWindow & {
   }
 }
 
-/** Main's root, as the windows ask it, and what they asked. */
+/** Main's root, whether Banda quits and the Dock, as the windows ask
+ * them, and what they asked. */
 function rootAt(closing: Closing) {
   const asked: string[] = []
   const heard: WebContents[] = []
   let dock: Promise<void> | null = null
   const root: Root = {
-    closing: () => closing,
-    followDock: () => asked.push("followDock"),
-    showDock: () => {
-      asked.push("showDock")
-      return dock
-    },
     opened: (contents) => heard.push(contents),
     closePopped: () => asked.push("closePopped"),
   }
+  const under = Layer.merge(
+    Layer.succeed(Quitting)({
+      closing: () => closing,
+      quits: () => false,
+      asksFirst: () => false,
+      leave: () => {},
+      banda: Effect.void,
+      updating: () => {},
+      engineStopped: () => {},
+    }),
+    Layer.succeed(Dock)({
+      startsHidden: false,
+      follow: () => asked.push("followDock"),
+      show: () => {
+        asked.push("showDock")
+        return dock
+      },
+      unseen: () => false,
+    })
+  )
   return {
-    root,
+    root: { ...root, under },
     asked,
     heard,
     /** The Dock's icon comes back as it is asked for. */
@@ -127,8 +144,9 @@ const MAC: Closing = { platform: "darwin", quitting: false, poweringOff: false }
 
 /** The windows over `root`, made of a material that says only which
  * window it made. */
-const over = (root: Root) =>
+const over = (root: Root & { under: Layer.Layer<Quitting | Dock> }) =>
   Windows.layer(root).pipe(
+    Layer.provide(root.under),
     Layer.provide(
       Layer.succeed(Material)({
         open: (main, make) =>
