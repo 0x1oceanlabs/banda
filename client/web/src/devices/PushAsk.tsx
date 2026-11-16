@@ -18,6 +18,7 @@ import { toast } from "@banda/ui/components/sonner"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useEffect, useState, useSyncExternalStore } from "react"
 import { named } from "./asking"
+import { elsewhere } from "./elsewhere"
 import { kept, later, turnOn, useStand } from "./push"
 import { useReached } from "./reached"
 
@@ -110,12 +111,32 @@ const looks = () =>
  * on each machine the page reaches: it sees here what calls, so none
  * pushes. A machine hears the hold end as the window goes behind
  * another, the page is put away, or its connection goes. Each machine's
- * is held by itself, so another coming or going lets none go. */
+ * is held by itself, so another coming or going lets none go. While they
+ * do not look here, it hears from each whether they look at another
+ * device (`elsewhere.ts`). */
 export function Looking({ engine }: { engine: Engine }) {
   const looking = useSyncExternalStore(followLooks, looks, () => false)
   const reached = useReached(engine)
-  if (!looking) return null
-  return reached.map((one, at) => <Front key={at} engine={one.engine} />)
+  const Held = looking ? Front : Away
+  return reached.map((one, at) => <Held key={at} engine={one.engine} />)
+}
+
+function Away({ engine }: { engine: Engine }) {
+  useEffect(() => {
+    // A machine from before it refuses the stream: it says nothing.
+    const stop = engine.stream(
+      undefined,
+      "devices.elsewhere",
+      {},
+      (looks) => elsewhere.say(engine, looks),
+      () => elsewhere.say(engine, false)
+    )
+    return () => {
+      stop()
+      elsewhere.say(engine, false)
+    }
+  }, [engine])
+  return null
 }
 
 function Front({ engine }: { engine: Engine }) {

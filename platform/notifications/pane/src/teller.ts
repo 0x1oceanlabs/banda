@@ -70,6 +70,7 @@ export function startTelling(
   const quietNow = async (): Promise<Quiet> => ({
     desktop: await desktopQuiet(window.look().notify, desktop),
     banda: window.quiet(),
+    elsewhere: window.elsewhere(),
   })
 
   const withdraw = (keys: Iterable<string>) => {

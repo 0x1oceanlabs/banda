@@ -167,6 +167,11 @@ export type WindowApi = {
    * while it is, and the Inbox still fills. Only for the part that tells
    * the Person. */
   quiet: () => boolean
+  /** Whether the Person looks at Banda on another device now, as a
+   * machine the Window reaches says (ADR 0124, decision 10): a window
+   * they do not look at tells of nothing while they do. Only for the
+   * part that tells the Person. */
+  elsewhere: () => boolean
   /** Sets `key` in the settings' file `file` (ADR 0016), as `limits.look`
    * in `harnesses.toml`, to `value`, written in TOML (`tomlOf`); what was
    * wrong, if refused. The file is the one source: what reads it hears

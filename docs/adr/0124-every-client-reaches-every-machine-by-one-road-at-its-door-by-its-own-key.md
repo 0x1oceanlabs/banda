@@ -384,8 +384,15 @@ repository), with an adversarial check.
   the worker opens the page there, or tells an open page, which goes to
   the Pane once it knows which machine has the Project
   (`client/web/src/devices/PushTap.tsx`). Going to a Pane puts away the
-  list a narrow window shows over it, as it does the Sheet. Not yet: a
-  window that stays silent while another device is in front.
+  list a narrow window shows over it, as it does the Sheet.
+- **One signal (SE7, PR 4b).** A machine keeps which devices hold
+  `devices.front`, and says to one that asks whether another does
+  (`devices.elsewhere`, a stream). A window its Person does not look at
+  hears it from each machine it reaches, and tells of nothing while one
+  says so: no sound, no notice on the desktop. They are told where they
+  look, by that device's window, and the Inbox here fills as ever. Two
+  windows both in front both tell: a machine knows which windows are in
+  front, not which of them the Person's eyes are on.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

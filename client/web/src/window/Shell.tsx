@@ -127,6 +127,7 @@ import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
 import { bare, List, PhoneForm, phoneNow } from "../phone"
+import { elsewhere } from "../devices/elsewhere"
 import { PushTap } from "../devices/PushTap"
 import { useKeyRouter, useKeys } from "./keys"
 import { useSteady } from "./steady"
@@ -485,6 +486,7 @@ export function Shell({
     uncover: () => closeTop("sheet") || (over && (hideOver(), true)),
     look: () => told,
     quiet: quiet.on,
+    elsewhere: elsewhere.is,
     projects: () => open,
     projectOf,
     placing: () => placing,

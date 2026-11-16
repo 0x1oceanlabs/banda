@@ -162,6 +162,7 @@ export const DOES = {
   "devices.push_to": "act",
   "devices.push_try": "act",
   "devices.front": "read",
+  "devices.elsewhere": "read",
   "harnesses.list": "read",
   "harnesses.accounts": "read",
   "harnesses.account_profiles": "read",
