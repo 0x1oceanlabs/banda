@@ -9,7 +9,7 @@
  * `client/web/src/boot/` (decision 4).
  */
 import type { Address, Named, ProjectId } from "@banda/contract"
-import type { Listed } from "@banda/contract/look"
+import type { Listed, Look } from "@banda/contract/look"
 import type { HostsDevice } from "./hosts"
 import type { PaneState, Place } from "./pane"
 import type { PaneDevice } from "./route"
@@ -283,6 +283,18 @@ export interface Device extends Pick<PaneDevice, "has"> {
     open: (route: string) => void
     listen: (listener: (route: string) => void) => Stop
   }
+  /** The look the desktop reads, as `banda look` resolved it (ADR 0007):
+   * the last one, none before the first and without the desktop, and
+   * each new one. */
+  look: {
+    current: () => Promise<Look | null>
+    listen: (listener: (look: Look) => void) => Stop
+  }
+  /** The window's frame (ADR 0030): the room in px the system's window
+   * buttons take at the bar's start where Banda draws its own title bar,
+   * `null` where the system draws the frame, now and as it changes.
+   * Nothing without the desktop. */
+  frame: { follow: (take: (inset: number | null) => void) => void }
   /** `sidebar.toml` (ADR 0008). */
   sidebar: { edit: () => void }
   /** The settings' files (ADR 0016): each change answers what was wrong,
@@ -295,8 +307,9 @@ export interface Device extends Pick<PaneDevice, "has"> {
     writes: () => boolean
     themes: () => Promise<Listed[]>
   }
-  /** What broke in Banda (ADR 0039). */
-  problems: { logs: () => void }
+  /** What broke in Banda (ADR 0039): `reopen` opens the page again as it
+   * opened, after it broke (decision 2). */
+  problems: { logs: () => void; reopen: () => void }
   /** A folder of this device, as its own dialog picks one (ADR 0026). */
   folder: { pick: (at: string | null) => Promise<string | null> }
   /** Files on the machine, by their full path (ADR 0073, decision 14). */

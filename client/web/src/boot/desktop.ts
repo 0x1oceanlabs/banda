@@ -10,17 +10,18 @@
  * the engine: a browser's is the door that served it (`browser.ts`).
  */
 import type { Address } from "@banda/contract"
-import type { Listed } from "@banda/contract/look"
-import type {
-  ActAnswer,
-  ActAsk,
-  Cap,
-  Device,
-  HostEntry,
-  HostState,
-  HostTest,
-  PoppedAsk,
-  Update,
+import type { Listed, Look } from "@banda/contract/look"
+import {
+  type ActAnswer,
+  type ActAsk,
+  type Cap,
+  type Device,
+  follow,
+  type HostEntry,
+  type HostState,
+  type HostTest,
+  type PoppedAsk,
+  type Update,
 } from "@banda/core"
 import type { Host } from "@banda/desktop/bridge"
 import { browser } from "./browser"
@@ -212,6 +213,25 @@ export const device = {
     listen: (listener: (route: string) => void) =>
       desktop()?.menu.listen(listener),
   },
+  /** The look the desktop reads, as `banda look` resolved it (ADR 0007). */
+  look: {
+    /** The last look; none before the first, and without the desktop. */
+    current: (): Promise<Look | null> =>
+      desktop()?.look.current() ?? Promise.resolve(null),
+    /** Calls `listener` with each new look, until it is stopped. */
+    listen: (listener: (look: Look) => void) =>
+      desktop()?.look.listen(listener),
+  },
+  /** The window's frame (ADR 0030), where Banda draws its own title bar. */
+  frame: {
+    /** Hands `take` the room in px the system's window buttons take at
+     * the bar's start, `null` where the system draws the frame, now and
+     * each time it changes; nothing without the desktop. */
+    follow: (take: (inset: number | null) => void): void => {
+      const frame = desktop()?.frame
+      if (frame) follow(frame, take)
+    },
+  },
   /** `sidebar.toml` (ADR 0008), whose keys the settings write. */
   sidebar: {
     /** Opens the file in the Person's editor; nothing without the
@@ -252,6 +272,13 @@ export const device = {
   problems: {
     /** Opens the folder of Banda's logs. */
     logs: (): void => void desktop()?.problems.logs(),
+    /** Opens the page again, as it opened, after it broke (decision 2):
+     * the desktop does; a browser loads it again. */
+    reopen: (): void => {
+      const host = desktop()
+      if (host) void host.problems.reopen()
+      else location.reload()
+    },
   },
   /** A folder of this device, as its own dialog picks one (ADR 0026). */
   folder: {
