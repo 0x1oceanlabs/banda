@@ -7,36 +7,37 @@
  */
 import type {
   Tree,
-  TreeButton,
-  TreeColumn,
-  TreeField,
-  TreeForm,
+  TreeAccordion,
+  TreeDialog,
   TreeList,
   TreeNode,
-  TreeTable,
+  TreeStat,
+  TreeTabs,
 } from "@banda/contract/apps"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@banda/ui/components/accordion"
+import { Alert, AlertDescription, AlertTitle } from "@banda/ui/components/alert"
 import { Badge } from "@banda/ui/components/badge"
 import { Button } from "@banda/ui/components/button"
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@banda/ui/components/card"
-import { Checkbox } from "@banda/ui/components/checkbox"
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@banda/ui/components/empty"
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@banda/ui/components/field"
-import { Input } from "@banda/ui/components/input"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@banda/ui/components/dialog"
 import {
   Item,
   ItemActions,
@@ -46,36 +47,24 @@ import {
   ItemTitle,
 } from "@banda/ui/components/item"
 import { Markdown } from "@banda/ui/components/markdown"
+import { clamp, Progress } from "@banda/ui/components/progress"
+import { Separator } from "@banda/ui/components/separator"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@banda/ui/components/select"
-import { Spinner } from "@banda/ui/components/spinner"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@banda/ui/components/table"
-import { Textarea } from "@banda/ui/components/textarea"
-import { useAct } from "@banda/ui/hooks/use-act"
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@banda/ui/components/tabs"
 import { cn } from "@banda/ui/lib/utils"
-import { type FormEvent, memo, useId, useRef, useState } from "react"
-import { emptyOf, type Filled, paramsOf } from "./form"
+import { memo, useState } from "react"
+import { ActButton } from "./Act"
+import { ChartNode } from "./ChartNode"
+import { Closing, FormNode, type Send } from "./Fields"
+import { TableNode } from "./TableNode"
+import { FRAME, Nothing } from "./frame"
+import { ALERT, toneBadge, toneText } from "./tone"
 
-/**
- * Sends the App's command `command`, and comes back once it is done and
- * the screen shows it. It throws what went wrong.
- */
-export type Send = (
-  command: string,
-  params: Record<string, unknown>
-) => Promise<void>
+export type { Send }
 
 /**
  * The Tree's nodes, under what it is for. Its title is its frame's to
@@ -91,7 +80,7 @@ export const TreeView = memo(function TreeView({
   send: Send
 }) {
   return (
-    <div data-slot="tree" className="flex flex-col gap-4 p-4">
+    <div data-slot="tree" className="@container flex flex-col gap-4 p-4">
       {tree.about && (
         <p className="text-meta text-muted-foreground">{tree.about}</p>
       )}
@@ -100,9 +89,17 @@ export const TreeView = memo(function TreeView({
   )
 })
 
-/** The edge of what stands apart in a Tree with no Card around it: a
- * Card's own. */
-const FRAME = "overflow-hidden rounded-card ring-1 ring-foreground/10"
+/** A Grid's columns by how many the App asked for: fewer where its Pane
+ * is narrow, and as many as fit when it asked for none. */
+const ACROSS: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-1 @md:grid-cols-2",
+  3: "grid-cols-1 @md:grid-cols-3",
+  4: "grid-cols-2 @2xl:grid-cols-4",
+  5: "grid-cols-2 @md:grid-cols-3 @3xl:grid-cols-5",
+  6: "grid-cols-2 @md:grid-cols-3 @3xl:grid-cols-6",
+}
+const AS_FIT = "grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]"
 
 function Nodes({ nodes, send }: { nodes: readonly TreeNode[]; send: Send }) {
   // A Tree has no keys: a node is the one in its place, so what a Form
@@ -112,14 +109,23 @@ function Nodes({ nodes, send }: { nodes: readonly TreeNode[]; send: Send }) {
   ))
 }
 
-function NodeView({ node, send }: { node: TreeNode; send: Send }) {
+// Drawn again only for a node read again: a tab chosen or a dialog
+// opened above it redraws none of what is under.
+const NodeView = memo(function NodeView({
+  node,
+  send,
+}: {
+  node: TreeNode
+  send: Send
+}) {
   switch (node.node) {
     case "Card":
       return (
         <Card size="sm">
-          {node.title && (
+          {(node.title || node.about) && (
             <CardHeader>
-              <CardTitle>{node.title}</CardTitle>
+              {node.title && <CardTitle>{node.title}</CardTitle>}
+              {node.about && <CardDescription>{node.about}</CardDescription>}
             </CardHeader>
           )}
           <CardContent className="flex flex-col gap-3">
@@ -127,18 +133,80 @@ function NodeView({ node, send }: { node: TreeNode; send: Send }) {
           </CardContent>
         </Card>
       )
+    case "Grid":
+      return (
+        <div
+          data-slot="tree-grid"
+          className={cn(
+            "grid items-start gap-3",
+            (node.columns && ACROSS[node.columns]) || AS_FIT
+          )}
+        >
+          <Nodes nodes={node.children} send={send} />
+        </div>
+      )
+    case "Tabs":
+      return <TabsNode tabs={node} send={send} />
+    case "Accordion":
+      return <AccordionNode accordion={node} send={send} />
+    case "Dialog":
+      return <DialogNode dialog={node} send={send} />
     case "Table":
-      return <TableNode table={node} />
+      return <TableNode table={node} send={send} />
     case "List":
-      return <ListNode list={node} />
+      return <ListNode list={node} send={send} />
+    case "Chart":
+      return <ChartNode chart={node} />
+    case "Stat":
+      return <StatNode stat={node} />
+    case "Progress":
+      return (
+        <div data-slot="tree-progress" className="flex flex-col gap-1.5">
+          {node.label && (
+            <div className="flex justify-between text-meta text-muted-foreground">
+              <span>{node.label}</span>
+              <span className="tabular-nums">
+                {Math.round((clamp(node.value, node.max) / node.max) * 100)}%
+              </span>
+            </div>
+          )}
+          <Progress
+            value={node.value}
+            max={node.max}
+            aria-label={node.label ?? "Progress"}
+          />
+        </div>
+      )
     case "Form":
       return <FormNode form={node} send={send} />
     case "Button":
-      return <ButtonNode button={node} send={send} />
+      return (
+        <ActButton
+          doing={node}
+          send={send}
+          variant={node.tone === "bad" ? "destructive" : "outline"}
+        />
+      )
     case "Badge":
-      return <Badge variant="outline">{node.text}</Badge>
+      return (
+        <Badge variant="outline" className={toneBadge(node.tone)}>
+          {node.text}
+        </Badge>
+      )
+    case "Alert": {
+      const { variant, Icon } = ALERT[node.tone] ?? ALERT.plain
+      return (
+        <Alert variant={variant}>
+          <Icon />
+          <AlertTitle>{node.title}</AlertTitle>
+          {node.about && <AlertDescription>{node.about}</AlertDescription>}
+        </Alert>
+      )
+    }
     case "Empty":
       return <Nothing title={node.title} about={node.about} />
+    case "Separator":
+      return <Separator />
     case "Markdown":
       return <Markdown>{node.text}</Markdown>
     default:
@@ -153,272 +221,140 @@ function NodeView({ node, send }: { node: TreeNode; send: Send }) {
         </p>
       )
   }
-}
+})
 
-function Nothing({ title, about }: { title: string; about?: string | null }) {
+function StatNode({ stat }: { stat: TreeStat }) {
   return (
-    <Empty className={FRAME}>
-      <EmptyHeader>
-        <EmptyTitle>{title}</EmptyTitle>
-        {about && <EmptyDescription>{about}</EmptyDescription>}
-      </EmptyHeader>
-    </Empty>
-  )
-}
-
-type Cell = TreeTable["rows"][number][string] | undefined
-
-/** Whether a column holds numbers only, which read from the right. */
-function numeric(table: TreeTable, column: TreeColumn): boolean {
-  const cells = table.rows.map((row) => row[column.key] ?? null)
-  return (
-    cells.some((cell) => typeof cell === "number") &&
-    cells.every((cell) => cell === null || typeof cell === "number")
-  )
-}
-
-function CellView({ cell, column }: { cell: Cell; column: TreeColumn }) {
-  if (cell === null || cell === undefined || cell === "")
-    return <span className="text-muted-foreground">—</span>
-  const words = typeof cell === "boolean" ? (cell ? "Yes" : "No") : `${cell}`
-  return column.as === "badge" ? (
-    <Badge variant="outline">{words}</Badge>
-  ) : (
-    words
-  )
-}
-
-function TableNode({ table }: { table: TreeTable }) {
-  if (table.rows.length === 0 && table.empty)
-    return <Nothing title={table.empty} />
-  const right = table.columns.map(
-    (column) => column.as === "badge" || numeric(table, column)
-  )
-  return (
-    <div data-slot="tree-table" className={FRAME}>
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            {table.columns.map((column, at) => (
-              <TableHead
-                key={column.key}
-                className={cn(right[at] && "text-right")}
-              >
-                {column.title}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {table.rows.map((row, place) => (
-            <TableRow key={place}>
-              {table.columns.map((column, at) => (
-                <TableCell
-                  key={column.key}
-                  className={cn(
-                    at > 0 && "text-muted-foreground",
-                    right[at] && "text-right tabular-nums"
-                  )}
-                >
-                  <CellView cell={row[column.key]} column={column} />
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div
+      data-slot="tree-stat"
+      className={cn(FRAME, "flex flex-col gap-1 bg-card p-3")}
+    >
+      <span className="text-meta text-muted-foreground">{stat.label}</span>
+      <span className="text-heading font-semibold tabular-nums">
+        {typeof stat.value === "number"
+          ? stat.value.toLocaleString()
+          : stat.value}
+      </span>
+      {stat.about && (
+        <span
+          className={cn(
+            "text-meta",
+            toneText(stat.tone) ?? "text-muted-foreground"
+          )}
+        >
+          {stat.about}
+        </span>
+      )}
     </div>
   )
 }
 
-function ListNode({ list }: { list: TreeList }) {
+function TabsNode({ tabs, send }: { tabs: TreeTabs; send: Send }) {
+  const [chosen, setChosen] = useState(0)
+  return (
+    // The Tree read again may have fewer: the last one then.
+    <Tabs
+      value={Math.min(chosen, tabs.tabs.length - 1)}
+      onValueChange={(value) => setChosen(Number(value))}
+    >
+      <TabsList>
+        {tabs.tabs.map((tab, place) => (
+          <TabsTrigger key={place} value={place}>
+            {tab.title}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {tabs.tabs.map((tab, place) => (
+        // Kept while another is shown: a Form in it holds what was typed.
+        <TabsContent key={place} value={place} keepMounted>
+          <Nodes nodes={tab.children} send={send} />
+        </TabsContent>
+      ))}
+    </Tabs>
+  )
+}
+
+function AccordionNode({
+  accordion,
+  send,
+}: {
+  accordion: TreeAccordion
+  send: Send
+}) {
+  return (
+    <Accordion className={cn(FRAME, "px-3")}>
+      {accordion.items.map((item, place) => (
+        <AccordionItem key={place} value={place}>
+          <AccordionTrigger>{item.title}</AccordionTrigger>
+          <AccordionContent keepMounted>
+            <Nodes nodes={item.children} send={send} />
+          </AccordionContent>
+        </AccordionItem>
+      ))}
+    </Accordion>
+  )
+}
+
+function DialogNode({ dialog, send }: { dialog: TreeDialog; send: Send }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <div data-slot="tree-dialog">
+        <DialogTrigger render={<Button type="button" size="sm" />}>
+          {dialog.label}
+        </DialogTrigger>
+      </div>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{dialog.title}</DialogTitle>
+          {dialog.about && (
+            <DialogDescription>{dialog.about}</DialogDescription>
+          )}
+        </DialogHeader>
+        <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto">
+          <Closing value={() => setOpen(false)}>
+            <Nodes nodes={dialog.children} send={send} />
+          </Closing>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ListNode({ list, send }: { list: TreeList; send: Send }) {
   if (list.items.length === 0 && list.empty)
     return <Nothing title={list.empty} />
   return (
     <ItemGroup data-slot="tree-list" className={FRAME}>
-      {list.items.map((item, place) => (
-        <Item key={place} size="sm">
-          <ItemContent>
-            <ItemTitle>{item.title}</ItemTitle>
-            {item.about && <ItemDescription>{item.about}</ItemDescription>}
-          </ItemContent>
-          {item.badge && (
-            <ItemActions>
-              <Badge variant="outline">{item.badge}</Badge>
-            </ItemActions>
-          )}
-        </Item>
-      ))}
+      {list.items.map((item, place) => {
+        const actions = item.actions ?? []
+        return (
+          <Item key={place} size="sm">
+            <ItemContent>
+              <ItemTitle>{item.title}</ItemTitle>
+              {item.about && <ItemDescription>{item.about}</ItemDescription>}
+            </ItemContent>
+            {(item.badge || actions.length > 0) && (
+              <ItemActions>
+                {item.badge && (
+                  <Badge variant="outline" className={toneBadge(item.tone)}>
+                    {item.badge}
+                  </Badge>
+                )}
+                {actions.map((action, at) => (
+                  <ActButton
+                    key={at}
+                    doing={action}
+                    send={send}
+                    variant="ghost"
+                    size="xs"
+                  />
+                ))}
+              </ItemActions>
+            )}
+          </Item>
+        )
+      })}
     </ItemGroup>
-  )
-}
-
-function FormNode({ form, send }: { form: TreeForm; send: Send }) {
-  const id = useId()
-  const [filled, setFilled] = useState<Filled>(() => emptyOf(form.fields))
-  /** What stops it from being sent, by field: said under the field. */
-  const [amiss, setAmiss] = useState<Record<string, string>>({})
-  const { busy, problem, act } = useAct()
-
-  const set = (name: string, value: string | boolean) => {
-    setFilled((filled) => ({ ...filled, [name]: value }))
-    setAmiss((amiss) =>
-      Object.fromEntries(
-        Object.entries(amiss).filter(([field]) => field !== name)
-      )
-    )
-  }
-
-  const first = useRef<HTMLDivElement>(null)
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault()
-    if (busy) return
-    const read = paramsOf(form.fields, filled)
-    if ("amiss" in read) {
-      setAmiss(read.amiss)
-      return
-    }
-    void act(async () => {
-      await send(form.command, read.params)
-      setFilled(emptyOf(form.fields))
-      // Ready for the next one, from its first field.
-      first.current?.querySelector<HTMLElement>("input, textarea")?.focus()
-    }, form.submit)
-  }
-
-  return (
-    <form
-      data-slot="tree-form"
-      noValidate
-      onSubmit={submit}
-      className="flex flex-col gap-3"
-    >
-      {form.title && <h2 className="text-ui font-semibold">{form.title}</h2>}
-      {/* A field keeps a width that reads, however wide its Pane is. */}
-      <FieldGroup ref={first} className="max-w-md gap-3">
-        {form.fields.map((field) => (
-          <FieldView
-            key={field.name}
-            id={`${id}-${field.name}`}
-            field={field}
-            value={filled[field.name] ?? ""}
-            amiss={amiss[field.name]}
-            set={(value) => set(field.name, value)}
-          />
-        ))}
-      </FieldGroup>
-      {problem && <FieldError>{problem}</FieldError>}
-      <div className="flex items-center gap-2">
-        <Button type="submit" size="sm" aria-busy={busy}>
-          {busy && <Spinner />}
-          {form.submit}
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-function FieldView({
-  id,
-  field,
-  value,
-  amiss,
-  set,
-}: {
-  id: string
-  field: TreeField
-  value: string | boolean
-  amiss: string | undefined
-  set: (value: string | boolean) => void
-}) {
-  const label = (
-    <FieldLabel htmlFor={id}>
-      {field.label}
-      {field.required && <span aria-hidden>*</span>}
-    </FieldLabel>
-  )
-  const said = amiss && <FieldError>{amiss}</FieldError>
-  const shared = {
-    id,
-    "aria-invalid": amiss ? true : undefined,
-    "aria-required": field.required || undefined,
-  }
-  if (field.kind === "checkbox")
-    return (
-      <Field orientation="horizontal" data-invalid={amiss ? true : undefined}>
-        <Checkbox
-          {...shared}
-          checked={value === true}
-          onCheckedChange={(on) => set(on === true)}
-        />
-        {label}
-      </Field>
-    )
-  const text = typeof value === "string" ? value : ""
-  const placeholder = field.placeholder ?? undefined
-  return (
-    <Field data-invalid={amiss ? true : undefined}>
-      {label}
-      {field.kind === "select" ? (
-        <Select
-          value={text === "" ? null : text}
-          onValueChange={(value) => set(typeof value === "string" ? value : "")}
-        >
-          <SelectTrigger {...shared}>
-            <SelectValue placeholder={placeholder}>
-              {(value: string | null) =>
-                field.options.find((option) => option.value === value)?.label
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {field.options.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : field.kind === "textarea" ? (
-        <Textarea
-          {...shared}
-          value={text}
-          placeholder={placeholder}
-          onChange={(event) => set(event.target.value)}
-        />
-      ) : (
-        <Input
-          {...shared}
-          value={text}
-          placeholder={placeholder}
-          inputMode={field.kind === "number" ? "decimal" : undefined}
-          autoComplete="off"
-          onChange={(event) => set(event.target.value)}
-        />
-      )}
-      {said}
-    </Field>
-  )
-}
-
-function ButtonNode({ button, send }: { button: TreeButton; send: Send }) {
-  const { busy, problem, act } = useAct()
-  return (
-    <div data-slot="tree-button" className="flex flex-col items-start gap-1">
-      <Button
-        size="sm"
-        variant="outline"
-        aria-busy={busy}
-        onClick={() =>
-          busy ||
-          void act(() => send(button.command, button.params), button.label)
-        }
-      >
-        {busy && <Spinner />}
-        {button.label}
-      </Button>
-      {problem && <FieldError>{problem}</FieldError>}
-    </div>
   )
 }

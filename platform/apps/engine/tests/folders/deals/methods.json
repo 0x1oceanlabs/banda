@@ -1,0 +1,61 @@
+{
+  "add": {
+    "kind": "command",
+    "ui": true,
+    "about": "Adds a deal: the client, the amount, and its stage, due date and chance when known. Answers the deal as kept, with its id.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "client": { "type": "string" },
+        "amount": { "type": "integer", "minimum": 0 },
+        "stage": { "type": "string", "enum": ["new", "talks", "won", "lost"] },
+        "due": { "type": "string", "format": "date", "title": "Due" },
+        "chance": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "multipleOf": 5,
+          "title": "Chance, %"
+        },
+        "paid": { "type": "boolean" }
+      },
+      "required": ["client", "amount"]
+    }
+  },
+  "update": {
+    "kind": "command",
+    "ui": true,
+    "about": "Changes a deal, by its id: any of its client, amount, stage, due date, chance and whether it is paid.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "client": { "type": "string" },
+        "amount": { "type": "integer", "minimum": 0 },
+        "stage": { "type": "string", "enum": ["new", "talks", "won", "lost"] },
+        "due": { "type": "string", "format": "date", "title": "Due" },
+        "chance": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "paid": { "type": "boolean" }
+      },
+      "required": ["id"]
+    }
+  },
+  "remove": {
+    "kind": "command",
+    "ui": true,
+    "about": "Removes a deal, by its id.",
+    "params": {
+      "type": "object",
+      "properties": { "id": { "type": "integer" } },
+      "required": ["id"]
+    }
+  },
+  "list": {
+    "kind": "call",
+    "about": "The deals, the largest first: each with its id, client, amount, stage, due date, chance and whether it is paid."
+  },
+  "home": {
+    "kind": "view",
+    "about": "The deals: what they sum to, each with what can be done with it, how they split by stage, and a form to add one."
+  }
+}

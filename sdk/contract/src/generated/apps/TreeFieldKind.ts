@@ -3,4 +3,4 @@
 /**
  * What a field is filled with.
  */
-export type TreeFieldKind = "text" | "textarea" | "number" | "select" | "checkbox";
+export type TreeFieldKind = "text" | "textarea" | "date" | "time" | "datetime" | "email" | "url" | "password" | "number" | "slider" | "select" | "radio" | "checkbox" | "switch";

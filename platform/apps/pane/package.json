@@ -16,7 +16,8 @@
     "@banda/contract": "workspace:*",
     "@banda/ui": "workspace:*",
     "lucide-react": "^1.65.0",
-    "react": "^19.3.1"
+    "react": "^19.3.1",
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@types/node": "^24",

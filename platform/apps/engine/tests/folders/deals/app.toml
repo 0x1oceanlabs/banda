@@ -1,0 +1,8 @@
+# The deals App: every node an App's screen has, in one App. The tests of
+# the window draw it, and it is an example to write a screen from.
+id = "deals"
+name = "Deals"
+about = "What is being sold, to whom, and how far along each sale is."
+version = "0.1.0"
+api = 1
+entry = "worker.mjs"

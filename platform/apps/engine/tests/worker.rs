@@ -329,7 +329,7 @@ async fn what_goes_wrong_in_an_app_stays_in_that_app() {
     assert_eq!(mess.code, Code::Internal);
     assert_eq!(
         mess.message,
-        "trouble.mess failed: its Tree does not read. children[0] (Tabel): there is no such node: the nodes are Card, Table, List, Form, Button, Badge, Empty and Markdown."
+        "trouble.mess failed: its Tree does not read. children[0] (Tabel): there is no such node: the nodes are Card, Grid, Tabs, Accordion, Dialog, Table, List, Chart, Stat, Progress, Form, Button, Badge, Alert, Empty, Separator and Markdown."
     );
 }
 
@@ -366,11 +366,11 @@ async fn an_apps_view_answers_its_screen_as_a_tree_the_engine_read() {
     let said = log.events_after(0, Default::default(), 10).await.unwrap();
     let at = said.last().unwrap().seq;
     let tree = host.call(&work, "clients.home", json!({}));
-    let column =
-        |key: &str, title: &str, shown: &str| json!({ "key": key, "title": title, "as": shown });
+    let column = |key: &str, title: &str, shown: &str| json!({ "key": key, "title": title, "as": shown, "tones": {} });
     let field = |name: &str, label: &str, required: bool| {
         json!({ "name": name, "label": label, "kind": "text", "required": required,
-            "placeholder": null, "options": [] })
+            "placeholder": null, "about": null, "value": null, "min": null, "max": null,
+            "step": null, "options": [] })
     };
     assert_eq!(
         tree.await.unwrap(),
@@ -380,19 +380,53 @@ async fn an_apps_view_answers_its_screen_as_a_tree_the_engine_read() {
             "title": "Clients",
             "about": "The people I work with: who they are, where, and notes on each.",
             "children": [
-                { "node": "Table", "empty": "No clients yet",
+                { "node": "Table", "empty": "No clients yet", "search": false, "actions": [],
                   "columns": [column("name", "Name", "text"), column("city", "City", "text"),
                               column("email", "Email", "text"), column("notes", "Notes", "badge")],
                   "rows": [
                     { "name": "Anna", "city": "Berlin", "email": null, "notes": 1 },
                     { "name": "Boris", "city": null, "email": null, "notes": null } ] },
-                { "node": "Card", "title": "Add a client", "children": [
+                { "node": "Card", "title": "Add a client", "about": null, "children": [
                     { "node": "Form", "title": null, "command": "add", "submit": "Add client",
                       "fields": [field("name", "Name", true), field("city", "City", false),
                                  field("email", "Email", false)] } ] },
             ]
         })
     );
+}
+
+#[tokio::test]
+async fn a_screen_of_every_node_reads_and_a_rows_action_carries_its_form() {
+    needs_node!();
+    let host = host(&["deals"]).await;
+    let work = host.project("Work").await;
+    let anna = json!({ "client": "Anna", "amount": 12000, "stage": "talks", "due": "2020-01-15" });
+    host.call(&work, "deals.add", anna).await.unwrap();
+    let tree = host.call(&work, "deals.home", json!({})).await.unwrap();
+    let nodes: Vec<&str> = (tree["children"].as_array().unwrap().iter())
+        .map(|node| node["node"].as_str().unwrap())
+        .collect();
+    // What is past due is said first.
+    assert_eq!(nodes, ["Alert", "Grid", "Tabs", "Dialog", "Accordion"]);
+    let table = &tree["children"][2]["tabs"][0]["children"][0];
+    assert_eq!(table["rows"][0]["client"], "Anna");
+    // The Edit action's form has the fields the App chose, each of the
+    // kind it asked for within its param's own.
+    let kinds: Vec<&str> = (table["actions"][0]["form"]["fields"]
+        .as_array()
+        .unwrap()
+        .iter())
+    .map(|field| field["kind"].as_str().unwrap())
+    .collect();
+    assert_eq!(
+        kinds,
+        ["text", "number", "radio", "date", "slider", "switch"]
+    );
+    // And the row is changed by what it sends.
+    let won = json!({ "id": 1, "stage": "won" });
+    host.call(&work, "deals.update", won).await.unwrap();
+    let tree = host.call(&work, "deals.home", json!({})).await.unwrap();
+    assert_eq!(tree["children"][0]["node"], "Grid");
 }
 
 /// Starts the engine's kernel over `dir` again, once the one before let go

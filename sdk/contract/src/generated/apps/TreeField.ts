@@ -15,6 +15,18 @@ name: string, label: string, kind: TreeFieldKind,
  */
 required: boolean, placeholder: string | null, 
 /**
- * What a `select` offers.
+ * A line under it.
+ */
+about: string | null, 
+/**
+ * What it holds as the form opens.
+ */
+value: string | number | boolean | null, 
+/**
+ * A number's least, most and step, from the param.
+ */
+min: number | null, max: number | null, step: number | null, 
+/**
+ * What a `select` or a `radio` offers.
  */
 options: Array<TreeChoice>, };
