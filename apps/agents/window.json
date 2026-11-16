@@ -3,7 +3,8 @@
     {
       "kind": "agents.thread",
       "grouped": true,
-      "home": true
+      "home": true,
+      "elsewhere": true
     },
     {
       "kind": "agents.subagent"
@@ -12,7 +13,8 @@
       "kind": "agents.crew"
     },
     {
-      "kind": "agents.visual"
+      "kind": "agents.visual",
+      "elsewhere": true
     }
   ],
   "actions": [

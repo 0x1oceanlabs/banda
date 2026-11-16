@@ -440,6 +440,17 @@ describe("applyChange", () => {
     expect(args.workspaces[0].columns[1]).toEqual(kept[0].columns[1])
   })
 
+  test("that an Agent asked for a Pane, said for other machines' windows, changes nothing here (ADR 0120, decision 6)", () => {
+    const kept = keptOf(arranged())
+    const before = { at: 3, workspaces: kept, aside: null }
+    // Its payload names a Thread, a Project, a kind and args: none of a
+    // Pane of this arrangement.
+    const id = kept[0].columns[0].panes[0].id
+    const asked = { thread: "t", project: "p", kind: "git.diff", args: {} }
+    const said = { ...event(4, { ...asked, pane: id }), kind: "pane.asked" }
+    expect(applyChange(before, said)).toEqual({ ...before, at: 4 })
+  })
+
   test("hears what is set aside only as the workspaces are set aside or come back", () => {
     const kept = keptOf(arranged())
     const aside = { workspaces: 1, panes: 2 }

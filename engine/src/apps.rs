@@ -282,6 +282,7 @@ mod build {
             .grouped_kinds(crate::modules::grouped_kinds())
             .home_kinds(crate::modules::home_kinds())
             .narrow_kinds(crate::modules::narrow_kinds())
+            .elsewhere_kinds(crate::modules::elsewhere_kinds())
             .tiling(move || banda_workspaces::tiling::read(&config))
     }
 }

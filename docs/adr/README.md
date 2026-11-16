@@ -93,7 +93,7 @@ Several machines, their doors, and what one draws of another.
 | [0105](0105-honest-when-away-what-the-person-sees-while-a-machine-is-away-and-what-may-wait-for-it.md) | Honest when away: what the Person sees while a machine is away, and what may wait for it | **standing** | decisions 3, 5 amended by 0124; H5e rule amended by 0106 |
 | [0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md) | Another machine's Panes run on its engine, and this device only draws them | **standing** | law 6 widened by 0124; decisions 3 and 9 amended by 0120 |
 | [0116](0116-a-thread-moves-to-a-project-on-another-machine-and-the-device-carries-it.md) | A Thread moves to a Project on another machine, and the device carries it | **standing** | untouched; 0124 promises a later ADR for moving a Thread by the engines |
-| [0120](0120-what-stage-2-left-for-another-machine-goes-by-the-roads-it-built.md) | What stage 2 left for another machine goes by the roads it built | **standing** | partly built: port forward and place_asked not in code yet |
+| [0120](0120-what-stage-2-left-for-another-machine-goes-by-the-roads-it-built.md) | What stage 2 left for another machine goes by the roads it built | **standing** | built through step 9: the window does not follow `pane.asked` yet (step 10); steps 7, 8 and 11 unbuilt |
 | [0124](0124-every-client-reaches-every-machine-by-one-road-at-its-door-by-its-own-key.md) | Every client reaches every machine by one road: at its door, by its own key | **standing** | built through SE5; old ssh road stays until every machine has the door |
 
 ### Apps

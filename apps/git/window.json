@@ -1,7 +1,8 @@
 {
   "panes": [
     {
-      "kind": "git.diff"
+      "kind": "git.diff",
+      "elsewhere": true
     }
   ],
   "actions": [

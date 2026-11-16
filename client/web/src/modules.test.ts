@@ -171,15 +171,17 @@ function actionOf(action: Action<never>) {
  * engine reads from it which kinds of Pane open as a Group of their own
  * (ADR 0065, decision 7), which stand on their Project's workspace and
  * which are lists, whose new column is the narrowest, for the workspaces
- * (ADR 0110; ADR 0127, decision 4). */
+ * (ADR 0110; ADR 0127, decision 4), and which this build shows for a
+ * Project of another machine (ADR 0120, decision 6). */
 function windowOf(module: Module) {
   return {
-    panes: module.panes.map(({ kind, grouped, home, narrow }) => ({
+    panes: module.panes.map(({ kind, grouped, home, narrow, elsewhere }) => ({
       kind,
       grouped,
       // Said, whatever its Flow: the engine asks it only in the row.
       ...(home && { home: true }),
       ...(narrow && { narrow: true }),
+      ...(elsewhere && { elsewhere: true }),
     })),
     actions: allOf(module).map(actionOf),
     ...(module.scopes.length > 0 && { scopes: module.scopes }),

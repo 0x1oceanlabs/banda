@@ -28,6 +28,7 @@ arranged: workspaces one under another, each a Strip of columns.
 - [ADR 0101](../../docs/adr/0101-machines-are-peers-and-there-is-no-home-host.md): Machines are peers, and there is no home host
 - [ADR 0102](../../docs/adr/0102-in-the-row-and-solo-a-project-has-its-own-workspace-and-free-workspaces-hold-the-rest.md): In the row and solo, a Project has its own workspace, and free workspaces hold the rest
 - [ADR 0110](../../docs/adr/0110-where-a-pane-opens-is-one-rule-in-the-workspaces-module.md): Where a Pane opens is one rule, in the `workspaces` module
+- [ADR 0120](../../docs/adr/0120-what-stage-2-left-for-another-machine-goes-by-the-roads-it-built.md): What stage 2 left for another machine goes by the roads it built
 - [ADR 0127](../../docs/adr/0127-the-window-shows-and-asks-and-each-thing-has-one-place.md): The window shows and asks, and each thing has one place
 
 [The architecture](../../docs/architecture.md#modules) is the map this page

@@ -65,7 +65,10 @@ impl Machine {
         // decision 7).
         let workspaces = workspaces
             .grouped_kinds(["agents.thread"])
-            .home_kinds(["agents.thread"]);
+            .home_kinds(["agents.thread"])
+            // As this build's window parts say: no browser for another
+            // machine's Project yet.
+            .elsewhere_kinds(["agents.thread", "git.diff", "files.file"]);
         let kernel = Kernel::builder(root.join("projects"), root.join("data"), owner)
             .machine(root.join("state/machine"))
             .module(workspaces)
@@ -977,12 +980,17 @@ async fn what_an_agent_opens_with_no_place_goes_into_its_threads_group_as_a_deck
     assert_eq!(ids, [diff["pane"].clone(), browser["pane"].clone()]);
     assert_eq!(deck["group"], group);
 
-    // One shown already is named: nothing moves, nothing is said.
-    let (before, said) = (machine.list().await, machine.events().await);
+    // One shown already is named, and nothing moves. Only that the Agent
+    // asked is said: another machine's window may show it no more, and
+    // places it again by that (ADR 0120, decision 6).
+    let (before, mut said) = (machine.list().await, machine.events().await);
     let again = open(changes()).await.unwrap();
-    let same = json!({ "pane": diff["pane"], "new": false });
-    assert_eq!(again, unplaced(same));
-    assert_eq!(machine.list().await, before);
+    assert_eq!(again.value, json!({ "pane": diff["pane"], "new": false }));
+    let after = machine.list().await;
+    assert_eq!(after["workspaces"], before["workspaces"]);
+    let asked = json!({ "thread": thread, "project": work, "kind": "git.diff",
+        "args": { "scope": { "kind": "changes" } } });
+    said.push(("pane.asked".to_owned(), asked));
     assert_eq!(machine.events().await, said);
 
     // A place given is followed: right of the Person's page, in no Group.
@@ -1863,4 +1871,129 @@ async fn undo_is_refused_once_the_workspaces_changed_since_arrange_by_project() 
         );
         assert_eq!(machine.list().await["workspaces"], changed, "{case}");
     }
+}
+
+#[tokio::test]
+async fn a_pane_another_machines_agent_asked_for_is_placed_beside_its_thread_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let machine = Machine::open(dir.path(), PersonId::new()).await;
+    // arc, its Project and its Agent's Thread, which this window shows.
+    let (arc, there, thread) = (ProjectId::new(), ProjectId::new(), Uuid::now_v7());
+    let by = AgentId::new();
+    let shows = json!({ "project": there, "kind": "agents.thread",
+        "args": { "thread": thread, "title": "Fix" } });
+    let shown = machine.command("workspaces.open", shows).await.unwrap();
+    let group = group_of(&machine.list().await, &shown["pane"]);
+    let asked = |at: i64, kind: &str, args: Value| {
+        json!({ "from": arc, "at": at, "by": by, "thread": thread, "project": there,
+            "kind": kind, "args": args })
+    };
+    let diff = || json!({ "scope": { "kind": "changes" } });
+    let place = |asked: Value| machine.command("workspaces.place_asked", asked);
+
+    // The Diff arc's Agent opened: right of its Thread, in its Group,
+    // marked as an Agent's.
+    let placed = place(asked(5, "git.diff", diff())).await.unwrap();
+    assert_eq!(placed["new"], true);
+    let list = machine.opened().await;
+    let column = column_of(&list, &placed["pane"]);
+    assert_eq!(column["group"], group);
+    let pane = &column["panes"][0];
+    assert_eq!((&pane["project"], &pane["by"]), (&json!(there), &json!(by)));
+
+    // Placed through already, as after a reload or from a second window:
+    // nothing, and nothing said.
+    let said = machine.events().await;
+    for at in [5, 3] {
+        let again = place(asked(at, "files.file", json!({ "path": "a.md" })));
+        assert_eq!(again.await.unwrap(), json!({ "new": false }));
+    }
+    assert_eq!(machine.events().await, said);
+
+    // Asked again later, it is shown already: named, not opened twice.
+    let again = place(asked(6, "git.diff", diff())).await.unwrap();
+    assert_eq!(again, json!({ "pane": placed["pane"], "new": false }));
+
+    // A Thread this window does not show places nothing, and its
+    // position is passed all the same.
+    let mut unshown = asked(7, "git.diff", json!({ "scope": { "kind": "staged" } }));
+    unshown["thread"] = json!(Uuid::now_v7());
+    let nothing = place(unshown).await.unwrap();
+    assert_eq!(nothing, json!({ "new": false }));
+    let staged = place(asked(
+        7,
+        "git.diff",
+        json!({ "scope": { "kind": "staged" } }),
+    ));
+    assert_eq!(staged.await.unwrap(), json!({ "new": false }));
+
+    // Checked as an Agent's, though the window asks: no kind an Agent may
+    // not open, no arg that is the Person's, and none this build does not
+    // show for another machine's Project.
+    let refused = place(asked(8, "terminal.terminal", json!({})))
+        .await
+        .unwrap_err();
+    assert!(
+        refused.message.starts_with("An Agent opens only"),
+        "{}",
+        refused.message
+    );
+    let ask = json!({ "thread": Uuid::now_v7(), "ask": "rm -rf" });
+    let refused = place(asked(8, "agents.thread", ask)).await.unwrap_err();
+    assert!(
+        refused.message.contains("`ask` is your Person's"),
+        "{}",
+        refused.message
+    );
+    let page = json!({ "url": "https://a.test" });
+    let refused = place(asked(8, "browser.browser", page)).await.unwrap_err();
+    assert_eq!(
+        refused.message,
+        "This Banda does not show browser.browser for another machine's Project yet."
+    );
+    // A refusal keeps nothing, and another machine's position is its own.
+    let mut devbox = asked(1, "git.diff", json!({ "scope": { "kind": "staged" } }));
+    devbox["from"] = json!(ProjectId::new());
+    assert_eq!(place(devbox).await.unwrap()["new"], true);
+
+    // And no Agent places for another: it is no tool, so the kernel
+    // refuses an Agent's pass on the machine's own command.
+    let work = machine.project("Work").await;
+    let agents = asked(9, "git.diff", diff());
+    let refused = (machine.agent(AgentId::new(), work, "workspaces.place_asked", agents))
+        .await
+        .unwrap_err();
+    assert_eq!(
+        refused.message,
+        "An Agent's pass is for its Project, not this machine."
+    );
+}
+
+#[tokio::test]
+async fn what_an_agent_opens_is_said_in_the_machines_log_for_other_machines_windows() {
+    let dir = tempfile::tempdir().unwrap();
+    let machine = Machine::open(dir.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let thread = Uuid::now_v7();
+    let agent = AgentId::new();
+    let caller = agent_in(agent, work, thread);
+    let file = showing("files.file", json!({ "path": "notes.md", "line": 3 }));
+    let opened = machine.answer_from(CommandId::new(), caller, "workspaces.open_pane", file);
+    opened.await.unwrap();
+    let said = machine.events().await;
+    let asked = json!({ "thread": thread, "project": work, "kind": "files.file",
+        "args": { "path": "notes.md", "line": 3 } });
+    assert_eq!(said[said.len() - 2], ("pane.asked".to_owned(), asked));
+    assert_eq!(said[said.len() - 1].0, "opened");
+
+    // A pass that names no Thread has no Group elsewhere to go into:
+    // nothing is said of it.
+    let count = said.len();
+    let other = showing("files.file", json!({ "path": "other.md" }));
+    (machine.agent(agent, work, "workspaces.open_pane", other))
+        .await
+        .unwrap();
+    let said = machine.events().await;
+    assert_eq!(said.len(), count + 1);
+    assert_eq!(said[count].0, "opened");
 }
