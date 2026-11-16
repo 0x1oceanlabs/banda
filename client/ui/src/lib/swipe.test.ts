@@ -54,6 +54,13 @@ describe("a swipe", () => {
   })
 })
 
+/** What a wheel event at `target` goes through, as `composedPath` says. */
+function path(target: Element): Element[] {
+  const all: Element[] = []
+  for (let at: Element | null = target; at; at = at.parentElement) all.push(at)
+  return all
+}
+
 describe("the room to scroll sideways under a swipe", () => {
   /** A wide table in a Pane in the Strip, scrolled `at` of 300 pixels. */
   function table(at: number, direction = "ltr") {
@@ -74,23 +81,60 @@ describe("the room to scroll sideways under a swipe", () => {
 
   it("is none over what does not scroll sideways", () => {
     const { strip, pane } = table(0)
-    expect(sidewaysRoom(pane, strip)).toEqual({ back: 0, on: 0 })
+    expect(sidewaysRoom(path(pane), strip)).toEqual({ back: 0, on: 0 })
   })
 
   it("is what is left each way, and none at an end", () => {
     const start = table(0)
-    expect(sidewaysRoom(start.cell, start.strip)).toEqual({ back: 0, on: 300 })
+    expect(sidewaysRoom(path(start.cell), start.strip)).toEqual({
+      back: 0,
+      on: 300,
+    })
     const middle = table(100)
-    expect(sidewaysRoom(middle.cell, middle.strip)).toEqual({
+    expect(sidewaysRoom(path(middle.cell), middle.strip)).toEqual({
       back: 100,
       on: 200,
     })
     const end = table(300)
-    expect(sidewaysRoom(end.cell, end.strip)).toEqual({ back: 300, on: 0 })
+    expect(sidewaysRoom(path(end.cell), end.strip)).toEqual({
+      back: 300,
+      on: 0,
+    })
   })
 
   it("counts from the right in a right-to-left text", () => {
     const { strip, cell } = table(-100, "rtl")
-    expect(sidewaysRoom(cell, strip)).toEqual({ back: 200, on: 100 })
+    expect(sidewaysRoom(path(cell), strip)).toEqual({ back: 200, on: 100 })
+  })
+})
+
+describe("the room a page's own view has", () => {
+  /** A page 500 wide in a view of 200, scrolled `at`. */
+  function page(at: number) {
+    Object.defineProperties(document.documentElement, {
+      scrollWidth: { value: 500, configurable: true },
+      clientWidth: { value: 200, configurable: true },
+      scrollLeft: { value: at, configurable: true },
+    })
+    // As Chromium says of a page that sets neither; happy-dom says nothing.
+    document.documentElement.style.overflowX = "visible"
+    document.body.style.overflowX = "visible"
+    return document.body.appendChild(document.createElement("p"))
+  }
+
+  it("counts, with no stop, as a page wider than its view scrolls", () => {
+    expect(sidewaysRoom(path(page(100)), null)).toEqual({ back: 100, on: 200 })
+  })
+
+  it("is none when the body hides what is wider, as its view then does", () => {
+    const target = page(0)
+    document.body.style.overflowX = "hidden"
+    expect(sidewaysRoom(path(target), null)).toEqual({ back: 0, on: 0 })
+  })
+
+  it("is none when the root hides it", () => {
+    const target = page(0)
+    document.documentElement.style.overflowX = "clip"
+    expect(sidewaysRoom(path(target), null)).toEqual({ back: 0, on: 0 })
   })
 })

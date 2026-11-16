@@ -68,6 +68,23 @@ function inPages(app: ElectronApplication, code: string): Promise<unknown[]> {
   }, code)
 }
 
+/** Calls `method` of each browser page's web contents with `arg`. */
+function onPages<M extends "sendInputEvent" | "setZoomFactor">(
+  app: ElectronApplication,
+  method: M,
+  arg: Parameters<Electron.WebContents[M]>[0]
+): Promise<void> {
+  return app.evaluate(
+    ({ webContents }, { method, arg }) => {
+      for (const page of webContents.getAllWebContents()) {
+        if (page.getType() !== "webview") continue
+        ;(page[method] as (arg: unknown) => void)(arg)
+      }
+    },
+    { method, arg }
+  )
+}
+
 /** Opens a browser beside the first Thread; returns its address bar. */
 async function openBrowser(page: Page): Promise<Locator> {
   await page.keyboard.press("Alt+KeyN")
@@ -196,6 +213,94 @@ test("a Person browses in a Pane that keeps its page wherever it moves", async (
   await pressInPage(app, "W", ["alt"])
   await expect(alpha).toBeHidden()
   await expect.poll(() => inPages(app, "1")).toEqual([])
+})
+
+test("a sideways swipe over a browser's page is the page's while it can scroll that way, and the Strip's otherwise", async () => {
+  const address = await serve({
+    "/": "<title>Narrow</title><p>A page as wide as its view</p>",
+    "/wide":
+      '<title>Wide</title><div style="width:3000px;height:10px">wide</div>',
+  })
+  window = await startWindow({ files: FREE })
+  const { app, page } = window
+  const { thread: draft } = await firstThread(page)
+  await expect(draft).toBeVisible()
+  const bar = await openBrowser(page)
+  await bar.fill(address.replace("http://", ""))
+  await bar.press("Enter")
+  const narrow = page.getByRole("region", { name: "Narrow" })
+  await expect(narrow).toBeVisible()
+  // The browser takes the whole screen; the Thread is out of view, left.
+  await narrow.locator("header").click()
+  await page.keyboard.press("Alt+Control+ArrowRight")
+  await page.keyboard.press("Alt+Control+ArrowRight")
+  const strip = page.locator("[data-column]").first().locator("xpath=..")
+  const scrolled = () => strip.evaluate((element) => element.scrollLeft)
+  // It comes to rest at the Strip's right end, once the column has grown.
+  await expect
+    .poll(async () => {
+      const before = await scrolled()
+      await page.waitForTimeout(300)
+      return before > 300 && before === (await scrolled())
+    })
+    .toBe(true)
+  const end = await scrolled()
+  /** One swipe in the page, as the Person's hand makes it: five wheel
+   * events of `x` pixels sideways, one after another, each drifting down
+   * a little. The page tells one swipe from the next by a pause. Chromium
+   * counts a wheel event's way against the page's. */
+  const swipe = async (x: number) => {
+    await page.waitForTimeout(300)
+    for (let i = 0; i < 5; i++) {
+      await onPages(app, "sendInputEvent", {
+        type: "mouseWheel",
+        x: 100,
+        y: 100,
+        deltaX: -x,
+        deltaY: -2,
+        hasPreciseScrollingDeltas: true,
+      })
+      await page.waitForTimeout(20)
+    }
+  }
+
+  // A page as wide as its view has nowhere to go: the Strip moves, as
+  // over any Pane, though the hand drifts down a little.
+  await swipe(-60)
+  await expect.poll(scrolled).toBe(end - 300)
+  await swipe(60)
+  await expect.poll(scrolled).toBe(end)
+  // Only the Person's hand counts: a wheel event the page makes up moves
+  // nothing of Banda's.
+  await inPages(
+    app,
+    "void dispatchEvent(new WheelEvent('wheel', { deltaX: -600, bubbles: true }))"
+  )
+  await page.waitForTimeout(300)
+  expect(await scrolled()).toBe(end)
+
+  // A page zoomed to twice its size counts the hand's way in half as
+  // many of its own pixels: the Strip moves by the window's all the same.
+  await onPages(app, "setZoomFactor", 2)
+  await swipe(-60)
+  await expect.poll(scrolled).toBe(end - 300)
+  await swipe(60)
+  await expect.poll(scrolled).toBe(end)
+  await onPages(app, "setZoomFactor", 1)
+
+  // A wide page scrolls itself first, and the Strip stays. At its left
+  // end, a swipe further left is the Strip's.
+  await inPages(app, "location.assign('/wide')")
+  await expect.poll(() => inPages(app, "document.title")).toEqual(["Wide"])
+  await swipe(60)
+  await expect.poll(() => inPages(app, "scrollX")).toEqual([300])
+  expect(await scrolled()).toBe(end)
+  await swipe(-60)
+  await expect.poll(() => inPages(app, "scrollX")).toEqual([0])
+  expect(await scrolled()).toBe(end)
+  await swipe(-60)
+  await expect.poll(scrolled).toBe(end - 300)
+  expect(await inPages(app, "scrollX")).toEqual([0])
 })
 
 test("a gap dragged over a browser's page sizes the column: the page lets the pointer by", async () => {

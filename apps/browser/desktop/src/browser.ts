@@ -47,6 +47,7 @@ import { Dialogs } from "./dialogs"
 import { Drive } from "./drive"
 import { BoxArg, Extensions } from "./extensions"
 import { keepInForce, keys } from "./keys"
+import { swipes } from "./swipes"
 import { attaching, downloaded, keepCertificates, keepProfile } from "./profile"
 import { Tabs } from "./tabs"
 
@@ -160,6 +161,7 @@ function host(
     dialogs.attached(page)
     tabs.attached(page)
     keys(page, contents, tabs.byHands)
+    swipes(page, contents, tabs.byHands)
     keep(page, agents, tell, extensions)
   })
 }

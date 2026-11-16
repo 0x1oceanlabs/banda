@@ -46,6 +46,18 @@ PR.
     have no menu, and a Mac's hears a key only with its native event,
     which a key sent with `sendInputEvent` has not. A key added to the
     menu is checked against this rule.
+  - A sideways swipe over a page is the page's while it can still scroll
+    that way, its own view or anything in it, and the window's Strip's
+    otherwise, as over any Pane (ADR 0025). The page's preload reads the
+    wheel as the window does (`Swipe`, `@banda/ui/lib/swipe`) and says
+    once, as a swipe picks its way, whose it is (`passSwipes`); of a
+    swipe the page has no use for it tells main each wheel event, main
+    tells the window (`swipes.ts`), and the window sends it on the
+    page's slot, in the window's pixels, where the Strip hears it. A
+    page with room keeps the swipe that takes it to its end. An event
+    the page took for itself stays its own, and one the page made up
+    counts for nothing, nor one Banda's hands made, nor one in a frame
+    inside it.
   - A page takes the keys as an iframe does, with no focus event of its
     own; its tile takes the focus once the window blurs.
   - A Pane keeps its tabs in its args, and holds their pages while it

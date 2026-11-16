@@ -244,6 +244,10 @@ On the list, Roma decided:
      scrolls by the system's hand: Banda moves it by what the system
      says of the swipe, its glide too, wherever the pointer is; a swipe
      begun over what can still scroll that way by itself is that Pane's._
+     _A browser's page too (2026-11-16, Roma): a swipe is the page's
+     while the page can still scroll that way, and the Strip's
+     otherwise; the page tells the window of the swipes it has no use
+     for (`apps/browser`)._
    - **The view.** `Alt` and the middle button drag the Strip sideways
      and the workspaces up and down. The wheel stays as it is (the
      architecture's swipes): `Alt` and the wheel go a workspace up or
