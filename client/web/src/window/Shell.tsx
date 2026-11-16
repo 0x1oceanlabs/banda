@@ -126,7 +126,7 @@ import { useAsked } from "./asked"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
-import { bare, List, phoneNow } from "../phone"
+import { bare, List, PhoneForm, phoneNow } from "../phone"
 import { useKeyRouter, useKeys } from "./keys"
 import { useSteady } from "./steady"
 import { closeTop, Layered, TopPart, useTopFollows, useTops } from "./top"
@@ -719,142 +719,146 @@ export function Shell({
         tiled={{ store: tiling.store, aside, flow }}
         run={parts.run}
       >
-        <ThreadMenus engine={engine} projects={projects}>
-          <TopPart shell={parts} />
-          <div className="flex h-svh flex-col bg-desk text-foreground">
-            <Watches engine={engine} modules={modules} projects={open} />
-            <Bar
-              engine={engine}
-              widgets={bar.parts}
-              listed={bar.listed}
-              onArrange={arrangeBar}
-            />
-            <div
-              className="relative flex min-h-0 flex-1"
-              data-sidebar-shown={(sidebarShown && !narrow) || undefined}
-            >
-              {sidebarShown && (
-                <List
-                  engine={engine}
-                  over={narrow}
-                  onDismiss={narrow ? hideOver : undefined}
-                  hiding={hiding}
-                  projects={projects}
-                  strayed={strayedIn(workspaces, placing)}
-                  isCurrent={focusedIn(workspaces)}
-                />
-              )}
-              {sidebarShown && !narrow && (
-                <Edge
-                  width={sidebarWidth}
-                  columnMin={columnMin}
-                  onWidth={setSidebarWidth}
-                  onHide={hideSidebar}
-                  onHiding={setHiding}
-                />
-              )}
-              <main
-                className="relative min-h-0 min-w-0 flex-1"
-                // A click beside the sidebar over the Strip hides it.
-                onPointerDown={narrow && sidebarShown ? hideOver : undefined}
+        <PhoneForm projects={projects}>
+          <ThreadMenus engine={engine} projects={projects}>
+            <TopPart shell={parts} />
+            <div className="flex h-svh flex-col bg-desk text-foreground">
+              <Watches engine={engine} modules={modules} projects={open} />
+              <Bar
+                engine={engine}
+                widgets={bar.parts}
+                listed={bar.listed}
+                onArrange={arrangeBar}
+              />
+              <div
+                className="relative flex min-h-0 flex-1"
+                data-sidebar-shown={(sidebarShown && !narrow) || undefined}
               >
-                {ready && (
-                  <Workspaces
-                    workspaces={workspaces}
-                    covered={overview || drawer.shown}
-                    overview={overview}
+                {sidebarShown && (
+                  <List
+                    engine={engine}
+                    over={narrow}
+                    onDismiss={narrow ? hideOver : undefined}
+                    hiding={hiding}
+                    projects={projects}
+                    strayed={strayedIn(workspaces, placing)}
+                    isCurrent={focusedIn(workspaces)}
+                  />
+                )}
+                {sidebarShown && !narrow && (
+                  <Edge
+                    width={sidebarWidth}
+                    columnMin={columnMin}
+                    onWidth={setSidebarWidth}
+                    onHide={hideSidebar}
+                    onHiding={setHiding}
+                  />
+                )}
+                <main
+                  className="relative min-h-0 min-w-0 flex-1"
+                  // A click beside the sidebar over the Strip hides it.
+                  onPointerDown={narrow && sidebarShown ? hideOver : undefined}
+                >
+                  {ready && (
+                    <Workspaces
+                      workspaces={workspaces}
+                      covered={overview || drawer.shown}
+                      overview={overview}
+                      modules={modules}
+                      projectOf={projectOf}
+                      strict={strict}
+                      gone={gone}
+                      shows={shows}
+                      marked={marked}
+                      away={away}
+                      zoomed={zoomed}
+                      reveal={reveal}
+                      inset={sidebarShown && !narrow ? sidebarWidth : 0}
+                      narrow={narrow}
+                      frame={frame}
+                      onStep={stepBy}
+                      onGo={goTo}
+                      // A first Pane started on an empty workspace opens as a
+                      // key opens it; the engine places it, there on one no
+                      // Project owns (ADR 0134, decision 6).
+                      onStart={parts.open}
+                    />
+                  )}
+                  <Toaster />
+                  <LaterPicker />
+                  <RemovingProject engine={engine} />
+                  <QuitDialog
+                    working={quitting}
+                    onQuit={device.quit}
+                    onClose={() => setQuitting(null)}
+                  />
+                  <BandaMenu
+                    opening={menu}
+                    onClose={closeMenu}
+                    onChoose={choose}
+                    onAdded={added}
+                    engine={engine}
                     modules={modules}
-                    projectOf={projectOf}
-                    strict={strict}
-                    gone={gone}
-                    shows={shows}
-                    marked={marked}
-                    away={away}
-                    zoomed={zoomed}
-                    reveal={reveal}
-                    inset={sidebarShown && !narrow ? sidebarWidth : 0}
-                    narrow={narrow}
-                    frame={frame}
-                    onStep={stepBy}
-                    onGo={goTo}
-                    // A first Pane started on an empty workspace opens as a
-                    // key opens it; the engine places it, there on one no
-                    // Project owns (ADR 0134, decision 6).
-                    onStart={parts.open}
+                    laterClock={laterClock}
+                    projects={menuProjects}
+                    actions={keyed}
+                    binds={binds}
                   />
-                )}
-                <Toaster />
-                <LaterPicker />
-                <RemovingProject engine={engine} />
-                <QuitDialog
-                  working={quitting}
-                  onQuit={device.quit}
-                  onClose={() => setQuitting(null)}
-                />
-                <BandaMenu
-                  opening={menu}
-                  onClose={closeMenu}
-                  onChoose={choose}
-                  onAdded={added}
-                  engine={engine}
-                  modules={modules}
-                  laterClock={laterClock}
-                  projects={menuProjects}
-                  actions={keyed}
-                  binds={binds}
-                />
-                {/* Each on its layer, in the layers' order (`top/layers.ts`). */}
-                <Layered
-                  parts={{
-                    peek: peek && (
-                      <Peek
-                        peek={peek}
-                        shell={parts}
-                        onUpdate={(pane) =>
-                          setPeek((was) => was && { ...was, pane })
-                        }
-                        onFill={fillPeek}
-                        onClose={closePeek}
-                      />
-                    ),
-                    drawer: drawer.drawn && (
-                      <Drawer
-                        entry={drawer.drawn}
-                        shown={drawer.shown}
-                        height={drawerLook.height}
-                        modules={modules}
-                        shows={shows}
-                        projectOf={projectOf}
-                        frame={frame}
-                        onLift={drawer.lift}
-                        onPin={pinDrawer}
-                        onChange={drawer.change}
-                        onClose={drawer.close}
-                      />
-                    ),
-                    sheet: <Sheet state={sheet} shell={parts} />,
-                  }}
-                />
-                {overview && (
-                  <Overview
-                    open={overviewState === "open"}
-                    onExited={leftOverview}
-                    workspaces={workspaces}
-                    projectOf={projectOf}
-                    strict={strict}
-                    gone={gone}
-                    shows={shows}
-                    frame={frame}
-                    onPick={(entry) => change((w) => focusEntry(w, entry))}
-                    onArrow={(direction) => change((w) => across(w, direction))}
-                    onGo={goTo}
-                    onClose={closeOverview}
+                  {/* Each on its layer, in the layers' order (`top/layers.ts`). */}
+                  <Layered
+                    parts={{
+                      peek: peek && (
+                        <Peek
+                          peek={peek}
+                          shell={parts}
+                          onUpdate={(pane) =>
+                            setPeek((was) => was && { ...was, pane })
+                          }
+                          onFill={fillPeek}
+                          onClose={closePeek}
+                        />
+                      ),
+                      drawer: drawer.drawn && (
+                        <Drawer
+                          entry={drawer.drawn}
+                          shown={drawer.shown}
+                          height={drawerLook.height}
+                          modules={modules}
+                          shows={shows}
+                          projectOf={projectOf}
+                          frame={frame}
+                          onLift={drawer.lift}
+                          onPin={pinDrawer}
+                          onChange={drawer.change}
+                          onClose={drawer.close}
+                        />
+                      ),
+                      sheet: <Sheet state={sheet} shell={parts} />,
+                    }}
                   />
-                )}
-              </main>
+                  {overview && (
+                    <Overview
+                      open={overviewState === "open"}
+                      onExited={leftOverview}
+                      workspaces={workspaces}
+                      projectOf={projectOf}
+                      strict={strict}
+                      gone={gone}
+                      shows={shows}
+                      frame={frame}
+                      onPick={(entry) => change((w) => focusEntry(w, entry))}
+                      onArrow={(direction) =>
+                        change((w) => across(w, direction))
+                      }
+                      onGo={goTo}
+                      onClose={closeOverview}
+                    />
+                  )}
+                </main>
+              </div>
             </div>
-          </div>
-        </ThreadMenus>
+          </ThreadMenus>
+        </PhoneForm>
       </Kept>
     </KeysInForce.Provider>
   )
