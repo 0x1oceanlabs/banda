@@ -70,7 +70,7 @@ has it whole (`main` at `5291a5b6`):
       with no Pane in front; in the row a Project that owns no workspace
       yet still gets its own (ADR 0134, decision 6).
    5. **A place that cannot be made gives way:** beside a Pane, with none
-      in front; into a Group, for a kind that leads one.
+      in front, or one that has gone since.
    6. **Of no Project:** "its Project's workspace" is the top free one,
       and "first on its Project's workspace" the workspace on screen.
    7. **One Pane of a thing.** A Pane shown already, as its kind's
