@@ -71,7 +71,10 @@ page is one part of. A change to main changes this page in the same PR.
   it is open). All of it comes from one child of main, `banda status
   --follow --with-parent`, started again when it dies (`status.ts`,
   `menubar.ts`, `tray.ts`; its icons drawn by
-  `client/desktop/icons/menu-bar/draw.mjs`). An engine with no app opens
+  `client/desktop/icons/menu-bar/draw.mjs`, which draws the five signs
+  for Linux and Windows too, in `tray/`: each for a light bar and a dark
+  one, a PNG at 1x and `@2x` and an `.ico` of 16, 20, 24 and 32 px, which
+  nothing shows yet). An engine with no app opens
   Banda.app hidden, by its path (`open -g -j <app> --args --hidden`),
   which then shows no window and no Dock icon, only the menu bar's; it
   never opens an app that runs, nor one the Person quit or ended with

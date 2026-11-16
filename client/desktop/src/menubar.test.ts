@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { EngineStatus } from "@banda/contract"
 import type { CountedAs, CountedThread } from "@banda/contract/agents"
@@ -150,6 +150,33 @@ describe("the menu bar icon (ADR 0086, decision 4)", () => {
     for (const file of new Set(files))
       for (const one of [file, file.replace(/\.png$/, "@2x.png")])
         expect(existsSync(join(drawn, one)), one).toBe(true)
+  })
+
+  it("has every sign drawn for Linux and Windows, for a light bar and a dark one (icons/menu-bar/draw.mjs)", () => {
+    const signs: Sign[] = ["rest", "working", "asking", "done", "asleep"]
+    const drawn = join(import.meta.dirname, "../icons/menu-bar/tray")
+    /** A PNG's width and height, read from its header. */
+    const sizeOf = (png: Buffer) => {
+      expect(png.subarray(1, 4).toString("latin1")).toBe("PNG")
+      return [png.readUInt32BE(16), png.readUInt32BE(20)]
+    }
+    for (const sign of signs)
+      for (const bar of ["light", "dark"]) {
+        const name = join(drawn, `${sign}-${bar}`)
+        expect(sizeOf(readFileSync(`${name}.png`)), name).toEqual([16, 16])
+        expect(sizeOf(readFileSync(`${name}@2x.png`)), name).toEqual([32, 32])
+        // The `.ico`: 6 bytes, an entry of 16 for each picture, the PNGs.
+        const ico = readFileSync(`${name}.ico`)
+        expect([ico.readUInt16LE(0), ico.readUInt16LE(2)], name).toEqual([0, 1])
+        const held = Array.from({ length: ico.readUInt16LE(4) }, (_, index) => {
+          const entry = 6 + 16 * index
+          const at = ico.readUInt32LE(entry + 12)
+          const png = ico.subarray(at, at + ico.readUInt32LE(entry + 8))
+          expect(sizeOf(png), name).toEqual([ico[entry], ico[entry + 1]])
+          return ico[entry]
+        })
+        expect(held, name).toEqual([16, 20, 24, 32])
+      }
   })
 })
 

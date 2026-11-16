@@ -66,7 +66,8 @@ await Promise.all([
   }),
 ])
 
-// The macOS menu bar's icons, drawn by icons/menu-bar/draw.mjs.
+// The macOS menu bar's icons, and those of Linux and Windows in `tray/`,
+// drawn by icons/menu-bar/draw.mjs.
 cpSync("icons/menu-bar", "out/menu-bar", {
   recursive: true,
   filter: (from) => !from.endsWith(".mjs"),
