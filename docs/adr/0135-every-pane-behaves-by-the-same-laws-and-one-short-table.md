@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-16
 ---
 
@@ -17,7 +17,8 @@ customise it. Not fight one window at a time and fix bugs." And, the same
 day: "There will be not only our applications but the users' apps. This
 has to be done well once, and after that all goes smoothly." Both Flows
 stay, the file stays TOML, and the predictable behaviour for every Pane
-comes before what a Person changes in the file.
+comes before what a Person changes in the file. Of the sheet below, read
+in Russian the same day: "it looks good and logical."
 
 It serves rules 1 and 2 of [the window](../window.md) (each thing in one
 place, the engine decides) and principle 9 of
@@ -118,8 +119,7 @@ has it whole (`main` at `5291a5b6`):
    opens = "below"
    ```
 
-   Banda's defaults are the same text, kept in the binary, and
-   `banda settings check` says which line placed a Pane.
+   Banda's defaults are the same text, kept in the binary.
 
 7. **After a close.** The focus goes back to the Pane that had it before
    the closed one, while that Pane still stands on the same workspace.
@@ -186,8 +186,7 @@ Each step is a PR that names this ADR and track 3.
    goes. A test holds the order of the row's lines the traces do not (a
    key from a Group, for a kind that stands on its Project's workspace).
    Nothing a Person sees changes.
-   _Roma tries:_ a day of work as before; `banda settings check` names
-   the line that placed a Pane.
+   _Roma tries:_ a day of work as before, in both Flows.
 2. **The file asks how and from what.** `via`, `from` and the three
    places in `tiling.toml`, its schema and Settings → Tiling.
    _Roma tries:_ a line that sends a terminal clicked from a Thread under
