@@ -82,7 +82,9 @@ export function MachinesPopover() {
             size="sm"
             aria-label={`Machines: ${named}`}
             title="Machines"
-            className="ml-auto h-7 min-w-0 gap-2.5 px-2 text-meta font-normal text-muted-foreground"
+            // It gives way to the foot's buttons, as each name truncates:
+            // a long machine name never runs past the sidebar's edge.
+            className="ml-auto h-7 min-w-0 shrink gap-2.5 px-2 text-meta font-normal text-muted-foreground"
           />
         }
       >
@@ -136,10 +138,13 @@ function Dot({
       data-machine-dot={host ?? HERE}
       data-standing={standing}
       title={`${named.name} · ${words}`}
-      className="flex min-w-0 items-center gap-1.5"
+      // This machine's name stays whole; the others give way.
+      className={cn("flex min-w-0 items-center gap-1.5", !host && "shrink-0")}
     >
       <Light standing={standing} />
-      <span className="truncate">{named.name}</span>
+      {/* No name takes more than its share, so a long one leaves the
+          others theirs. */}
+      <span className="max-w-24 truncate">{named.name}</span>
     </span>
   )
 }
