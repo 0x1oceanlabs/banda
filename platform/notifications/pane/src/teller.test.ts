@@ -61,6 +61,7 @@ test("a call the Person looks at while it gathers is not told, though they look 
     sight,
     look: () => ({ notify: NOTIFY, sound: DEFAULT_SOUND }),
     quiet: () => false,
+    elsewhere: () => false,
     projects: () => [],
     run: () => {},
   } as unknown as WindowApi
@@ -101,6 +102,7 @@ test("while Quiet is on nothing is told, and as it ends nothing is played back",
     sight: () => "in-window",
     look: () => ({ notify: NOTIFY, sound: DEFAULT_SOUND }),
     quiet: () => quiet,
+    elsewhere: () => false,
     projects: () => [],
     run: () => {},
   } as unknown as WindowApi
@@ -151,6 +153,7 @@ test("a machine back from away updates its calls silently, and what comes after 
     sight: () => "in-window",
     look: () => ({ notify: NOTIFY, sound: DEFAULT_SOUND }),
     quiet: () => false,
+    elsewhere: () => false,
     projects: () => [],
     run: () => {},
   } as unknown as WindowApi

@@ -86,6 +86,23 @@ test("the desktop's quiet leaves only the Marks, unless told never", () => {
   expect(tell("asking", "away", never, DESKTOP_QUIET).system).toBe(true)
 })
 
+// ADR 0124, decision 10: the Person is told once, where they are.
+test("a window the Person is away from tells nothing while they look at Banda on another device", () => {
+  const elsewhere = { ...LOUD, elsewhere: true }
+  const always = { ...NOTIFY, system: "always" as const }
+  for (const settings of [NOTIFY, always])
+    for (const chime of ["done", "asking", "failed"] as const)
+      expect(tell(chime, "away", settings, elsewhere, true)).toEqual({
+        sound: false,
+        toast: false,
+        system: false,
+      })
+  // In front here too, this window tells as ever.
+  expect(tell("asking", "in-window", NOTIFY, elsewhere).toast).toBe(true)
+  // And once they look at no other device.
+  expect(tell("asking", "away", NOTIFY, LOUD).system).toBe(true)
+})
+
 // ADR 0098, decision 21: while Banda's Quiet is on nothing is told, a
 // module's news neither, wherever the Person is and whatever the desktop
 // and [notify] say.

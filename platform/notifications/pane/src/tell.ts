@@ -52,14 +52,16 @@ const NOTHING: Telling = { sound: false, toast: false, system: false }
 export type Place = { toast: boolean; system: boolean }
 
 /** What keeps the window quiet now: Banda's own Quiet (ADR 0098, decision
- * 21), and the desktop's Do Not Disturb, which `[notify] quiet` follows
- * unless told never. */
-export type Quiet = { banda: boolean; desktop: boolean }
+ * 21); the desktop's Do Not Disturb, which `[notify] quiet` follows
+ * unless told never; and the Person looking at Banda on another device
+ * (ADR 0124, decision 10), which quiets a window they do not look at. */
+export type Quiet = { banda: boolean; desktop: boolean; elsewhere?: boolean }
 
 /**
  * Where to tell of something, from where the Person looks: nowhere while
- * they look at it, while Banda's Quiet is on, or while the desktop is
- * quiet; once, in one place, otherwise. A call's and a Problem's alike
+ * they look at it, while Banda's Quiet is on, while the desktop is
+ * quiet, or while they are away from this window and at Banda on another
+ * device, which tells them; once, in one place, otherwise. A call's and a Problem's alike
  * (ADR 0039).
  */
 export function placeOf(
@@ -69,6 +71,7 @@ export function placeOf(
 ): Place | null {
   if (sight === "looking" || quiet.banda) return null
   if (quiet.desktop && settings.quiet === "desktop") return null
+  if (quiet.elsewhere && sight === "away") return null
   const system =
     settings.system === "always" ||
     (settings.system === "away" && sight === "away")

@@ -750,6 +750,10 @@ mod tests {
                 "devices.front",
                 "it says a device's Person looks at Banda there, for the Person alone",
             ),
+            (
+                "devices.elsewhere",
+                "it says whether the Person looks at Banda on another device, for the Person alone",
+            ),
             ("harnesses.account", "it asks a Harness who is signed in"),
         ];
         let mut read_by_mark = Vec::new();

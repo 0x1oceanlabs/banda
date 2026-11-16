@@ -141,6 +141,7 @@ export function windowApiOf(shell: Shell): WindowApi {
     top: shell.top,
     look: shell.look,
     quiet: shell.quiet,
+    elsewhere: shell.elsewhere,
     writeSetting: shell.writeSetting,
     attach: shell.attach,
     peek: shell.peek,

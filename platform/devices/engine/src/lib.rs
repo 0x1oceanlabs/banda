@@ -42,7 +42,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::{oneshot, watch};
 use ts_rs::TS;
@@ -187,8 +186,9 @@ struct Kept {
     kept: watch::Sender<u64>,
     /// Where a push reaches each device, and the key that signs it.
     pushes: push::Pushes,
-    /// How many devices say their Person looks at Banda there now.
-    front: AtomicUsize,
+    /// The devices that say their Person looks at Banda there now, one
+    /// for each window that says so.
+    front: watch::Sender<Vec<DeviceId>>,
 }
 
 /// This machine's host key and the devices it paired, as the engine holds
@@ -226,7 +226,7 @@ impl Paired {
             removals: watch::channel(0).0,
             kept: watch::channel(0).0,
             pushes: push::Pushes::open(state)?,
-            front: AtomicUsize::new(0),
+            front: watch::channel(Vec::new()).0,
         })))
     }
 
@@ -400,7 +400,27 @@ impl Paired {
     /// machine, as the devices say (`devices.front`): they see there what
     /// calls them, and a push would say it twice.
     pub fn looking(&self) -> bool {
-        self.0.front.load(Ordering::Relaxed) > 0
+        !self.0.front.borrow().is_empty()
+    }
+
+    /// Whether they look at it on a device other than `device`, now and
+    /// as it changes.
+    fn elsewhere(&self, device: DeviceId) -> Stream {
+        watching_as(self.0.front.subscribe(), move |front| {
+            Some(Value::Bool(front.iter().any(|one| *one != device)))
+        })
+    }
+
+    /// A window of `device` says its Person looks at Banda there, or,
+    /// with `looks` false, no more.
+    fn looks(&self, device: DeviceId, looks: bool) {
+        self.0.front.send_modify(|front| {
+            if looks {
+                front.push(device);
+            } else if let Some(at) = front.iter().position(|one| *one == device) {
+                front.swap_remove(at);
+            }
+        });
     }
 
     /// Pushes `pushed` to `device`, where it said a push reaches it; or
@@ -670,6 +690,10 @@ banda_kernel::methods! {
         /// there: this machine pushes to no device while one holds it. It
         /// says `true` once, and ends as the device lets go of it.
         stream front(Nothing) -> bool, Manage, read;
+        /// Whether the Person looks at Banda on a device other than the
+        /// one that asks, now and as it changes: a window they do not
+        /// look at tells of nothing while they see it there.
+        stream elsewhere(Nothing) -> bool, Manage, read;
     }
 }
 
@@ -803,17 +827,21 @@ impl DevicesModule {
     }
 
     async fn front(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
-        asks(&call)?;
+        let device = asks(&call)?;
         let (says, stream) = tokio::sync::mpsc::channel(1);
         let paired = self.paired.clone();
-        paired.0.front.fetch_add(1, Ordering::Relaxed);
+        paired.looks(device, true);
         tokio::spawn(async move {
             let _ = says.send(Value::Bool(true)).await;
             // Its device stopped hearing it, or its session ended.
             says.closed().await;
-            paired.0.front.fetch_sub(1, Ordering::Relaxed);
+            paired.looks(device, false);
         });
         Ok(stream)
+    }
+
+    async fn elsewhere(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
+        Ok(self.paired.elsewhere(asks(&call)?))
     }
 
     async fn push_try(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
@@ -899,6 +927,30 @@ mod tests {
             origin: Some("https://arc.example".to_owned()),
             code: code.to_owned(),
         }
+    }
+
+    #[tokio::test]
+    async fn a_device_hears_that_its_person_looks_at_another_and_not_at_itself() {
+        let state = tempfile::tempdir().unwrap();
+        let paired = Paired::open(state.path(), PersonId::new()).unwrap();
+        let (mac, phone) = (DeviceId::new(), DeviceId::new());
+        let mut heard = paired.elsewhere(mac);
+        assert_eq!(heard.recv().await, Some(Value::Bool(false)));
+        // Its own window in front is not another device's.
+        paired.looks(mac, true);
+        assert_eq!(heard.recv().await, Some(Value::Bool(false)));
+        assert!(paired.looking());
+        // Two of the phone's windows: it looks there until both let go.
+        paired.looks(phone, true);
+        assert_eq!(heard.recv().await, Some(Value::Bool(true)));
+        paired.looks(phone, true);
+        assert_eq!(heard.recv().await, Some(Value::Bool(true)));
+        paired.looks(phone, false);
+        assert_eq!(heard.recv().await, Some(Value::Bool(true)));
+        paired.looks(phone, false);
+        assert_eq!(heard.recv().await, Some(Value::Bool(false)));
+        paired.looks(mac, false);
+        assert!(!paired.looking());
     }
 
     #[tokio::test]

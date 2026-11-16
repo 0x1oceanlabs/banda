@@ -75,4 +75,10 @@ push_try: CommandMethod<Nothing, null>,
  * there: this machine pushes to no device while one holds it. It
  * says `true` once, and ends as the device lets go of it.
  */
-front: StreamMethod<Nothing, boolean>, };
+front: StreamMethod<Nothing, boolean>, 
+/**
+ * Whether the Person looks at Banda on a device other than the
+ * one that asks, now and as it changes: a window they do not
+ * look at tells of nothing while they see it there.
+ */
+elsewhere: StreamMethod<Nothing, boolean>, };
