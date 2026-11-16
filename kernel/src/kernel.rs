@@ -14,7 +14,6 @@ use crate::sign::{self, Kept, Sign};
 use crate::window::Window;
 use crate::{AgentId, Named, PersonId, ProjectId, Refusal};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -317,11 +316,4 @@ pub(crate) async fn open_in(projects: &Projects, id: ProjectId) -> Result<Arc<Pr
 
 pub(crate) fn no_project() -> Refusal {
     Refusal::not_found("There is no such Project on this computer.")
-}
-
-/// Reads a method's parameters. Unknown fields are ignored, so an older
-/// engine accepts a newer window's call (ADR 0002, decision 8).
-pub fn decode<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, Refusal> {
-    serde_json::from_value(params)
-        .map_err(|e| Refusal::invalid(format!("The call's parameters do not fit: {e}.")))
 }

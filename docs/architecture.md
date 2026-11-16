@@ -191,11 +191,12 @@ The detail of each part is beside its code:
 
 ```
 banda/
-  kernel/             Rust: Project, event log, access, registry, API
+  kernel/             Rust: Project, event log, access, registry, API; base/ its IDs and refusal, for code that runs without it
   engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu
   apps/               each App's module, one folder each (ADR 0062, decision 11): the table under Modules
   platform/           what the Apps stand on; it names no App (ADR 0062): its modules are in that table, and beside them
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
+    tiling/           Rust: the Tiling's model, a leaf the engine runs and a client can build (ADR 0135)
     look/             Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
     settings/         Rust: Banda's settings files, each described once, and the one writer that changes them (ADR 0016)
     git-cli/          Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
@@ -222,6 +223,7 @@ allows only falls.
 | --- | --- | --- |
 | The kernel names no module; no module reads another's tables; what the platform's Rust and an App still name of another App; which crates depend on an App's | `kernel/tests/architecture.rs`, `engine/src/apps.rs` | [`kernel/README.md`](../kernel/README.md#checks) |
 | No code of the engine makes a process but `banda-environments`, and who makes a `Program` | `kernel/tests/architecture.rs` | [`kernel/README.md`](../kernel/README.md#checks) |
+| The Tiling's model brings no store, runtime, file's reader nor randomness, so it builds for a client | `platform/tiling/tests/leaf.rs` | [`platform/workspaces/README.md`](../platform/workspaces/README.md) |
 | The fence makes real namespaces | the fence's tests, CI's `fence` part | [`kernel/README.md`](../kernel/README.md#checks) |
 | A Pane imports only the API, `@banda/ui`, React and its icons | each `apps/*/pane/src/architecture.test.ts` | [`kernel/README.md`](../kernel/README.md#checks) |
 | Only `modules.ts` and the bridge's table name a module's package; nothing more animates a size or a place; ADR 0087's ratchets; who reads `window.banda`; what the core imports | `client/web/src/architecture.test.ts` | [`client/web/README.md`](../client/web/README.md#checks) |

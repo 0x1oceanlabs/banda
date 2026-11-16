@@ -1,0 +1,25 @@
+[package]
+name = "banda-base"
+description = "The kernel's words that code says without the kernel: the IDs and a call's refusal."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# What an ID is in the engine only: text in SQLite, and made new by the
+# clock. The kernel turns it on; a build for a client leaves it off.
+engine = ["dep:rusqlite", "uuid/v7"]
+
+[dependencies]
+rusqlite = { workspace = true, optional = true }
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ts-rs.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

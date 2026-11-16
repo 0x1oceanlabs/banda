@@ -33,11 +33,17 @@
 //! can draw them at once, two clients never make the same, and a command
 //! sent again makes nothing twice: its receipt answers it, and past the
 //! receipt the workspaces refuse it while they hold what it made.
+//!
+//! The arrangement's rules, `placing` and the commands as functions of
+//! it are `banda-tiling`'s (`platform/tiling`), a leaf a client runs too; this
+//! crate keeps the arrangement, reads `tiling.toml` and holds the Agents
+//! behind their walls.
 
-pub mod commands;
-pub mod model;
-pub mod placing;
 pub mod tiling;
+
+pub use banda_tiling::model;
+
+use banda_tiling::{commands, placing};
 
 use banda_kernel::{
     AgentId, Call, Error, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Scope,
@@ -47,7 +53,7 @@ pub use commands::{
     Arrange, Fill, Height, Maximize, MoveColumn, MovePane, MoveWorkspace, OneColumn, OnePane, Open,
     Regroup, ShowAs, Size, Take, Tidy, Update,
 };
-use model::{Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Sight, WorkspaceId};
+use model::{Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, WorkspaceId};
 use placing::{Asked, By, Facts};
 use rusqlite::OptionalExtension;
 use schemars::JsonSchema;
@@ -363,6 +369,36 @@ fn shows_only(args: &Value, shows: &[&str]) -> Result<(), Refusal> {
     }
 }
 
+/// How much of a Pane a caller sees (ADR 0032).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Sight {
+    /// All of it: the owner, or an Agent of its Project.
+    Whole,
+    /// Where it is and what it is, not its args: an Agent of another
+    /// Project whose Person lets it see the others.
+    Outline,
+    /// Nothing: behind the wall.
+    Hidden,
+}
+
+/// How much of `pane` a caller behind `wall` sees.
+fn sight(wall: Option<Wall>, pane: &model::Pane) -> Sight {
+    match wall {
+        None => Sight::Whole,
+        Some(wall) if wall.project == pane.shows.project => Sight::Whole,
+        Some(wall) if wall.sees_others => Sight::Outline,
+        Some(_) => Sight::Hidden,
+    }
+}
+
+/// The Pane `pane`, when a caller behind `wall` sees it; a Pane it does
+/// not is as if the workspaces did not show it.
+fn seen(list: &Arrangement, wall: Wall, pane: PaneId) -> Result<&model::Pane, Refusal> {
+    model::panes(list)
+        .find(|other| other.id == pane && sight(Some(wall), other) != Sight::Hidden)
+        .ok_or_else(|| Refusal::not_found("The workspaces show no such Pane."))
+}
+
 /// Drops the words a Thread's Pane an Agent opened would send first,
 /// whenever it was kept: they are the Person's alone to give (ADR 0083,
 /// decision 3).
@@ -457,7 +493,7 @@ pub struct Beside {
 impl Beside {
     /// Its place, by a Pane the caller behind `wall` sees.
     fn place(self, list: &Arrangement, wall: Wall) -> Result<Place, Refusal> {
-        model::seen(list, wall, self.pane)?;
+        seen(list, wall, self.pane)?;
         Ok(Place::Beside {
             pane: self.pane,
             side: self.side,
@@ -647,7 +683,7 @@ impl Module for Workspaces {
             .write(|tx| {
                 tx.sql().execute(
                     "INSERT OR IGNORE INTO workspaces_arrangement (one, workspaces) VALUES (1, ?1)",
-                    [serde_json::to_string(&model::start())?],
+                    [serde_json::to_string(&model::start_at(WorkspaceId::new()))?],
                 )?;
                 Ok(())
             })
@@ -1018,7 +1054,7 @@ impl Workspaces {
         let me = call.participant().agent();
         let (_, list) = call.project().view(load).await?;
         let seen = |pane: &model::Pane| {
-            let sight = model::sight(wall, pane);
+            let sight = sight(wall, pane);
             (sight != Sight::Hidden).then(|| SeenPane {
                 id: pane.id,
                 project: pane.shows.project,
@@ -1226,7 +1262,7 @@ fn walled(call: &Call) -> Result<(Wall, AgentId), Refusal> {
 
 /// Refuses a Pane `agent` did not open.
 fn own(list: &Arrangement, wall: Wall, agent: AgentId, pane: PaneId) -> Result<(), Refusal> {
-    if model::seen(list, wall, pane)?.by == Some(agent) {
+    if seen(list, wall, pane)?.by == Some(agent) {
         Ok(())
     } else {
         Err(Refusal::forbidden(
@@ -1420,6 +1456,44 @@ mod tests {
     use super::*;
     use banda_kernel::ProjectId;
     use serde_json::json;
+
+    #[test]
+    fn a_wall_shows_its_project_whole_and_the_others_only_when_let() {
+        let mut list = model::start_at(WorkspaceId::new());
+        let (mine, other) = (ProjectId::new(), ProjectId::new());
+        let shown = |project, n: u32| Shown {
+            project,
+            kind: "a.a".into(),
+            args: json!({ "n": n }),
+        };
+        let mut open = |opening| {
+            let seed = Seed::of(&Uuid::now_v7().to_string());
+            model::open(&mut list, opening, &seed).unwrap()
+        };
+        let a = open(Opening::of(shown(mine, 1)));
+        let b = open(Opening::of(shown(other, 2)));
+        let agent = AgentId::new();
+        let c = open(Opening {
+            by: Some(agent),
+            ..Opening::of(shown(mine, 3))
+        });
+        let walled = Wall {
+            project: mine,
+            sees_others: false,
+        };
+        let let_see = Wall {
+            sees_others: true,
+            ..walled
+        };
+        let pane = |id| model::panes(&list).find(|p| p.id == id).unwrap();
+        assert_eq!(sight(None, pane(b)), Sight::Whole);
+        assert_eq!(sight(Some(walled), pane(a)), Sight::Whole);
+        assert_eq!(sight(Some(walled), pane(b)), Sight::Hidden);
+        assert_eq!(sight(Some(let_see), pane(b)), Sight::Outline);
+        assert!(seen(&list, walled, b).is_err());
+        assert!(seen(&list, let_see, b).is_ok());
+        assert_eq!(seen(&list, walled, c).unwrap().by, Some(agent));
+    }
 
     #[test]
     fn a_projects_own_group_kept_before_adr_0134_reads_as_columns_in_no_group() {

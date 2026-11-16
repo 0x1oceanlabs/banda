@@ -453,6 +453,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "banda-base"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
 name = "banda-browser"
 version = "0.1.0"
 dependencies = [
@@ -656,6 +669,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "banda-base",
  "base64 0.22.1",
  "dirs",
  "dunce",
@@ -716,6 +730,7 @@ name = "banda-look"
 version = "0.1.0"
 dependencies = [
  "banda-theme",
+ "banda-tiling",
  "dunce",
  "image",
  "schemars 1.2.3",
@@ -880,6 +895,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "banda-tiling"
+version = "0.1.0"
+dependencies = [
+ "banda-base",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
 name = "banda-updates"
 version = "0.1.0"
 dependencies = [
@@ -910,6 +937,7 @@ dependencies = [
  "async-trait",
  "banda-kernel",
  "banda-look",
+ "banda-tiling",
  "rusqlite",
  "schemars 1.2.3",
  "serde",

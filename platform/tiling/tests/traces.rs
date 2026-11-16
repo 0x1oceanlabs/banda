@@ -11,7 +11,7 @@
 //! changed, make the client's copy do the same, and run it again.
 //!
 //! ```sh
-//! cargo test -p banda-workspaces --test traces
+//! cargo test -p banda-tiling --test traces
 //! ```
 //!
 //! Nothing in them is random, so a trace changes only when what the model
@@ -21,11 +21,11 @@
 //! order: serde_json keeps keys in the order given only when another crate
 //! of the build asks it to, as one does under `cargo test --workspace`.
 
-use banda_kernel::{Code, Refusal};
-use banda_workspaces::commands::{self, METHODS};
-use banda_workspaces::model::{self, Arrangement, Seed};
-use banda_workspaces::placing::{Facts, Flow, Via};
-use banda_workspaces::tiling::{Front, Opens, Rule, When};
+use banda_base::{Code, Refusal};
+use banda_tiling::commands::{self, METHODS};
+use banda_tiling::model::{self, Arrangement, Seed};
+use banda_tiling::placing::{Facts, Flow, Via};
+use banda_tiling::rule::{Front, Opens, Rule, When};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -1789,7 +1789,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         assert!(ways.contains(way), "No passing step takes {way}.");
     }
 
-    let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../traces");
+    let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../workspaces/traces");
     std::fs::create_dir_all(&folder).unwrap();
     let mut names = BTreeSet::new();
     let mut changed = Vec::new();

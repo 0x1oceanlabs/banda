@@ -21,27 +21,27 @@
 //! command's `Seed`, so the client that sends it knows the IDs before the
 //! answer.
 
-use banda_kernel::{AgentId, ProjectId, Refusal, Wall};
-use banda_look::columns::{Display, share};
+use crate::columns::{Display, share};
+use banda_base::{AgentId, ProjectId, Refusal};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 use uuid::Uuid;
 
-banda_kernel::id!(
+banda_base::id!(
     /// A workspace's ID.
     WorkspaceId, export_to = "workspaces/"
 );
-banda_kernel::id!(
+banda_base::id!(
     /// A column's ID, which it keeps as it moves.
     ColumnId, export_to = "workspaces/"
 );
-banda_kernel::id!(
+banda_base::id!(
     /// A Pane's ID, which it keeps as it moves.
     PaneId, export_to = "workspaces/"
 );
-banda_kernel::id!(
+banda_base::id!(
     /// A Group's ID: columns side by side that move and look as one (ADR
     /// 0065).
     GroupId, export_to = "workspaces/"
@@ -203,36 +203,6 @@ pub struct Pane {
     pub height: Option<String>,
 }
 
-/// How much of a Pane a caller sees (ADR 0032).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Sight {
-    /// All of it: the owner, or an Agent of its Project.
-    Whole,
-    /// Where it is and what it is, not its args: an Agent of another
-    /// Project whose Person lets it see the others.
-    Outline,
-    /// Nothing: behind the wall.
-    Hidden,
-}
-
-/// How much of `pane` a caller behind `wall` sees.
-pub fn sight(wall: Option<Wall>, pane: &Pane) -> Sight {
-    match wall {
-        None => Sight::Whole,
-        Some(wall) if wall.project == pane.shows.project => Sight::Whole,
-        Some(wall) if wall.sees_others => Sight::Outline,
-        Some(_) => Sight::Hidden,
-    }
-}
-
-/// The Pane `pane`, when a caller behind `wall` sees it; a Pane it does
-/// not is as if the workspaces did not show it.
-pub fn seen(list: &Arrangement, wall: Wall, pane: PaneId) -> Result<&Pane, Refusal> {
-    panes(list)
-        .find(|other| other.id == pane && sight(Some(wall), other) != Sight::Hidden)
-        .ok_or_else(|| Refusal::not_found("The workspaces show no such Pane."))
-}
-
 /// What a Pane shows: two Panes are the same when this is, but for a
 /// Thread's Pane an Agent asks for (`showing_asked`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -323,14 +293,14 @@ pub enum Side {
     Right,
 }
 
-/// The first arrangement: one empty workspace.
-pub fn start() -> Arrangement {
-    vec![blank(WorkspaceId::new())]
+/// The first arrangement: one empty workspace, `id`.
+pub fn start_at(id: WorkspaceId) -> Arrangement {
+    vec![blank(id)]
 }
 
 /// An arrangement of one empty workspace, as a command makes it.
 pub fn start_from(seed: &Seed) -> Arrangement {
-    vec![blank(seed.bottom())]
+    start_at(seed.bottom())
 }
 
 fn blank(id: WorkspaceId) -> Workspace {
@@ -1238,6 +1208,11 @@ pub(crate) mod tests {
     use super::*;
     use crate::placing::agents_place;
     use serde_json::json;
+
+    /// The first arrangement.
+    pub(crate) fn start() -> Arrangement {
+        start_at(WorkspaceId::new())
+    }
 
     /// A new command's seed.
     pub(crate) fn seed() -> Seed {
@@ -2380,39 +2355,6 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_wall_shows_its_project_whole_and_the_others_only_when_let() {
-        let mut list = start();
-        let (mine, other) = (ProjectId::new(), ProjectId::new());
-        let a = opened(&mut list, shown(mine, "a.a", 1), None);
-        let b = opened(&mut list, shown(other, "a.a", 2), None);
-        let walled = Wall {
-            project: mine,
-            sees_others: false,
-        };
-        let let_see = Wall {
-            sees_others: true,
-            ..walled
-        };
-        let pane = |id| panes(&list).find(|p| p.id == id).unwrap();
-        assert_eq!(sight(None, pane(b)), Sight::Whole);
-        assert_eq!(sight(Some(walled), pane(a)), Sight::Whole);
-        assert_eq!(sight(Some(walled), pane(b)), Sight::Hidden);
-        assert_eq!(sight(Some(let_see), pane(b)), Sight::Outline);
-        assert!(seen(&list, walled, b).is_err());
-        assert!(seen(&list, let_see, b).is_ok());
-        let agent = AgentId::new();
-        let c = open(
-            &mut list,
-            Opening {
-                by: Some(agent),
-                ..Opening::of(shown(mine, "a.a", 3))
-            },
-            &seed(),
-        );
-        assert_eq!(seen(&list, walled, c.unwrap()).unwrap().by, Some(agent));
-    }
-
-    #[test]
     fn update_keeps_new_args_in_place() {
         let mut list = start();
         let one = opened(&mut list, shown(ProjectId::new(), "a.a", 1), None);
@@ -2567,7 +2509,7 @@ pub(crate) mod tests {
     fn a_command_whose_ids_the_workspaces_hold_ran_before() {
         let ran_before = |seed: Seed, list: &Arrangement| {
             let refused = seed.unused(list).unwrap_err();
-            assert_eq!(refused.code, banda_kernel::Code::Conflict);
+            assert_eq!(refused.code, banda_base::Code::Conflict);
         };
         let mut list = start();
         let opening = seed();

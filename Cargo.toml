@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "platform/apps/engine", "platform/bytes/engine", "platform/devices/engine", "platform/environments", "platform/fence", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/machines/engine", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/theme", "platform/updates/engine", "platform/workspaces/engine", "tools/fake-agent"]
+members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "kernel/base", "platform/apps/engine", "platform/bytes/engine", "platform/devices/engine", "platform/environments", "platform/fence", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/machines/engine", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/theme", "platform/tiling", "platform/updates/engine", "platform/workspaces/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"
@@ -108,7 +108,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tokio-tungstenite = "0.29"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
-uuid = { version = "1.29.0", features = ["v4", "v5", "v7", "serde"] }
+# No `v4` nor `v7` here: they ask for a source of randomness, which a build
+# for a client has none of (banda-base, banda-tiling). A crate that makes
+# IDs adds them.
+uuid = { version = "1.29.0", features = ["v5", "serde"] }
 # A file's volume and index on Windows, read from the open file, so a
 # token of the bytes module serves only the file it was given for (ADR
 # 0106, step 4a). walkdir brings it already.

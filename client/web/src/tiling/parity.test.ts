@@ -1,7 +1,7 @@
 /**
  * The client's copy of the arrangement does what the engine does (ADR
  * 0088, decision 11): every golden trace the engine's tests record
- * (`platform/workspaces/engine/tests/traces.rs`) replays through `apply`,
+ * (`platform/tiling/tests/traces.rs`) replays through `apply`,
  * step by step. Each step starts from the arrangement the engine had
  * before it, so one step the copy gets wrong fails alone.
  *
