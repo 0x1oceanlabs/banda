@@ -17,8 +17,15 @@
 //! is the Person here, each with the code its own screen shows, and
 //! `devices.allow` pairs one, `devices.refuse` sends it away. An engine
 //! that restarts forgets them: the device asks again.
+//!
+//! A device says where a push reaches it while it is not looking
+//! (`devices.push_to`, [`push`]), and this machine pushes there
+//! ([`Paired::push`]).
 
+mod push;
 mod served;
+
+pub use push::{Pushed, Subscription};
 
 use banda_kernel::api::APP_ORIGIN;
 use banda_kernel::devices::{Asked, Asking, Device, Devices};
@@ -177,6 +184,8 @@ struct Kept {
     removals: watch::Sender<u64>,
     /// Counts the changes kept, for who hears what a device was handed.
     kept: watch::Sender<u64>,
+    /// Where a push reaches each device, and the key that signs it.
+    pushes: push::Pushes,
 }
 
 /// This machine's host key and the devices it paired, as the engine holds
@@ -213,6 +222,7 @@ impl Paired {
             changing: Mutex::new(()),
             removals: watch::channel(0).0,
             kept: watch::channel(0).0,
+            pushes: push::Pushes::open(state)?,
         })))
     }
 
@@ -363,7 +373,26 @@ impl Paired {
         one.removed_at = Some(now_ms());
         self.keep(known)?;
         self.0.removals.send_modify(|removed| *removed += 1);
+        // It is told nothing more; a file that would not write keeps a
+        // subscription `push` finds no device for.
+        let _ = self.0.pushes.keep(device, None);
         Ok(())
+    }
+
+    /// The devices that take pushes from this machine.
+    pub fn pushed(&self) -> Vec<DeviceId> {
+        let paired = self.listed();
+        let takes = |(id, _): (DeviceId, _)| paired.iter().any(|one| one.id == id).then_some(id);
+        self.0.pushes.all().into_iter().filter_map(takes).collect()
+    }
+
+    /// Pushes `pushed` to `device`, where it said a push reaches it; or
+    /// says why none went.
+    pub async fn push(&self, device: DeviceId, pushed: &Pushed) -> Result<(), Refusal> {
+        if !self.listed().iter().any(|one| one.id == device) {
+            return Err(Refusal::not_found("This machine has no such device."));
+        }
+        self.0.pushes.push(device, pushed).await
     }
 
     /// Lets go of each asking whose time is out, or whose device went
@@ -613,6 +642,16 @@ banda_kernel::methods! {
         /// as this machine's devices change: where it reaches each, and
         /// as which device. None for a program on the machine.
         stream machines(Nothing) -> Vec<Machine>, Manage, read;
+        /// This machine's push key, public: what a browser names as it
+        /// subscribes to pushes (`applicationServerKey`).
+        call push_key(Nothing) -> PushKey, Manage, read;
+        /// Says where a push reaches the device that asks while it is
+        /// not looking, as its browser's subscription has it; with none,
+        /// this machine pushes to it no more.
+        command push_to(PushTo) -> (), Manage;
+        /// Pushes a few words to the device that asks, so its Person
+        /// sees that pushes from this machine reach it.
+        command push_try(Nothing) -> (), Manage;
     }
 }
 
@@ -635,6 +674,26 @@ pub struct Listed {
     /// `https://arc.example.ts.net`: none where nothing serves it.
     #[serde(default)]
     pub doors: Vec<String>,
+    /// The devices that take pushes from this machine.
+    #[serde(default)]
+    pub pushed: Vec<DeviceId>,
+}
+
+/// What `devices.push_key` answers.
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "devices/")]
+pub struct PushKey {
+    /// P-256, uncompressed, as base64url.
+    pub key: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema, TS)]
+#[ts(export, export_to = "devices/")]
+pub struct PushTo {
+    /// None to take pushes from this machine no more.
+    #[serde(default)]
+    #[ts(optional)]
+    subscription: Option<Subscription>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, TS)]
@@ -681,6 +740,7 @@ impl DevicesModule {
             host_key: self.paired.host_key_text(),
             devices: self.paired.listed(),
             doors,
+            pushed: self.paired.pushed(),
         })
     }
 
@@ -719,6 +779,38 @@ impl DevicesModule {
         let paired = self.paired.clone();
         written(move || paired.hand(hand.device, hand.machines)).await
     }
+}
+
+impl DevicesModule {
+    async fn push_key(&self, _: Call, _: Nothing) -> Result<PushKey, Refusal> {
+        Ok(PushKey {
+            key: self.paired.0.pushes.key(),
+        })
+    }
+
+    async fn push_to(&self, call: Call, to: PushTo) -> Result<(), Refusal> {
+        let (paired, device) = (self.paired.clone(), asks(&call)?);
+        written(move || paired.0.pushes.keep(device, to.subscription)).await
+    }
+
+    async fn push_try(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
+        let pushed = Pushed {
+            title: "Banda".to_owned(),
+            body: "Pushes from this machine reach this device.".to_owned(),
+            tag: "banda.try".to_owned(),
+            to: None,
+        };
+        self.paired.push(asks(&call)?, &pushed).await
+    }
+}
+
+/// The device a call came from, which alone says where its pushes go.
+fn asks(call: &Call) -> Result<DeviceId, Refusal> {
+    call.device().ok_or_else(|| {
+        Refusal::invalid(
+            "Only a device says where its pushes go: a program on the machine has none.",
+        )
+    })
 }
 
 /// Runs a change that writes the devices' file where a wait for the disk

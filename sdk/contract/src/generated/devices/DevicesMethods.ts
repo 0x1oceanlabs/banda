@@ -10,6 +10,8 @@ import type { Hand } from "./Hand";
 import type { Listed } from "./Listed";
 import type { Machine } from "./Machine";
 import type { PairedDevice } from "./PairedDevice";
+import type { PushKey } from "./PushKey";
+import type { PushTo } from "./PushTo";
 import type { Remove } from "./Remove";
 
 export type DevicesMethods = { 
@@ -57,4 +59,20 @@ hand: CommandMethod<Hand, PairedDevice>,
  * as this machine's devices change: where it reaches each, and
  * as which device. None for a program on the machine.
  */
-machines: StreamMethod<Nothing, Array<Machine>>, };
+machines: StreamMethod<Nothing, Array<Machine>>, 
+/**
+ * This machine's push key, public: what a browser names as it
+ * subscribes to pushes (`applicationServerKey`).
+ */
+push_key: CallMethod<Nothing, PushKey>, 
+/**
+ * Says where a push reaches the device that asks while it is
+ * not looking, as its browser's subscription has it; with none,
+ * this machine pushes to it no more.
+ */
+push_to: CommandMethod<PushTo, null>, 
+/**
+ * Pushes a few words to the device that asks, so its Person
+ * sees that pushes from this machine reach it.
+ */
+push_try: CommandMethod<Nothing, null>, };
