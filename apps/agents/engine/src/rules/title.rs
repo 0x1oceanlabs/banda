@@ -175,12 +175,12 @@ fn cut(line: &str, longest: usize) -> String {
 }
 
 /// `text` on one line, its spaces collapsed.
-fn one_line(text: &str) -> String {
+pub(crate) fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// The first `longest` characters of `text`, and "…" if there are more.
-fn start(text: &str, longest: usize) -> String {
+pub(crate) fn start(text: &str, longest: usize) -> String {
     match text.char_indices().nth(longest) {
         Some((at, _)) => format!("{}…", &text[..at]),
         None => text.to_owned(),

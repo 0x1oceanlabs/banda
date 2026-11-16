@@ -320,6 +320,9 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         println!("{line}");
     }
     tracing::info!(port = running.port, root = %places.root.display(), "the engine serves");
+    // Who calls the Person while they look at no device is pushed to
+    // their devices (ADR 0124, decision 10).
+    let telling = crate::tell::start(places.clone(), paired.clone());
     let keeping = to_keep.map(|app| tokio::spawn(app::keep_open(app::Mac::of(&places), app)));
     let keeps = keeping.as_ref().map(tokio::task::JoinHandle::abort_handle);
 
@@ -361,6 +364,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     if let Some(keeping) = keeping {
         keeping.abort();
     }
+    telling.abort();
     kernel.stopping();
     drop(awake);
     places.withdraw();

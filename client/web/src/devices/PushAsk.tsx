@@ -8,13 +8,15 @@
  * switch.
  *
  * `PushKept` is the other half: while pushes are on, it says to every
- * machine the page reaches where a push finds this device.
+ * machine the page reaches where a push finds this device. And `Looking`
+ * says to each, from any device, that the Person looks at Banda here: a
+ * machine pushes only while they look at none.
  */
 import type { Engine } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { toast } from "@banda/ui/components/sonner"
 import { useAct } from "@banda/ui/hooks/use-act"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { named } from "./asking"
 import { kept, later, turnOn, useStand } from "./push"
 import { useReached } from "./reached"
@@ -87,5 +89,47 @@ export function PushKept({ engine }: { engine: Engine }) {
     // A browser that gives no subscription now gives one the next time.
     void kept(reached.map((one) => one.engine)).catch(() => {})
   }, [on, reached])
+  return null
+}
+
+const LOOKS = ["focus", "blur", "visibilitychange"] as const
+
+const followLooks = (hear: () => void) => {
+  for (const one of LOOKS) window.addEventListener(one, hear, true)
+  return () => {
+    for (const one of LOOKS) window.removeEventListener(one, hear, true)
+  }
+}
+
+/** The window is in front and its page is shown: a phone's browser put
+ * away keeps the focus it had. */
+const looks = () =>
+  document.hasFocus() && document.visibilityState === "visible"
+
+/** While the Person looks at Banda in this window, holds `devices.front`
+ * on each machine the page reaches: it sees here what calls, so none
+ * pushes. A machine hears the hold end as the window goes behind
+ * another, the page is put away, or its connection goes. Each machine's
+ * is held by itself, so another coming or going lets none go. */
+export function Looking({ engine }: { engine: Engine }) {
+  const looking = useSyncExternalStore(followLooks, looks, () => false)
+  const reached = useReached(engine)
+  if (!looking) return null
+  return reached.map((one, at) => <Front key={at} engine={one.engine} />)
+}
+
+function Front({ engine }: { engine: Engine }) {
+  useEffect(
+    () =>
+      // A machine from before it refuses the stream: it pushes to none.
+      engine.stream(
+        undefined,
+        "devices.front",
+        {},
+        () => {},
+        () => {}
+      ),
+    [engine]
+  )
   return null
 }

@@ -77,6 +77,7 @@ mod run;
 mod serve;
 mod service;
 mod status;
+mod tell;
 mod window;
 
 use banda_kernel::{CommandId, EventFilter, ProjectId, Refusal};

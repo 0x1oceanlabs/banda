@@ -23,7 +23,7 @@ import { AS_OF } from "./calls/as-of"
 import { RoutingContext } from "./tiling/mount"
 import { AskToShare } from "./sharing/AskToShare"
 import { DevicesAsking } from "./devices/AskingDialog"
-import { PushKept } from "./devices/PushAsk"
+import { Looking, PushKept } from "./devices/PushAsk"
 import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
 import { Updates } from "./bar/update/heard"
 
@@ -111,6 +111,7 @@ export function App({ engine }: { engine: Engine }) {
               </Updates>
               <DevicesAsking engine={engine} />
               <PushKept engine={engine} />
+              <Looking engine={engine} />
             </Machines>
           </RoutingContext>
         </HostsContext>
