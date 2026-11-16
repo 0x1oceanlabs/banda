@@ -193,6 +193,13 @@ Each step is a PR that names this ADR and track 3.
    it; a line for a kind does not move what an Agent opens.
 3. **A trial of the model in the window**, for its cost: a report, no
    product change.
+   _Done_, 2026-11-16:
+   [the trial](../research/2026-11-16-the-model-in-the-window.md). The
+   model's files, unchanged, built for WebAssembly, gave the engine's
+   answer on all 354 steps of the 21 traces, at 0.07 ms a command and
+   134 KB gzipped. What stands in the way is borders, not the model: the
+   kernel's small types, SQLite in the IDs, the rule's types beside the
+   file's reader. So the model goes to the window before step 4.
 4. **The view's rule.** One function for the focus and the screen, with
    decisions 7 and 8 and laws 1, 2 and 7; `held`, `aim` and `want` go.
    _Roma tries:_ open three Panes and close them one by one: the focus
