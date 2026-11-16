@@ -165,6 +165,17 @@ pub struct Asked {
 ///   Pane in front;
 /// - from another Project's workspace, first on its own, as with none.
 pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Option<Place> {
+    let tree = place_tree(list, leads, asked);
+    #[cfg(debug_assertions)]
+    {
+        let table = table::place(list, leads, asked);
+        assert_eq!(table, tree, "the table and the tree differ for {asked:?}");
+        table::count();
+    }
+    tree
+}
+
+fn place_tree(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Option<Place> {
     let Asked {
         flow,
         project,
@@ -403,6 +414,161 @@ pub(crate) fn agents_place(list: &Arrangement, project: ProjectId, thread: Uuid)
         args: serde_json::json!({ "thread": thread.to_string() }),
     };
     model::showing_asked(list, &asked).map(|pane| Place::Group { pane: pane.id })
+}
+
+/// Shape B of `docs/research/2026-11-16-the-tiling-s-behaviour-as-one-table.md`,
+/// for a replay only: the laws as code, then the first line of a table
+/// that holds and whose place can be made.
+#[cfg(debug_assertions)]
+pub(crate) mod table {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SAME: AtomicUsize = AtomicUsize::new(0);
+    /// Counts a placing the two agreed on, for the replay's report.
+    pub fn count() {
+        let n = SAME.fetch_add(1, Ordering::Relaxed) + 1;
+        if let Ok(path) = std::env::var("BANDA_TABLE_COUNT") {
+            let _ = std::fs::write(format!("{path}.{}", std::process::id()), n.to_string());
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    enum From {
+        Pane,
+        Group,
+    }
+    #[derive(Clone, Copy)]
+    enum To {
+        Beside,
+        Below,
+        Group,
+        BesideGroup,
+        Project,
+        ProjectStart,
+        Here,
+    }
+    /// What a line asks (none: any) and says.
+    struct Line {
+        via: Option<Via>,
+        from: Option<From>,
+        home: bool,
+        to: To,
+    }
+    const fn line(via: Option<Via>, from: Option<From>, home: bool, to: To) -> Line {
+        Line { via, from, home, to }
+    }
+    const CLICK: Line = line(Some(Via::Click), Some(From::Group), false, To::Group);
+    const KEY: Line = line(Some(Via::Key), Some(From::Group), false, To::BesideGroup);
+    const BESIDE: Line = line(None, Some(From::Pane), false, To::Beside);
+    const FREE: [Line; 4] = [CLICK, KEY, BESIDE, line(None, None, false, To::Here)];
+    const ROW: [Line; 5] = [
+        CLICK,
+        line(None, None, true, To::Project),
+        KEY,
+        BESIDE,
+        line(None, None, false, To::ProjectStart),
+    ];
+
+    pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Option<Place> {
+        let Asked { flow, project, grouped, home, opens, scratch, from, on, by } = asked;
+        let row = flow == Flow::Row;
+        let its_workspace = if scratch { Place::Free } else { Place::Project { project } };
+        // Law: what an Agent opens goes into its Thread's Group, else in
+        // the row on its Project's workspace.
+        if let By::Agent { thread } = by {
+            let group = (thread.filter(|_| !grouped)).and_then(|t| agents_place(list, project, t));
+            if group.is_some() {
+                return group;
+            }
+            if row {
+                return Some(its_workspace);
+            }
+        }
+        let at = from.and_then(|pane| Some((pane, model::spot(list, pane).ok()?)));
+        let here = || {
+            let workspace = on.filter(|on| list.iter().any(|w| w.id == *on))?;
+            Some(Place::Column { workspace, index: usize::MAX })
+        };
+        // Law: in the row no Pane goes by the Pane in front onto a
+        // workspace another Project owns.
+        let theirs = at.as_ref().is_some_and(|(_, at)| {
+            let owner = list[at.workspace].project;
+            row && !scratch && owner.is_some_and(|owner| owner != project)
+        });
+        // Law: an empty workspace no Project owns takes what the Person
+        // opens with no Pane in front (ADR 0134, decision 6).
+        let empty = (on.and_then(|on| list.iter().find(|w| w.id == on)))
+            .is_some_and(|w| w.project.is_none() && w.columns.is_empty());
+        if let (By::Person { .. }, None, true) = (by, &at, empty) {
+            let owns = list.iter().any(|w| w.project == Some(project));
+            if !row || scratch || owns {
+                return here();
+            }
+        }
+        let spot = at.as_ref().map(|(pane, at)| {
+            let columns = &list[at.workspace].columns;
+            let in_group = columns[at.column].group.is_some();
+            let leads_one = leads.contains(&columns[at.column].panes[at.pane].shows.kind);
+            (*pane, columns, at.column, in_group, leads_one)
+        });
+        // The Person's line for the kind, over Banda's.
+        let theirs_line = opens.and_then(|opens| match opens {
+            Opens::Beside => Some(line(None, Some(From::Pane), false, To::Beside)),
+            Opens::Below => Some(line(None, Some(From::Pane), false, To::Below)),
+            Opens::Group => Some(line(None, Some(From::Pane), false, To::Group)),
+            Opens::Project => None,
+        });
+        let defaults: &[Line] = if row { &ROW } else { &FREE };
+        let person = theirs_line.as_ref().map(|l| (l, true));
+        for (line, persons) in person.into_iter().chain(defaults.iter().map(|l| (l, false))) {
+            if line.home && !home {
+                continue;
+            }
+            if let Some(via) = line.via {
+                if !matches!(by, By::Person { via: v } if v == via) {
+                    continue;
+                }
+            }
+            match (line.from, &spot) {
+                (None, _) => {}
+                (Some(_), None) => continue,
+                (Some(From::Pane), Some(_)) => {}
+                (Some(From::Group), Some((_, _, _, in_group, leads_one))) => {
+                    if !(*in_group || *leads_one) {
+                        continue;
+                    }
+                }
+            }
+            // The place, where it can be made; else the next line.
+            let made = match (line.to, &spot) {
+                (To::Beside, Some((pane, ..))) if !theirs => {
+                    Some(Place::Beside { pane: *pane, side: Side::Right })
+                }
+                (To::Below, Some((pane, ..))) if !theirs => {
+                    Some(Place::Beside { pane: *pane, side: Side::Below })
+                }
+                // The Person's line gives way on another Project's
+                // workspace; a click into a Group does not, as today.
+                (To::Group, Some((pane, ..))) if !(persons && theirs) => {
+                    Some(Place::Group { pane: *pane })
+                }
+                (To::BesideGroup, Some((_, columns, column, true, _))) if !theirs => {
+                    let last = &columns[model::run(columns, *column).end - 1];
+                    Some(Place::Beside { pane: last.panes[0].id, side: Side::Right })
+                }
+                (To::Project, _) => Some(its_workspace.clone()),
+                (To::ProjectStart, _) if scratch => return here(),
+                (To::ProjectStart, _) => Some(Place::Start { project }),
+                (To::Here, _) => return here(),
+                _ => None,
+            };
+            if made.is_some() {
+                return made;
+            }
+        }
+        None
+    }
 }
 
 #[cfg(test)]
