@@ -13,15 +13,16 @@
 //! machine awake ([`Live::crew`]), and its Thread counted as at work by the
 //! list, the Mark, the bar, archive and an update. Its agents' calls and
 //! Questions between turns are its own while it is the one Crew at work
-//! (`between.rs`), and end and close with it. One Banda cut off as it let
+//! (`between.rs`), and end and close with it; while one is open, the agent
+//! that asks it shows as asking ([`asking`]). One Banda cut off as it let
 //! the process go ends Lost in words that say why (decision 3), as does
 //! every Crew at work when Banda restarts.
 
 use crate::acp::{self, CrewSaid, Notified, Progress, Sdk, Started, TaskEnd, TaskKind};
 use crate::live::{CrewRun, Cut, Live};
 use crate::model::{
-    Body, Crew, CrewAgent, CrewBrief, CrewId, CrewState, Fact, Item, ItemId, ThreadId, ToolStatus,
-    TurnId,
+    Body, Crew, CrewAgent, CrewBrief, CrewId, CrewState, Fact, Item, ItemId, SubagentState,
+    ThreadId, ToolStatus, TurnId,
 };
 use crate::transcript::{Holder, Transcript};
 use crate::{emit, plain, questions, store};
@@ -153,6 +154,73 @@ fn same(one: &CrewAgent, other: &CrewAgent) -> bool {
     (one.phase, one.index) == (other.phase, other.index)
 }
 
+/// Crew `now` with the agents that ask its open Questions, titled `asks`,
+/// asking, and the others at work as Claude says. No frame names who asks
+/// inside a Crew (ADR 0103, Open questions), so an agent asks when what it
+/// does now is what a Question asks to run, as Claude sums it up
+/// (`Bash · echo a > a.txt`). Claude says that only once the call runs,
+/// so the Questions left over go to the agents at work that ask nothing
+/// yet when there are no more of those than of them: then each asks.
+pub fn asking(mut now: Crew, asks: &[String]) -> Crew {
+    let does = |agent: &CrewAgent, title: &str| {
+        (agent.last.as_deref()).is_some_and(|last| {
+            last == title
+                || last
+                    .strip_suffix(title)
+                    .is_some_and(|tool| tool.ends_with(" · "))
+        })
+    };
+    let mut unplaced = 0;
+    for agent in &mut now.agents {
+        if agent.state == SubagentState::Asks {
+            agent.state = SubagentState::Running;
+        }
+    }
+    for title in asks {
+        let found = (now.agents.iter_mut())
+            .find(|agent| agent.state == SubagentState::Running && does(agent, title));
+        match found {
+            Some(agent) => agent.state = SubagentState::Asks,
+            None => unplaced += 1,
+        }
+    }
+    let free = (now.agents.iter()).filter(|agent| agent.state == SubagentState::Running);
+    if unplaced > 0 && free.count() <= unplaced {
+        for agent in &mut now.agents {
+            if agent.state == SubagentState::Running {
+                agent.state = SubagentState::Asks;
+            }
+        }
+    }
+    now
+}
+
+/// Crew `now` asking as its open Questions in the store say.
+fn asked(sql: &rusqlite::Connection, now: Crew) -> Result<Crew, Error> {
+    let asks: Vec<String> = (store::crew_questions(sql, now.id)?.into_iter())
+        .filter_map(|item| match item.body {
+            Body::Question { title, .. } => Some(title),
+            _ => None,
+        })
+        .collect();
+    Ok(asking(now, &asks))
+}
+
+/// A Question of Crew `crew`'s agents opened, was answered or closed: its
+/// agents ask as its open Questions say now, written when that moved.
+pub fn asks_moved(tx: &mut Tx<'_>, crew: CrewId) -> Result<(), Error> {
+    let Some((thread, was)) = store::crew(tx.sql(), crew)? else {
+        return Ok(());
+    };
+    let Some(agent) = store::agent_of(tx.sql(), thread)? else {
+        return Ok(());
+    };
+    if !was.state.works() {
+        return Ok(());
+    }
+    keep_progress(tx, Participant::Agent(agent), thread, was).map(drop)
+}
+
 /// What a Person would see change of an agent: not its tokens, its time or
 /// what it does now, which change with each frame.
 fn moved(was: &CrewAgent, now: &CrewAgent) -> bool {
@@ -241,23 +309,27 @@ pub fn start(
     Ok(crew)
 }
 
-/// Keeps Crew `now` at work, and its fact, when it moved.
+/// Keeps Crew `now` at work, its agents asking as its open Questions say,
+/// and its fact, when it moved from what is kept. It as kept, when written.
 fn keep_progress(
     tx: &mut Tx<'_>,
     agent: Participant,
     thread: ThreadId,
-    was: &Crew,
-    now: &Crew,
-) -> Result<bool, Error> {
-    let Some(fact) = progress(was, now) else {
-        return Ok(false);
+    now: Crew,
+) -> Result<Option<Crew>, Error> {
+    let Some((_, was)) = store::crew(tx.sql(), now.id)? else {
+        return Ok(None);
+    };
+    let now = asked(tx.sql(), now)?;
+    let Some(fact) = progress(&was, &now) else {
+        return Ok(None);
     };
     if store::agent_of(tx.sql(), thread)?.is_none() {
-        return Ok(false);
+        return Ok(None);
     }
-    store::set_crew(tx.sql(), now)?;
+    store::set_crew(tx.sql(), &now)?;
     emit(tx, agent, thread, &fact)?;
-    Ok(true)
+    Ok(Some(now))
 }
 
 /// Ends Crew `now`, as its `state` and `why` say, and its agents'
@@ -275,8 +347,25 @@ fn end(
     if !was.state.works() || store::agent_of(tx.sql(), thread)?.is_none() {
         return Ok(was);
     }
+    // None asks once it ended.
+    now = asking(now, &[]);
     now.ended = Some(tx.now());
     store::set_crew(tx.sql(), &now)?;
+    let asked = |agent: &CrewAgent| {
+        (was.agents.iter()).any(|one| same(one, agent) && one.state == SubagentState::Asks)
+    };
+    let answered: Vec<CrewAgent> = now.agents.iter().filter(|a| asked(a)).cloned().collect();
+    if !answered.is_empty() {
+        let fact = Fact::CrewProgressed {
+            crew: now.id,
+            phases: None,
+            agents: answered,
+            log: None,
+            tokens: now.tokens,
+            went_on: None,
+        };
+        emit(tx, agent, thread, &fact)?;
+    }
     // Its calls end as it did: done with a Crew that is done.
     let ended = match now.state {
         CrewState::Done => ToolStatus::Done,
@@ -510,19 +599,17 @@ impl Hearer {
                     return Ok(());
                 };
                 let now = progressed(&track.record, &progress);
+                let tokens = now.tokens;
                 let (thread, agent) = (self.thread, Participant::Agent(self.agent));
-                let was = track.record.clone();
-                let kept = now.clone();
-                let written = self
+                let kept = self
                     .project
-                    .write(move |tx| keep_progress(tx, agent, thread, &was, &kept))
+                    .write(move |tx| keep_progress(tx, agent, thread, now))
                     .await
                     .map_err(plain)?;
-                if written {
-                    track.record = now;
-                } else {
+                match kept {
+                    Some(kept) => track.record = kept,
                     // Its tokens move with it, written with the next change.
-                    track.record.tokens = now.tokens;
+                    None => track.record.tokens = tokens,
                 }
                 Ok(())
             }
@@ -740,6 +827,46 @@ mod tests {
                 log: None,
             }),
         }
+    }
+
+    fn doing(mut agent: CrewAgent, last: &str) -> CrewAgent {
+        agent.last = Some(last.to_owned());
+        agent
+    }
+
+    fn states(crew: &Crew) -> Vec<SubagentState> {
+        crew.agents.iter().map(|agent| agent.state).collect()
+    }
+
+    #[test]
+    fn the_agent_that_runs_what_a_question_asks_asks_it() {
+        use SubagentState::{Asks, Done, Running};
+        let mut was = crew();
+        was.agents = vec![
+            doing(agent(1, 1, Running), "Bash · echo a > a.txt"),
+            agent(1, 2, Done),
+            doing(agent(1, 3, Running), "Bash · echo c > c.txt"),
+        ];
+        let c = "echo c > c.txt".to_owned();
+        let now = asking(was, std::slice::from_ref(&c));
+        assert_eq!(states(&now), [Running, Done, Asks]);
+        let both = [c, "echo a > a.txt".to_owned()];
+        assert_eq!(states(&asking(now.clone(), &both)), [Asks, Done, Asks]);
+        // Answered, it works again.
+        assert_eq!(states(&asking(now, &[])), [Running, Done, Running]);
+    }
+
+    #[test]
+    fn with_no_match_as_many_agents_at_work_as_questions_ask_and_more_do_not() {
+        use SubagentState::{Asks, Done, Running};
+        let mut was = crew();
+        was.agents = vec![agent(1, 1, Done), agent(1, 2, Running)];
+        let one = ["echo d > d.txt".to_owned()];
+        assert_eq!(states(&asking(was.clone(), &one)), [Done, Asks]);
+        was.agents.push(agent(1, 3, Running));
+        assert_eq!(states(&asking(was.clone(), &one)), [Done, Running, Running]);
+        let two = ["echo d > d.txt".to_owned(), "echo e > e.txt".to_owned()];
+        assert_eq!(states(&asking(was, &two)), [Done, Asks, Asks]);
     }
 
     #[test]

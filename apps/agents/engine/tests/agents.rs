@@ -5212,6 +5212,14 @@ async fn claudes_crews_work_after_their_turn_ask_as_themselves_and_end() {
         .flat_map(|(_, fact)| fact["agents"].as_array().cloned().unwrap_or_default())
         .any(|agent| agent["state"] == "queued");
     assert!(queued, "past sixteen at once, some waited");
+    // The one agent at work when the Question came asked it (#1846).
+    let asked: Vec<_> = (facts.iter())
+        .filter(|(kind, _)| kind == "crew.progressed")
+        .flat_map(|(_, fact)| fact["agents"].as_array().cloned().unwrap_or_default())
+        .filter(|agent| agent["state"] == "asks")
+        .map(|agent| agent["label"].clone())
+        .collect();
+    assert_eq!(asked, [json!("write d")]);
     // Written only as something a Person sees changed: far fewer than the
     // frames Claude sent.
     let progressed = facts
@@ -12601,9 +12609,17 @@ async fn a_crews_agent_asks_between_turns_as_the_crew() {
         .map(|asked| asked.asker.clone())
         .collect();
     assert_eq!(asking, [Some("Crew audit-routes".to_owned())]);
+    // Its agent asks in the Crew Pane until it is answered (#1846).
+    let asks = |crew: &Crew| {
+        (crew.agents.iter())
+            .filter(|agent| agent.state == SubagentState::Asks)
+            .count()
+    };
+    assert_eq!(asks(&crew), 1, "{:?}", crew.agents);
     world.answer(question, "allow-once").await;
     let view = world.until(thread, |v| crews_ended(v, 1)).await;
     assert_eq!(the_crew(&view).state, CrewState::Done);
+    assert_eq!(asks(the_crew(&view)), 0);
     let read = world.crew(&crew).await;
     let entries = entries(&read.items);
     assert_eq!(

@@ -1005,7 +1005,12 @@ impl Transcript {
                 if sub.is_none() && crew.is_none() {
                     store::touch_thread(tx.sql(), thread, tx.now())?;
                 }
-                emit(tx, agent, thread, &fact)
+                emit(tx, agent, thread, &fact)?;
+                // Its agent asks while it is open (#1846).
+                match (crew, &item.body) {
+                    (Some(crew), Body::Question { .. }) => crate::crews::asks_moved(tx, crew),
+                    _ => Ok(()),
+                }
             })
             .await
             .map_err(plain)
