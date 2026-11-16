@@ -387,6 +387,9 @@ starts at login too, later.
   it starts, so after it moved onto a new copy a boot starts that copy.
   Banda does not turn linger on itself: which machine serves others is
   the Person's to say, and `docs/hosts.md` gives the one command.
+- Decisions 3 and 4 on Linux and Windows (2026-11-17): ADR
+  0136 puts Banda's icon in the tray there in place of the Omarchy
+  plugin, and hides a closed window where a tray host is known.
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.
