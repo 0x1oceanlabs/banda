@@ -72,8 +72,8 @@ pub struct Pushed {
     pub body: String,
     /// What it tells of: a later push with the same tag takes its place.
     pub tag: String,
-    /// Where a tap goes, in the page: a path and query, none for the
-    /// page as it opens.
+    /// Where a tap goes, as an address in the page, `./#go/<what>`: none
+    /// for the page as it opens.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub to: Option<String>,
