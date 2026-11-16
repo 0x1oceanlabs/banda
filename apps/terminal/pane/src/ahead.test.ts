@@ -44,6 +44,68 @@ describe("the letters a terminal draws ahead of its machine (#1242)", () => {
     expect(ahead.text()).toBe("s")
   })
 
+  // What bash sends with ble.sh, key by key, as taken from it: the line
+  // written again, painted, with the rest it offers after the cursor.
+  test("a shell that writes its line again on each key, and offers the rest after the cursor, still confirms it", () => {
+    const e = "\u001b"
+    const plain = `${e}(B${e}[m`
+    const ahead = new Ahead()
+    ahead.typed("e", 0)
+    ahead.heard(
+      `${e}[?25l${e}[0;38;5;231;48;5;203me${plain}${e}[K${e}[?25h` +
+        `${e}[?25l${plain}${e}[1D${e}[0;32me${e}[0;38;5;238;48;5;254m2freefrag${plain}${e}[K${plain}${e}[9D${e}[?25h`,
+      150
+    )
+    type(ahead, "cho", 1_000)
+    expect(ahead.text()).toBe("cho")
+    ahead.heard(
+      `${e}[?25l${plain}${e}[1D${e}[0;91mec${plain}${e}[K${e}[?25h` +
+        `${e}[?25l${plain}${e}[2D${e}[0;91mec${e}[0;38;5;238;48;5;254mho${plain}${e}[K${plain}${e}[2D${e}[?25h`,
+      1_160
+    )
+    // The "ho" it offers is not the "ho" typed: the cursor is before it.
+    expect(ahead.text()).toBe("ho")
+    ahead.heard(`${e}[?25l${e}[0;91mh${e}[?25h`, 1_170)
+    ahead.heard(`${e}[?25l${e}[0;91mo${plain}${e}[K${e}[?25h`, 1_180)
+    expect(ahead.text()).toBe("")
+    expect(ahead.waits).toBe(false)
+  })
+
+  test("a line written again that comes in two pieces confirms as one, and a word offered in another alphabet does not take it back", () => {
+    const e = "\u001b"
+    const ahead = linked(150)
+    type(ahead, "cd", 1_000)
+    ahead.heard(`${e}[?25lc${e}[1D`, 1_160)
+    expect(ahead.text()).toBe("cd")
+    ahead.heard(
+      `cd${e}[38;5;238m Документы${e}[m${e}[K${e}[10D${e}[?25h`,
+      1_170
+    )
+    expect(ahead.text()).toBe("")
+    expect(ahead.waits).toBe(false)
+    type(ahead, " ", 1_200)
+    expect(ahead.text()).toBe(" ")
+  })
+
+  test("a line written again with another letter where one was typed takes all back", () => {
+    const ahead = linked(150)
+    type(ahead, "ab", 1_000)
+    ahead.heard("a\bqb", 1_160)
+    expect(ahead.text()).toBe("")
+    expect(ahead.waits).toBe(false)
+  })
+
+  test("a cursor moved past where the letters go, or a letter left anywhere but there, confirms nothing", () => {
+    for (const sent of ["\u001b[2Ca", "ab", "\u001b[2Da"]) {
+      const ahead = linked(150)
+      type(ahead, "a", 1_000)
+      ahead.heard(sent, 1_160)
+      expect(ahead.waits).toBe(false)
+      type(ahead, "b", 1_200)
+      expect(ahead.text()).toBe("")
+    }
+  })
+
   test("the machine is right: anything else it sends takes all back, and nothing shows until a letter comes back again", () => {
     const ahead = linked(150)
     type(ahead, "abc", 1_000)
