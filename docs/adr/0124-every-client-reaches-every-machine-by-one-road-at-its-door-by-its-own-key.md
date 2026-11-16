@@ -337,6 +337,18 @@ repository), with an adversarial check.
   works and nothing is written, Send once something is (Roma, 2026-11-15;
   a second button, tried in this PR, was taken out). Not yet: how many Threads call, at the way back, which the
   sidebar's door has no word for.
+- **A machine pushes to a device (SE7, PR 1).** A device says where a
+  push reaches it while it is not looking (`devices.push_to`, with its
+  browser's subscription, made with this machine's push key,
+  `devices.push_key`), and the machine keeps that in `push.json` in its
+  state, by device, saying it to no one: `devices.list` names only which
+  devices take pushes. A push is Web Push straight from the machine to the
+  device's push service: sealed to the device's keys (RFC 8291), signed
+  with the machine's own push key (RFC 8292), an ECDSA key in `push.key`.
+  A push service that says the device is gone has its subscription
+  forgotten, and so has a device removed. `devices.push_try` pushes a few
+  words to the device that asks. Not yet: the page that subscribes; what
+  is pushed, and when (who is looking); one signal over several devices.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

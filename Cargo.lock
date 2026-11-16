@@ -494,6 +494,7 @@ dependencies = [
  "async-trait",
  "banda-kernel",
  "base64 0.22.1",
+ "reqwest",
  "ring",
  "schemars 1.2.3",
  "serde",

@@ -11,6 +11,7 @@ publish.workspace = true
 async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
 base64.workspace = true
+reqwest.workspace = true
 ring.workspace = true
 schemars.workspace = true
 serde.workspace = true
