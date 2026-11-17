@@ -230,3 +230,10 @@ Each step is a PR that names this ADR and track 3.
    first rule; one that declares `home` or `narrow` gets its line.
    _Roma tries:_ a Pane of a test App opens beside the one in front, and
    a line in `tiling.toml` moves it.
+   _Held_ by a test, with nothing to build: an App from a folder shows
+   in the kind `apps.view` (ADR 0126), which declares nothing, opens by
+   the first rule and is moved by `[rule.apps.view]`
+   (`client/desktop/e2e/placing.spec.ts`). The line holds for every such
+   App at once, and an App cannot yet declare `home` or `narrow` of its
+   own: that needs a word in `app.toml`, the App SDK's to decide
+   (#1889).

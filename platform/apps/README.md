@@ -79,6 +79,12 @@ this machine (ADR 0126).
   it copies anything, so a step that fails is refused with why, and the
   App installed before goes on as it ran. A step that fails only over
   what a Project holds still turns it off there alone.
+- **Where its screen opens** is the Tiling's one sheet (ADR 0135,
+  decision 1): its Pane, `apps.view`, declares nothing, so it opens right
+  of the Pane in front and takes the focus, and a line of the Person's
+  `tiling.toml`, `[rule.apps.view]`, moves it or says how wide. The line
+  holds for every App from a folder; a name and a default of its own
+  for one App is #1889.
 - **Its screen is a view that answers a Tree** (ADR 0062, decision 7).
   A method of kind `view` is a read, routed as a call, whose answer is
   the App's screen as data: a title and nodes of a catalogue
