@@ -50,6 +50,9 @@ export type Update = { name: string; have: string; always: boolean } & (
       state: "ready"
       version: string
       notes: Note[]
+      /** What Banda does since the Person said Update: it installs the
+       * version, then restarts into it. None while it waits for them. */
+      doing?: "installing" | "restarting"
     }
   | {
       /** The first moments of a Banda that restarted into a new version

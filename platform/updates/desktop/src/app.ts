@@ -66,6 +66,10 @@ const RETRIES = 15
  * shows: two looks with none, and it restarts into it. */
 const ALONE = 30_000
 
+/** How long the page has to draw "Restarting" before main is held by
+ * the install: an AppImage's is done in this process. */
+const SAID = 150
+
 /** The app this window is, as main knows it. */
 export type App = {
   /** Its name, `Banda Dev`. */
@@ -219,6 +223,12 @@ export function updates(
     asked = restarts = confirms = false
     set({ state: "failed", reason })
   }
+  /** The version ready waits for the Person again: what it did since
+   * they said Update came to nothing. */
+  const waits = () => {
+    if (now.state === "ready" && now.doing && !restarting)
+      set({ state: "ready", version: now.version, notes: now.notes })
+  }
 
   // The quit installs only what `installsAtQuit` says, set as Banda quits:
   // electron-updater reads this at the quit, and after a download only
@@ -241,6 +251,7 @@ export function updates(
     offered = { version: info.version, at: Date.now() }
     if (now.state === "ready" && now.version === info.version) {
       if (confirms) restart()
+      else waits()
       return
     }
     // An AppImage Banda cannot replace downloads nothing.
@@ -344,7 +355,13 @@ export function updates(
       set({ state: "looking" })
     }
     looking.now(
-      (state) => heard(state),
+      (state) => {
+        // No look to read: the Restart that waited for one is over.
+        if (!heard(state) && confirms) {
+          confirms = false
+          waits()
+        }
+      },
       (missed) => {
         if (confirms && now.state === "ready") {
           confirms = false
@@ -356,15 +373,17 @@ export function updates(
       }
     )
   }
-  const heard = (state: UpdateState) => {
+  /** Whether it reads the release `state` names: only once for a look. */
+  const heard = (state: UpdateState): boolean => {
     said = state
-    if (!looking.anew(state)) return
+    if (!looking.anew(state)) return false
     if (state.off) {
       // The engine takes nothing here, and the app neither.
       if (asked) rest(state.off)
-      return
+      return false
     }
     read()
+    return true
   }
   const restart = () => {
     if (now.state !== "ready" || restarting) return
@@ -373,6 +392,7 @@ export function updates(
     // have been withdrawn since (ADR 0092, decision 10).
     if (!isOffered(offered, ready.version, Date.now())) {
       confirms = true
+      set({ ...ready, doing: "installing" })
       look(false)
       return
     }
@@ -380,14 +400,21 @@ export function updates(
     restarting = true
     leaving()
     leave({ from: have, to: ready.version, notes: ready.notes })
-    // An AppImage is installed by the time it returns, and the new one
-    // starts once this one is gone; Windows' installer starts it itself.
-    autoUpdater.quitAndInstall(true, !installed)
-    if (installed) startAfterImage(installed)
+    set({ ...ready, doing: "restarting" })
+    setTimeout(() => {
+      // Quit meanwhile, as the Person asked: that quit installs it.
+      if (mine.quits()) return
+      // An AppImage is installed by the time it returns, and the new one
+      // starts once this one is gone. Windows' installer shows its own
+      // window while it works, as Banda has none then, and starts Banda
+      // itself.
+      autoUpdater.quitAndInstall(!windows, !installed)
+      if (installed) startAfterImage(installed)
+    }, SAID)
   }
   return {
     current: () => now,
-    heard,
+    heard: (state) => void heard(state),
     check: () => look(true),
     now() {
       restarts = true
@@ -398,6 +425,7 @@ export function updates(
     later() {
       restarts = confirms = false
       if (now.state === "downloading") set({ ...now, restarts })
+      waits()
     },
     restart,
     seen() {
@@ -651,6 +679,7 @@ export function brewUpdates(
     if (now.state === "ready" && now.version === info.version) {
       asked = false
       if (confirms) restart()
+      else waits()
       return
     }
     // The Restart that looked first goes on to the newer version.
@@ -659,11 +688,20 @@ export function brewUpdates(
     // One brew at a time: the next look offers what came meanwhile.
     if (taking === undefined) take(info)
   })
-  /** A version brew could not take: one ready stays as it is; else the
-   * command, which still installs it by hand. */
+  /** The version ready waits for the Person again: what it did since
+   * they said Update came to nothing. */
+  const waits = () => {
+    if (now.state === "ready" && now.doing && !restarting)
+      set({ state: "ready", version: now.version, notes: now.notes })
+  }
+  /** A version brew could not take: one ready stays, and waits for the
+   * Person again; else the command, which still installs it by hand. */
   const drop = (info: UpdateInfo) => {
     if (now.state !== "ready") out(info)
-    else asked = restarts = false
+    else {
+      asked = restarts = false
+      waits()
+    }
   }
   /** brew takes `info`'s version: ready once its zip is down. */
   const take = (info: UpdateInfo) => {
@@ -724,7 +762,10 @@ export function brewUpdates(
       return
     }
     // A Restart waits only for a look that runs again soon.
-    if (retry === undefined) restarts = false
+    if (retry === undefined) {
+      restarts = false
+      waits()
+    }
     if (!asked) return
     asked = false
     looked = Date.now()
@@ -750,10 +791,12 @@ export function brewUpdates(
     // The same error comes as an "error" event.
     autoUpdater.checkForUpdates().catch(() => {})
   }
-  const heard = (state: UpdateState) => {
-    if (!looking.anew(state)) return
+  /** Whether `state` was of a look not yet read. */
+  const heard = (state: UpdateState): boolean => {
+    if (!looking.anew(state)) return false
     if (state.off) missed(state.off)
     else read()
+    return true
   }
   /** Asks the engine to look now, as the Person did, or as a restart
    * after an hour with no look does. */
@@ -764,7 +807,13 @@ export function brewUpdates(
       if (now.state !== "out" && now.state !== "ready")
         set({ state: "looking" })
     }
-    looking.now(heard, missed)
+    looking.now((state) => {
+      // No look to read: the Restart that waited for one is over.
+      if (!heard(state) && confirms) {
+        confirms = false
+        waits()
+      }
+    }, missed)
   }
   /** With the version ready, restarts into it unseen once no window has
    * shown for two looks in a row, half a minute apart. */
@@ -791,6 +840,9 @@ export function brewUpdates(
     // refuse, with none coming down: it never looks first, nor says a
     // failure the Person did not ask about.
     if (unseen && (!fresh || refused === ready.version || taking)) return
+    // The window stays and says so; unseen, it says nothing, as nobody
+    // asked.
+    if (!unseen) set({ ...ready, doing: "installing" })
     // A newer version comes down meanwhile: the restart waits for it.
     if (taking !== undefined) {
       restarts = true
@@ -817,6 +869,7 @@ export function brewUpdates(
         }
         const left = { from: known.have, to: ready.version, notes: ready.notes }
         leave(left)
+        if (!unseen) set({ ...ready, doing: "restarting" })
         // Quit as the Person or macOS asked meanwhile: the next start is
         // the new version, and says so.
         if (mine.quits()) return
@@ -837,7 +890,7 @@ export function brewUpdates(
   }
   return {
     current: () => now,
-    heard,
+    heard: (state) => void heard(state),
     check: () => look(true),
     now() {
       restarts = true

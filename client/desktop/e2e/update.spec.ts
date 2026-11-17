@@ -21,7 +21,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
     }, value)
   const known = { name: "Banda Dev", have: "0.1.0-dev.62", always: false }
   const { composer } = await firstThread(page)
-  const downloading = page.getByRole("button", { name: /^Updating/ })
+  const downloading = page.getByRole("button", { name: /^Downloading/ })
 
   // A download that is over in two seconds never shows.
   await tell({
@@ -34,7 +34,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
   })
   await page.waitForTimeout(1000)
   await expect(downloading).toBeHidden()
-  await expect(downloading).toHaveAccessibleName("Updating to dev.66 · 10%")
+  await expect(downloading).toHaveAccessibleName("Downloading dev.66 · 10%")
   await tell({
     ...known,
     state: "downloading",
@@ -43,7 +43,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
     notes: [],
     restarts: false,
   })
-  await expect(downloading).toHaveAccessibleName("Updating to dev.66 · 38%")
+  await expect(downloading).toHaveAccessibleName("Downloading dev.66 · 38%")
   await tell({
     ...known,
     state: "downloading",
@@ -157,7 +157,7 @@ test("Banda Dev's widget stays on the bar and looks now (ADR 0045)", async () =>
   })
   await expect(
     page.locator('[data-update="downloading"]')
-  ).toHaveAccessibleName("Updating to dev.104 · 38%")
+  ).toHaveAccessibleName("Downloading dev.104 · 38%")
 
   // A look that failed says why in words on its machine's row, with Try
   // again; never at the foot, nor on the bar.
@@ -211,7 +211,7 @@ test("on macOS the widget says a version is out, with its brew command (ADR 0033
   await page.screenshot({ path: "test-results/8-update-out.png" })
 })
 
-test("Banda's window restarts at once while a Thread works, and the new one says it updated (ADR 0072, ADR 0119)", async () => {
+test("Update waits for the Agents its restart would stop, says each step, and the new window says it updated (ADR 0072, ADR 0119, ADR 0131)", async () => {
   window = await startWindow()
   const { page, app } = window
   const tell = (value: object) =>
@@ -239,18 +239,41 @@ test("Banda's window restarts at once while a Thread works, and the new one says
   }
   const { composer } = await firstThread(page)
 
-  // A Thread works: the window restarts all the same, as only the window
-  // restarts; nothing waits for the turn.
-  await composer.fill("slow please")
+  // A Thread works, on an engine that stops with the window, as a
+  // checkout's does and Windows': Update asks first, and waiting is the
+  // default. The row says what it waits for, and nothing restarts.
+  await composer.fill("wait please")
   await composer.press("Enter")
   await tell(ready)
   await page.getByRole("button", { name: "Banda 0.3.0 is ready" }).click()
   const popover = page.locator("[data-slot=popover-content]")
-  await popover
-    .locator('[data-machine="here"]')
-    .getByRole("button", { name: "Update" })
-    .click()
+  const here = popover.locator('[data-machine="here"]')
+  await here.getByRole("button", { name: "Update" }).click()
+  await expect(page.getByRole("dialog")).toContainText("An Agent is working")
+  await page.getByRole("button", { name: "Update when they finish" }).click()
+  await expect(here).toContainText("After 1 Agent")
+  await expect(here.getByRole("button", { name: "Update" })).toBeHidden()
+  expect(await asked()).toEqual([])
+  await page.screenshot({ path: "test-results/8-update-held.png" })
+  await page.keyboard.press("Escape")
+
+  // The Agent is done: the window restarts by itself, and its row says
+  // what it does, with no button, while nothing looks.
+  await page.getByRole("button", { name: "Stop" }).click()
   await expect.poll(asked).toEqual(["restart"])
+  await tell({ ...ready, doing: "installing" })
+  await page.getByRole("button", { name: "Updating to 0.3.0" }).click()
+  await expect(here).toContainText("Installing")
+  await expect(
+    popover.getByRole("button", { name: "Check now" })
+  ).toBeDisabled()
+  await tell({ ...ready, doing: "restarting" })
+  await expect(here).toContainText("Restarting")
+  await expect(popover.locator("[data-update-title]")).toHaveText(
+    "Updating to 0.3.0"
+  )
+  await page.screenshot({ path: "test-results/8-update-restarting.png" })
+  await page.keyboard.press("Escape")
 
   // The new Banda says it updated until the Person closes it.
   await tell({

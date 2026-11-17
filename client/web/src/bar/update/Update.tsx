@@ -23,6 +23,7 @@ import type { Widget } from "@banda/ui/module"
 import { UPDATE } from "../widget-ids"
 import { Button } from "@banda/ui/components/button"
 import { MachineIcon } from "@banda/ui/components/machine-icon"
+import { Spinner } from "@banda/ui/components/spinner"
 import {
   Popover,
   PopoverContent,
@@ -56,7 +57,12 @@ import type { Engine } from "@banda/contract"
 import type { Update } from "@banda/core"
 import { sameEach, useStore } from "@banda/core/react"
 import { CheckIcon, ChevronRightIcon, ClockIcon } from "lucide-react"
-import { HERE, StoresContext } from "../../calls/stores"
+import {
+  HERE,
+  StoresContext,
+  useWorkingHere,
+  workingHere,
+} from "../../calls/stores"
 import {
   FollowUpdates,
   useEngineFor,
@@ -64,6 +70,7 @@ import {
   useMachineUpdates,
 } from "./heard"
 import {
+  heldRow,
   lookedOf,
   lookedWords,
   type MachineUpdates,
@@ -73,10 +80,11 @@ import {
   rowOf,
   shownOn,
   titleOf,
+  updatingRow,
   type Worst,
   worstOf,
 } from "./machines"
-import { SHOW_AFTER, UPDATED_FOR } from "./updating"
+import { shortOf, SHOW_AFTER, UPDATED_FOR } from "./updating"
 import { device } from "../../boot"
 
 /** How long the widget takes to grow into the bar or out of it. */
@@ -90,34 +98,64 @@ function useUpdate(): Update | undefined {
   return update
 }
 
-/** The rows, this machine's with this window's app in it, and what went
- * wrong as the Person last acted on a machine. */
+/** How long a machine may update, since the Person said so, before its
+ * row says it could not. */
+const UPDATES_IN = 2 * MINUTE
+
+/** What the Person's Update did on a machine, until its row says the
+ * rest by itself: it could not (`trouble`, as the program said it), it
+ * updates to `to` since `busy`, or it waits for the Agents there before
+ * it updates to `to` (`held`). */
+export type Acted =
+  | { trouble: string }
+  | { busy: number; to?: string }
+  | { held: true; to?: string }
+
+/** `row` as it stands at `now` since the Person acted on its machine,
+ * where `turns` Agents work. An Update said of another version than the
+ * row's is over. */
+function actedRow(
+  row: Row,
+  acted: Acted | undefined,
+  turns: number,
+  now: number
+): Row {
+  if (!acted) return row
+  const failed = (trouble: string): Row => ({
+    ...row,
+    kind: "failed",
+    status: "Couldn't update",
+    why: plainOf(trouble),
+    details: trouble,
+    act: "retry",
+  })
+  if ("trouble" in acted) return failed(acted.trouble)
+  if ((row.kind !== "ready" && row.kind !== "waits") || row.to !== acted.to)
+    return row
+  // The Agents it waited for are done: main says the rest.
+  if ("held" in acted) return turns > 0 ? heldRow(row, turns) : row
+  if (now - acted.busy > UPDATES_IN) return failed("Updating took too long.")
+  return updatingRow(row)
+}
+
+/** The rows, this machine's with this window's app in it, each as it
+ * stands since the Person last acted on its machine; `turns` Agents work
+ * on this machine. */
 export function useRows(
   app: Update | undefined,
   machines: readonly MachineUpdates[],
   now: number,
-  troubles: ReadonlyMap<string, string>
+  acted: ReadonlyMap<string, Acted>,
+  turns = 0
 ) {
   return machines.map((machine) => {
-    const row = rowOf(
+    const said = rowOf(
       machine,
       now,
       machine.host === undefined ? app : undefined
     )
-    const trouble = troubles.get(machine.host ?? "")
-    return {
-      machine,
-      row: trouble
-        ? ({
-            ...row,
-            kind: "failed",
-            status: "Couldn't update",
-            why: plainOf(trouble),
-            details: trouble,
-            act: "retry",
-          } satisfies Row)
-        : row,
-    }
+    const row = actedRow(said, acted.get(machine.host ?? ""), turns, now)
+    return { machine, row }
   })
 }
 
@@ -126,10 +164,35 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
   const app = useUpdate()
   const machines = useMachineUpdates()
   const now = useNow(MINUTE)
-  const [troubles, setTroubles] = useState<ReadonlyMap<string, string>>(
-    new Map()
+  const [acted, setActed] = useState<ReadonlyMap<string, Acted>>(new Map())
+  const working = useWorkingHere()
+  const rows = useRows(app, machines, now, acted, working)
+  const act = useCallback(
+    (host: string | undefined, next?: Acted) =>
+      setActed((was) => {
+        if (next === undefined && !was.has(host ?? "")) return was
+        const now = new Map(was)
+        if (next === undefined) now.delete(host ?? "")
+        else now.set(host ?? "", next)
+        return now
+      }),
+    []
   )
-  const rows = useRows(app, machines, now, troubles)
+  // The Update that waited for this machine's Agents: once they are
+  // done it is over, and the app restarts if the version it was said of
+  // is still the one ready.
+  const stores = useContext(StoresContext)
+  const held = acted.get("")
+  const waited = held && "held" in held ? held.to : undefined
+  const ready = app?.state === "ready" ? shortOf(app.version) : undefined
+  useEffect(() => {
+    if (waited === undefined) return
+    return stores.items.subscribe(() => {
+      if (workingHere(stores) > 0) return
+      act(undefined)
+      if (waited === ready) device.update.restart()
+    })
+  }, [stores, waited, ready, act])
   const worst = worstOf(app, rows)
   const [open, setOpen] = useState(false)
   const { opened } = useKeptUpdates()
@@ -199,7 +262,7 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
             engine={engine}
             lit={lit}
             now={now}
-            setTroubles={setTroubles}
+            act={act}
           />
         </PopoverContent>
       </Popover>
@@ -233,7 +296,9 @@ export function barWords(worst: Worst): string {
         ? `Banda ${worst.version} is ready`
         : "An update is ready"
     case "downloading":
-      return `Updating${worst.version ? ` to ${worst.version}` : ""} · ${Math.round(worst.share * 100)}%`
+      return `Downloading${worst.version ? ` ${worst.version}` : ""} · ${Math.round(worst.share * 100)}%`
+    case "updating":
+      return `Updating${worst.version ? ` to ${worst.version}` : ""}`
     case "looking":
       return "Checking for updates…"
     case "quiet":
@@ -249,7 +314,7 @@ function About({
   engine,
   lit,
   now,
-  setTroubles,
+  act,
 }: {
   app: Update | undefined
   machines: readonly MachineUpdates[]
@@ -257,20 +322,15 @@ function About({
   engine: Engine
   lit?: string
   now: number
-  setTroubles: (
-    change: (was: ReadonlyMap<string, string>) => ReadonlyMap<string, string>
-  ) => void
+  act: (host: string | undefined, next?: Acted) => void
 }) {
   const engineFor = useEngineFor(engine)
   const { title, say } = titleOf(rows, newestOf(app, machines[0]))
-  const trouble = (machine: MachineUpdates, why?: string) =>
-    setTroubles((was) => {
-      const next = new Map(was)
-      if (why === undefined) next.delete(machine.host ?? "")
-      else next.set(machine.host ?? "", why)
-      return next
-    })
-  const updating = useUpdateThere(engineFor, trouble)
+  const updating = useUpdateThere(engineFor, (machine, next) =>
+    act(machine.host, next)
+  )
+  // Nothing looks while a machine installs or restarts.
+  const busy = rows.some(({ row }) => row.kind === "updating")
   const check = (machine: MachineUpdates) =>
     void engineFor(machine.host)
       .call("updates.check", {})
@@ -280,7 +340,7 @@ function About({
     for (const { machine } of rows) if (!machine.away) check(machine)
   }
   const retry = (machine: MachineUpdates) => {
-    trouble(machine)
+    act(machine.host)
     if (machine.host === undefined)
       if (app?.state === "failed") device.update.now()
       else device.update.check()
@@ -316,6 +376,7 @@ function About({
           variant="ghost"
           size="sm"
           className="ml-auto"
+          disabled={busy}
           onClick={checkAll}
         >
           Check now
@@ -419,9 +480,11 @@ function Corner({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 text-meta whitespace-nowrap text-muted-foreground tabular-nums"
+        "inline-flex items-center gap-1.5 text-meta whitespace-nowrap text-muted-foreground tabular-nums",
+        row.kind === "updating" && "text-foreground"
       )}
     >
+      {row.kind === "updating" && <Spinner aria-hidden className="size-3" />}
       {row.kind === "ok" && <CheckIcon className="size-3.5 text-added" />}
       {row.kind === "waits" && row.status.startsWith("After") && (
         <ClockIcon className="size-3.25" />
@@ -450,54 +513,77 @@ function Details({ text }: { text: string }) {
 
 /**
  * Update on a machine (ADR 0131, decision 1): this window's app restarts
- * at once, and the engine moves now where nothing runs. While Agents work
- * there it asks once, and waiting is the default: a machine that updates
- * by itself once idle does so, and this window's app restarts all the
- * same, as it stops no Agent. What fails is said on the row (`trouble`).
+ * at once, and the engine moves now where nothing runs. Its row says so
+ * from the click (`busy`). While Agents work there it asks once, and
+ * waiting is the default: a machine that updates by itself once idle does
+ * so, and this window's app restarts all the same, as it stops no Agent.
+ * Where the engine stops with the app (`with_app`: Windows, the window's
+ * child), the app's restart is what stops them: waiting holds it until
+ * they are done (`held`). What fails is said on the row (`trouble`).
  * `ask` updates a machine's row; `dialog` is drawn where it asks.
  */
 export function useUpdateThere(
   engineFor: (host: string | undefined) => Engine,
-  trouble: (machine: MachineUpdates, why?: string) => void
+  tell: (machine: MachineUpdates, acted?: Acted) => void
 ) {
-  const [asking, setAsking] = useState<{ machine: MachineUpdates; row: Row }>()
+  const [asking, setAsking] = useState<{
+    machine: MachineUpdates
+    row: Row
+    turns: number
+    stops: boolean
+  }>()
   const close = useCallback(() => setAsking(undefined), [])
+  const stores = useContext(StoresContext)
   const restartApp = (row: Row) => {
     if (row.app) device.update.restart()
   }
-  const restartEngine = (machine: MachineUpdates, force: boolean) =>
-    engineFor(machine.host)
+  // The row says it updates from the click, while the engine is asked.
+  // Then main says what the app does (`doing`), and an engine alone is
+  // done once its row is no longer one to update.
+  const go = (machine: MachineUpdates, row: Row, force: boolean) => {
+    if (!row.engine) return restartApp(row)
+    tell(machine, { busy: Date.now(), to: row.to })
+    void engineFor(machine.host)
       .call("updates.restart", force ? { force: true } : {})
       .then(
-        () => true,
-        (error: Error) => {
-          trouble(machine, error.message)
-          return false
-        }
+        () => {
+          if (!row.app) return
+          tell(machine)
+          restartApp(row)
+        },
+        (error: Error) => tell(machine, { trouble: error.message })
       )
+  }
   const ask = (machine: MachineUpdates, row: Row) => {
-    trouble(machine)
-    if (!row.engine) return restartApp(row)
-    if ((machine.said?.waits?.turns ?? 0) > 0) setAsking({ machine, row })
-    else
-      void restartEngine(machine, false).then((done) => done && restartApp(row))
+    tell(machine)
+    const stops = row.app === true && machine.said?.with_app === true
+    const turns = stops
+      ? workingHere(stores)
+      : row.engine
+        ? (machine.said?.waits?.turns ?? 0)
+        : 0
+    if (turns > 0) setAsking({ machine, row, turns, stops })
+    else go(machine, row, false)
   }
   const now = () => {
     if (!asking) return
-    const { machine, row } = asking
     close()
-    void restartEngine(machine, true).then((done) => done && restartApp(row))
+    go(asking.machine, asking.row, true)
   }
   const later = () => {
     if (!asking) return
+    const { machine, row, stops } = asking
     close()
-    restartApp(asking.row)
+    if (stops) return tell(machine, { held: true, to: row.to })
+    restartApp(row)
   }
   return {
     ask,
     dialog: (
       <UpdateDialog
         machine={asking?.machine}
+        turns={asking?.turns ?? 0}
+        stops={asking?.stops ?? false}
         onNow={now}
         onLater={later}
         onClose={close}
@@ -509,21 +595,28 @@ export function useUpdateThere(
 /** While Agents work there: wait for them, or stop them and update. */
 function UpdateDialog({
   machine,
+  turns,
+  stops,
   onNow,
   onLater,
   onClose,
 }: {
   machine: MachineUpdates | undefined
+  /** The Agents that work there, which updating now stops. */
+  turns: number
+  /** The app's restart is what stops them: the engine's own `updates`
+   * setting says nothing of it. */
+  stops: boolean
   onNow: () => void
   onLater: () => void
   onClose: () => void
 }) {
   const working = useWorkingOn(machine?.host)
-  const turns = machine?.said?.waits?.turns ?? 0
   const name = machine?.name ?? ""
   // One set to ask takes nothing by itself: waiting is only a Cancel.
   const asks =
-    machine?.said?.takes === "ask" || machine?.said?.waits?.person === true
+    !stops &&
+    (machine?.said?.takes === "ask" || machine?.said?.waits?.person === true)
   const agents = turns === 1 ? "An Agent is" : `${turns} Agents are`
   return (
     <Dialog
@@ -640,10 +733,11 @@ function UpdateIcon({ worst }: { worst: Worst }) {
   const share =
     worst.kind === "downloading"
       ? worst.share
-      : worst.kind === "looking"
+      : worst.kind === "looking" || worst.kind === "updating"
         ? 0.22
         : 1
-  const state = worst.kind
+  // What installs turns as what looks does.
+  const state = worst.kind === "updating" ? "looking" : worst.kind
   const dot = worst.kind === "ready"
   return (
     <span className="relative inline-grid place-items-center">
