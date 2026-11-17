@@ -11,7 +11,7 @@ import {
   type Step,
 } from "./arrange"
 import { undoesNow } from "./arranged"
-import { apply } from "./arrangement"
+import { apply } from "./engine"
 import { focused, open, start, type Workspaces } from "./model"
 import { placingOf } from "./opening"
 

@@ -1,10 +1,9 @@
 //! Where a Pane goes when no one named a place, and which move the row
 //! refuses: the Tiling's placement policy (ADR 0110). It only decides,
 //! from the arrangement and the facts it is given; `model` does what it
-//! decides. The window's prediction,
-//! `client/web/src/tiling/arrangement.ts`, mirrors it, and the golden
-//! traces hold the two together until T1 runs this code there (ADR 0088,
-//! decision 11).
+//! decides. The window draws ahead of the
+//! engine by this same code, compiled to WebAssembly (ADR 0088, decision
+//! 11).
 
 use crate::model::{self, Arrangement, ColumnId, PaneId, Place, Shown, Side, WorkspaceId};
 use crate::rule::{self, Opens, Rule, When};
@@ -28,12 +27,14 @@ pub enum Flow {
 }
 
 /// What an engine knows beside its arrangement, and places a Pane by (ADR
-/// 0110, decision 5). A client that draws ahead of the engine gives its
-/// copy of the rule the same.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+/// 0110, decision 5). A client that draws ahead of the engine gives the
+/// rule the same.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize, TS)]
 #[serde(default, deny_unknown_fields)]
+#[ts(export, export_to = "workspaces/")]
 pub struct Facts {
     /// This machine's copy of the Flow.
+    #[ts(type = "\"free\" | \"row\"")]
     pub flow: Flow,
     /// The Pane kinds that stand on their Project's workspace
     /// (`PaneKind.home`).
@@ -42,19 +43,23 @@ pub struct Facts {
     /// that open as a Group of their own (`PaneKind.grouped`). A Group
     /// moves as its lead's Project (ADR 0102, decision 6).
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    #[ts(as = "Option<Vec<String>>", optional)]
     pub leads: BTreeSet<String>,
     /// The Person's rules by kind of Pane, from `tiling.toml` (ADR 0127,
     /// decision 4): each over what its kind and the Flow say.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[ts(as = "Option<BTreeMap<String, Rule>>", optional)]
     pub rules: BTreeMap<String, Rule>,
     /// The Pane kinds that are lists beside other Panes
     /// (`PaneKind.narrow`): a new column for one opens at `narrowest`
     /// where no rule of the kind says a width.
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    #[ts(as = "Option<Vec<String>>", optional)]
     pub narrow: BTreeSet<String>,
     /// The narrowest of the Tiling's widths, the first of `tiling.toml`'s
     /// `[columns]` `presets` (ADR 0127, decision 4).
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub narrowest: Option<String>,
 }
 
@@ -422,7 +427,8 @@ pub enum Moved {
 
 /// A move the row refuses: the workspace it would land on is another
 /// Project's (ADR 0102, decision 6).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "workspaces/", rename = "RowRefusal")]
 pub struct Refused {
     /// The workspace, and its place from the top, from 0.
     pub workspace: WorkspaceId,
@@ -464,6 +470,31 @@ pub fn refuses(list: &Arrangement, facts: &Facts, moving: Moved, place: &Place) 
         owner,
         moving: project,
     })
+}
+
+/// The workspaces the row lets Pane `pane` move to no more: alone, or
+/// `whole` with the Group it is in (ADR 0102, decision 6). What a client
+/// dims while the Pane is carried, and greys out in its menu.
+pub fn refused_to(
+    list: &Arrangement,
+    facts: &Facts,
+    pane: PaneId,
+    whole: bool,
+) -> Vec<WorkspaceId> {
+    let grouped = (model::spot(list, pane).ok())
+        .map(|at| &list[at.workspace].columns[at.column])
+        .filter(|column| whole && column.group.is_some());
+    let moving = grouped.map_or(Moved::Pane(pane), |column| Moved::Group(column.id));
+    list.iter()
+        .map(|to| to.id)
+        .filter(|&workspace| {
+            let last = Place::Column {
+                workspace,
+                index: usize::MAX,
+            };
+            refuses(list, facts, moving, &last).is_some()
+        })
+        .collect()
 }
 
 /// The workspace `place` puts a Pane on, from the top, and the Project
@@ -1308,6 +1339,70 @@ mod tests {
         // A column gone is not this rule's to refuse.
         let gone = Moved::Group(ColumnId::new());
         assert_eq!(refuses(&list, &row(), gone, &to_home), None);
+    }
+
+    #[test]
+    fn a_pane_carried_is_refused_every_other_projects_workspace_and_whole_as_its_groups_lead() {
+        let (mut list, [_, home], [thread, _, loose]) = two_projects();
+        let guest = opened(
+            &mut list,
+            shown(home, "a.a", 4),
+            Some(Place::Group { pane: thread }),
+        );
+        let homes = list[1].id;
+        // Alone, the guest is Home's: it moves on Work's, where it stands,
+        // and goes home. With its Group it goes as the Thread, Work's.
+        assert_eq!(refused_to(&list, &row(), guest, false), []);
+        assert_eq!(refused_to(&list, &row(), guest, true), [homes]);
+        // In no Group, whole is alone.
+        for whole in [false, true] {
+            assert_eq!(refused_to(&list, &row(), loose, whole), [homes]);
+        }
+        // In the Flow free every workspace is free, and a Pane no workspace
+        // shows is not this rule's to refuse.
+        assert_eq!(refused_to(&list, &Facts::default(), loose, false), []);
+        assert_eq!(refused_to(&list, &row(), PaneId::new(), true), []);
+    }
+
+    #[test]
+    fn the_row_says_what_it_refuses_a_command_for_and_nothing_of_the_rest() {
+        use crate::commands::refused;
+        use serde_json::json;
+        let (list, [work, home], [_, _, loose]) = two_projects();
+        let (works, homes) = (list[0].id, list[1].id);
+        let moved = json!({ "pane": loose, "place": last_on(homes) });
+        assert_eq!(
+            refused(&list, "move_pane", moved, &row()),
+            Some(Refused {
+                workspace: homes,
+                at: 1,
+                owner: home,
+                moving: work,
+            })
+        );
+        // The Thread's Group whole is Work's; its column too, as its lead's.
+        let column = json!({ "column": list[0].columns[0].id, "workspace": homes, "index": 0 });
+        for method in ["move_group", "move_column"] {
+            let said = refused(&list, method, column.clone(), &row());
+            assert_eq!(said.map(|r| (r.owner, r.moving)), Some((home, work)));
+        }
+        // A Pane brought to a place is refused as one moved there; one only
+        // opened there is not, nor any other command, nor params that do
+        // not fit.
+        let open = |brought: bool| {
+            json!({
+                "project": home, "kind": "a.a", "args": { "n": 9 },
+                "place": last_on(works), "brought": brought,
+            })
+        };
+        let said = refused(&list, "open", open(true), &row());
+        assert_eq!(said.map(|r| (r.workspace, r.at)), Some((works, 0)));
+        assert_eq!(refused(&list, "open", open(false), &row()), None);
+        assert_eq!(
+            refused(&list, "close", json!({ "pane": loose }), &row()),
+            None
+        );
+        assert_eq!(refused(&list, "move_pane", json!({}), &row()), None);
     }
 
     #[test]

@@ -61,9 +61,6 @@
  * - What a change makes takes IDs derived from its command's ID (ADR
  *   0088, decision 11): the places in the Tiling that make an ID of their
  *   own are counted, and the counts only fall.
- * - The client's copy of the arrangement's commands is a leaf, as the
- *   crate compiled to WebAssembly that takes its place will be (ADR 0088,
- *   decision 11): it imports the contract alone.
  * - What the Person does to an Item is its App's item actions (ADR 0087,
  *   decision 12): no page code but Threads' names a Thread's verb, no
  *   module global asks a Thread's card to show, the Window asks an App's
@@ -1311,14 +1308,6 @@ test("a place that no longer makes one comes off the list", () => {
 test("the Tiling's controller waits on no answer to draw a change", () => {
   const file = readFileSync(join(app, "web/src/tiling/useTiling.ts"), "utf8")
   expect(file.match(/\bawait\b/g)).toBeNull()
-})
-
-test("the copy of the arrangement's commands imports the contract alone", () => {
-  const file = join(app, "web/src/tiling/arrangement.ts")
-  const others = imports(readFileSync(file, "utf8")).filter(
-    (name) => name !== "@banda/contract" && !name.startsWith("@banda/contract/")
-  )
-  expect(others).toEqual([])
 })
 
 /** Every page part's code: the Window's, `@banda/ui`'s and each module's

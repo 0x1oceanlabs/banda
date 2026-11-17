@@ -13,7 +13,7 @@ import { problem } from "@banda/ui/lib/words"
 import { IN_PROGRAM } from "@banda/ui/pane"
 import type { Tiling } from "./actions"
 import { keptOf, type Plan } from "./arrange"
-import { apply } from "./arrangement"
+import { apply } from "./engine"
 import { focused, type Workspaces } from "./model"
 
 /** The one toast an Arrange says itself in: the next one takes its place. */
@@ -30,12 +30,15 @@ let shown: (() => void) | undefined
  * it takes no ID of its own (ADR 0088, decision 11). */
 const TRIED = "00000000-0000-4000-8000-000000000000"
 
-/** Whether `plan` moves anything of `workspaces`, as the window's copy of
- * the engine's commands works it out. */
+/** Whether `plan` moves anything of `workspaces`, as the engine's model
+ * works it out. */
 function moves(workspaces: Workspaces, plan: Plan): boolean {
   const list = keptOf(workspaces)
   const applied = apply(list, plan.command, TRIED)
-  return "list" in applied && !sameData(applied.list, list)
+  // As the model read it: through JSON, which keeps no key that holds
+  // nothing.
+  const asked = JSON.parse(JSON.stringify(list)) as typeof list
+  return "list" in applied && !sameData(applied.list, asked)
 }
 
 /** Says `plan`, an Arrange by Project the Person asked for, of

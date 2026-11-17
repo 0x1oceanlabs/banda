@@ -48,3 +48,14 @@ export function arcHosts(
     reread: () => Promise.resolve(),
   }
 }
+
+/**
+ * A UUID for the short `name` (15 letters at most), the same each time:
+ * the Tiling's model reads every ID as one, as the engine makes them.
+ */
+export function uid(name: string): string {
+  const hex = Array.from(name, (one) => one.charCodeAt(0).toString(16))
+    .join("")
+    .padStart(30, "0")
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(12, 15)}-8${hex.slice(15, 18)}-${hex.slice(18)}`
+}

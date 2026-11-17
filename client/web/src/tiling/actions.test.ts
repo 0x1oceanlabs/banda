@@ -47,6 +47,7 @@ import {
   strayedIn,
 } from "./opening"
 import { hear, look, predict, unseen } from "./unheard"
+import { uid } from "./testing"
 import { factsOf } from "./useTiling"
 
 const thread = (id: string): PaneState => ({
@@ -681,30 +682,30 @@ test("Alt+Shift+N onto another Project's workspace is the engine's to refuse in 
   const state: Workspaces = {
     list: [
       {
-        id: "mine",
-        project: "a",
+        id: uid("mine"),
+        project: uid("a"),
         focus: 0,
         columns: [
           {
-            id: "c",
+            id: uid("c"),
             active: 0,
-            entries: [{ id: "e", project: "a", pane: terminal }],
+            entries: [{ id: uid("e"), project: uid("a"), pane: terminal }],
           },
         ],
       },
       {
-        id: "theirs",
-        project: "b",
+        id: uid("theirs"),
+        project: uid("b"),
         focus: 0,
         columns: [
           {
-            id: "d",
+            id: uid("d"),
             active: 0,
-            entries: [{ id: "f", project: "b", pane: terminal }],
+            entries: [{ id: uid("f"), project: uid("b"), pane: terminal }],
           },
         ],
       },
-      { id: "bottom", columns: [], focus: 0 },
+      { id: uid("bottom"), columns: [], focus: 0 },
     ],
     current: 0,
   }
@@ -713,7 +714,9 @@ test("Alt+Shift+N onto another Project's workspace is the engine's to refuse in 
     let step: unknown
     const tiling = tilingOf({
       change: (how: (w: Workspaces) => unknown) => (step = how(state)),
-      projectOf: lookupOf(projectsOf({ a: "Banda", b: "Brand" })),
+      projectOf: lookupOf(
+        projectsOf({ [uid("a")]: "Banda", [uid("b")]: "Brand" })
+      ),
       placing: () => placingOf(flow, []),
     })
     run(tiling, "pane.send-2")
@@ -724,7 +727,7 @@ test("Alt+Shift+N onto another Project's workspace is the engine's to refuse in 
   // copy of the rule foresees refused leaves the view where it is.
   const asked = sent("row")
   expect(asked).toMatchObject({
-    command: { method: "workspaces.move_pane", params: { pane: "e" } },
+    command: { method: "workspaces.move_pane", params: { pane: uid("e") } },
     focus: false,
   })
   expect(toasted).not.toHaveBeenCalled()
@@ -743,11 +746,11 @@ test("Alt+Shift+N onto another Project's workspace is the engine's to refuse in 
   })
   // In the Flow free the copy foresees no refusal, and the Pane is
   // followed where it goes.
-  expect(sent("free")).toMatchObject({ want: "e" })
+  expect(sent("free")).toMatchObject({ want: uid("e") })
   expect(sent("free")).not.toHaveProperty("refused")
   // The Pane menu greys out the same workspace, and shows whose each is.
   inFlow("row")
-  const projects = projectsOf({ a: "Banda", b: "Brand" })
+  const projects = projectsOf({ [uid("a")]: "Banda", [uid("b")]: "Brand" })
   const projectOf = lookupOf(projects)
   const at = { workspace: 0, column: 0, entry: 0 }
   expect(targetsOf(state, at, projectOf)).toEqual([
@@ -767,29 +770,42 @@ test("a refused move names the workspace by its number before the move, though t
   inFlow("row")
   const terminal = { kind: "terminal.terminal", args: {} }
   const one = (id: string, project: string, pane: PaneState = terminal) => ({
-    id: `${id}-c`,
+    id: uid(`${id}-c`),
     active: 0,
-    entries: [{ id, project, pane }],
+    entries: [{ id: uid(id), project: uid(project), pane }],
   })
   // Banda's, then a free one with only a Thread of no Project, on screen,
   // then Brand's.
   const on = (project: string): Workspaces => ({
     list: [
-      { id: "mine", project: "a", focus: 0, columns: [one("e", "a")] },
-      { id: "free", focus: 0, columns: [one("t", project, thread("t1"))] },
-      { id: "theirs", project: "b", focus: 0, columns: [one("f", "b")] },
-      { id: "bottom", columns: [], focus: 0 },
+      {
+        id: uid("mine"),
+        project: uid("a"),
+        focus: 0,
+        columns: [one("e", "a")],
+      },
+      { id: uid("free"), focus: 0, columns: [one("t", project, thread("t1"))] },
+      {
+        id: uid("theirs"),
+        project: uid("b"),
+        focus: 0,
+        columns: [one("f", "b")],
+      },
+      { id: uid("bottom"), columns: [], focus: 0 },
     ],
     current: 1,
   })
-  const projects = projectsOf({ a: "Banda", b: "Brand", s: "" }, ["s"])
+  const projects = projectsOf(
+    { [uid("a")]: "Banda", [uid("b")]: "Brand", [uid("s")]: "" },
+    [uid("s")]
+  )
   // A scratch Project's Thread, and a draft in the machine's own ID, which
   // the window knows no summary of.
   for (const project of ["s", "machine"]) {
     const tiling = tilingOf({
       change: (how: (w: Workspaces) => unknown) => refuse(how(on(project))),
       projectOf: lookupOf(projects),
-      placing: () => placingOf("row", noProjectOf(projects, "machine")),
+      placing: () => placingOf("row", noProjectOf(projects, uid("machine"))),
     })
     for (const action of ["pane.send-3", "pane.move-down-or-to-workspace"]) {
       toasted.mockClear()
@@ -807,16 +823,16 @@ test("Alt+Shift+N on a Pane in no Group moves it alone; on an Agent's Group, the
   inFlow("row")
   const terminal = { kind: "terminal.terminal", args: {} }
   const column = (id: string, group?: string, pane = terminal): Column => ({
-    id,
+    id: uid(id),
     active: 0,
-    ...(group !== undefined && { group }),
-    entries: [{ id: `${id}-e`, project: "a", pane }],
+    ...(group !== undefined && { group: uid(group) }),
+    entries: [{ id: uid(`${id}-e`), project: uid("a"), pane }],
   })
   const on = (focus: number): Workspaces => ({
     list: [
       {
-        id: "mine",
-        project: "a",
+        id: uid("mine"),
+        project: uid("a"),
         focus,
         columns: [
           column("x1"),
@@ -824,7 +840,7 @@ test("Alt+Shift+N on a Pane in no Group moves it alone; on an Agent's Group, the
           column("t1", "agent", thread("t1")),
         ],
       },
-      { id: "bottom", columns: [], focus: 0 },
+      { id: uid("bottom"), columns: [], focus: 0 },
     ],
     current: 0,
   })
@@ -839,10 +855,10 @@ test("Alt+Shift+N on a Pane in no Group moves it alone; on an Agent's Group, the
     return step
   }
   expect(sent(on(1))).toMatchObject({
-    command: { method: "workspaces.move_pane", params: { pane: "x2-e" } },
+    command: { method: "workspaces.move_pane", params: { pane: uid("x2-e") } },
   })
   expect(sent(on(2))).toMatchObject({
-    command: { method: "workspaces.move_group", params: { column: "t1" } },
+    command: { method: "workspaces.move_group", params: { column: uid("t1") } },
   })
 })
 
@@ -852,28 +868,33 @@ test("Open beside brings a Thread onto a free workspace or its Project's; onto a
   const on = (project?: string): Workspaces => ({
     list: [
       {
-        id: "here",
+        id: uid("here"),
         focus: 0,
-        ...(project !== undefined && { project }),
+        ...(project !== undefined && { project: uid(project) }),
         columns: [
           {
-            id: "c",
+            id: uid("c"),
             active: 0,
-            entries: [{ id: "e", project: project ?? "b", pane: terminal }],
+            entries: [
+              { id: uid("e"), project: uid(project ?? "b"), pane: terminal },
+            ],
           },
         ],
       },
-      { id: "bottom", columns: [], focus: 0 },
+      { id: uid("bottom"), columns: [], focus: 0 },
     ],
     current: 0,
   })
-  const projects = projectsOf({ a: "Banda", b: "Brand", s: "" }, ["s"])
+  const projects = projectsOf(
+    { [uid("a")]: "Banda", [uid("b")]: "Brand", [uid("s")]: "" },
+    [uid("s")]
+  )
   const projectOf = lookupOf(projects)
-  const row = placingOf("row", noProjectOf(projects, "machine"))
+  const row = placingOf("row", noProjectOf(projects, uid("machine")))
   toasted.mockClear()
   // It says it brings the Pane, so the engine refuses it as a move, and
   // the window says nothing until it does.
-  const brought = bringing(on("b"), "a", pane, row, projectOf)
+  const brought = bringing(on("b"), uid("a"), pane, row, projectOf)
   expect(paramsOf(brought)).toMatchObject({ brought: true, again: true })
   expect(toasted).not.toHaveBeenCalled()
   refuse(brought)
@@ -883,7 +904,7 @@ test("Open beside brings a Thread onto a free workspace or its Project's; onto a
   })
   // Where the engine lets it go, the copy foresees no refusal.
   for (const owner of [undefined, "a"]) {
-    const let_go = bringing(on(owner), "a", pane, row, projectOf)
+    const let_go = bringing(on(owner), uid("a"), pane, row, projectOf)
     expect(paramsOf(let_go)).toMatchObject({ brought: true })
     expect(let_go).not.toHaveProperty("refused")
   }
@@ -891,7 +912,7 @@ test("Open beside brings a Thread onto a free workspace or its Project's; onto a
   // a draft in the machine's own ID, which has no summary.
   for (const none of ["s", "machine"]) {
     toasted.mockClear()
-    refuse(bringing(on("b"), none, pane, row, projectOf))
+    refuse(bringing(on("b"), uid(none), pane, row, projectOf))
     expect(toasted).toHaveBeenCalledWith("Workspace 1 is Brand's", {
       id: expect.any(String),
       description:
@@ -900,7 +921,7 @@ test("Open beside brings a Thread onto a free workspace or its Project's; onto a
   }
   // In the Flow free, every workspace is free.
   const free = placingOf("free", noProjectOf(projects))
-  expect(bringing(on("b"), "a", pane, free, projectOf)).not.toHaveProperty(
+  expect(bringing(on("b"), uid("a"), pane, free, projectOf)).not.toHaveProperty(
     "refused"
   )
   // One another workspace shows moves here, and is refused as any move.
@@ -908,21 +929,25 @@ test("Open beside brings a Thread onto a free workspace or its Project's; onto a
     list: [
       ...on("b").list.slice(0, 1),
       {
-        id: "mine",
-        project: "a",
+        id: uid("mine"),
+        project: uid("a"),
         focus: 0,
         columns: [
-          { id: "d", active: 0, entries: [{ id: "t", project: "a", pane }] },
+          {
+            id: uid("d"),
+            active: 0,
+            entries: [{ id: uid("t"), project: uid("a"), pane }],
+          },
         ],
       },
-      { id: "bottom", columns: [], focus: 0 },
+      { id: uid("bottom"), columns: [], focus: 0 },
     ],
     current: 0,
   }
   toasted.mockClear()
-  const moved = bringing(elsewhere, "a", pane, row, projectOf)
+  const moved = bringing(elsewhere, uid("a"), pane, row, projectOf)
   expect(moved).toMatchObject({
-    command: { method: "workspaces.move_pane", params: { pane: "t" } },
+    command: { method: "workspaces.move_pane", params: { pane: uid("t") } },
     focus: false,
   })
   // The window stays where it is while the engine says no: `focus`.
@@ -937,7 +962,7 @@ test("pane.beside brings what an Item carries beside the Pane in focus, and what
   // Open beside, by its key: the Sheet goes, and the Pane comes onto a
   // workspace as the menu's row brings it; without a Pane, nothing.
   const pane = thread("t1")
-  const projects = projectsOf({ a: "Banda" })
+  const projects = projectsOf({ [uid("a")]: "Banda" })
   const change = vi.fn()
   const uncover = vi.fn(() => true)
   const tiling = tilingOf({
@@ -946,17 +971,17 @@ test("pane.beside brings what an Item carries beside the Pane in focus, and what
     placing: () => placingOf("free", noProjectOf(projects)),
     projectOf: lookupOf(projects),
   })
-  run(tiling, "pane.beside", { project: "a", pane })
-  run(tiling, "pane.beside", { project: "a" })
+  run(tiling, "pane.beside", { project: uid("a"), pane })
+  run(tiling, "pane.beside", { project: uid("a") })
   expect(uncover).toHaveBeenCalledOnce()
   expect(change).toHaveBeenCalledOnce()
   const [how] = change.mock.calls[0] as [Change]
   const empty: Workspaces = {
-    list: [{ id: "bottom", columns: [], focus: 0 }],
+    list: [{ id: uid("bottom"), columns: [], focus: 0 }],
     current: 0,
   }
   expect(how(empty)).toEqual(
-    bringing(empty, "a", pane, tiling.placing(), tiling.projectOf)
+    bringing(empty, uid("a"), pane, tiling.placing(), tiling.projectOf)
   )
   expect(how(empty)).toBeDefined()
 })

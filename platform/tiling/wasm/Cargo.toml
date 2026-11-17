@@ -14,7 +14,10 @@ crate-type = ["cdylib"]
 banda-base = { path = "../../../kernel/base" }
 banda-tiling = { path = ".." }
 serde.workspace = true
-serde_json.workspace = true
+# A number in a Pane's args comes back as it went in, so the window can
+# tell an arrangement a command left as it was.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+ts-rs.workspace = true
 
 # The workspace's lints, but for `unsafe_code`, which it forbids: bytes
 # cross to WebAssembly's host by a pointer and a length, and there is no

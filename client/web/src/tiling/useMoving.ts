@@ -20,7 +20,7 @@ import { type RefObject, useEffect, useRef } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { Place } from "@banda/contract/workspaces"
 import { keptOf, type Plan } from "./arrange"
-import { refusedTo } from "./arrangement"
+import { refusedTo } from "./engine"
 import { notesOf, type Workspaces } from "./model"
 import { room, scrollOf, stripOf } from "./layout"
 import {
@@ -80,7 +80,7 @@ export type Carrying = {
  * `strict`: every other Project's workspace refuses the Pane, and the note
  * says whose it is, or where the Pane goes (ADR 0102, decision 6). The
  * engine refuses the move (ADR 0110, decision 8): the window foresees it
- * by its copy of the engine's rule, to dim what takes no drop. */
+ * by the engine's rule, to dim what takes no drop. */
 export function refusing(
   state: Workspaces,
   strict: boolean,

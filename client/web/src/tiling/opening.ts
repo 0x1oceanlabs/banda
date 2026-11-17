@@ -30,7 +30,7 @@ import {
   refusable,
   type Step,
 } from "./arrange"
-import type { RowRefusal } from "./arrangement"
+import type { RowRefusal } from "./engine"
 import {
   bring,
   current,

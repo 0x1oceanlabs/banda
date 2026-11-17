@@ -27,7 +27,7 @@ import {
   tidiedInFront,
   viewOf,
 } from "./arrange"
-import { type Facts, NO_FACTS, widthIn } from "./arrangement"
+import { type Facts, NO_FACTS, widthIn } from "./engine"
 import { focused, type Gone, NONE_GONE, soloed, type Workspaces } from "./model"
 import {
   answered,
@@ -55,10 +55,10 @@ export function factsOf(
 ): Facts {
   return {
     flow: flow === "free" ? "free" : "row",
-    home: HOME_KINDS,
-    leads: LEAD_KINDS,
+    home: [...HOME_KINDS],
+    leads: [...LEAD_KINDS],
     rules,
-    narrow: NARROW_KINDS,
+    narrow: [...NARROW_KINDS],
     narrowest: columns.presets[0],
   }
 }

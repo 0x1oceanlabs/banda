@@ -25,10 +25,11 @@ PR.
   layer over them (the Banda menu, the Drawer, Quick Look, dialogs and
   toasts), and the middle, which it gives to the Tiling
   (`client/web/src/tiling/`): the workspaces, or the overview over them
-  (ADR 0005, decisions 7–9; ADR 0087). The engine's own model of the
-  workspaces is built for it as WebAssembly (`tiling/engine.ts`;
+  (ADR 0005, decisions 7–9; ADR 0087). The Tiling draws ahead of the
+  engine by the engine's own model of the workspaces, built for it as
+  WebAssembly (`tiling/engine.ts`;
   `tilingModel` in `vite.config.ts` runs `cargo build` for
-  `platform/tiling/wasm`), so the page's tests need Rust with the target `wasm32-unknown-unknown`, which `rust-toolchain.toml`
+  `platform/tiling/wasm`), so the page's tests and its build need Rust with the target `wasm32-unknown-unknown`, which `rust-toolchain.toml`
   names. A popped-out Pane's window is the
   Window's too (`window/Popped.tsx`). The Window routes the keys
   (`window/keys.ts`). What lies over what in the Top layer, which part

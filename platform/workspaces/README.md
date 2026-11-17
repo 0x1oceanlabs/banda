@@ -21,8 +21,9 @@ arranged: workspaces one under another, each a Strip of columns.
   [`platform/tiling/wasm`](../tiling/wasm/src/lib.rs)
   (`banda-tiling-wasm`): a command as JSON in, its answer as JSON out. The
   window's build makes the file (`tilingModel` in
-  `client/web/vite.config.ts`), and its `parity.test.ts` replays the
-  traces through it and through the window's copy, until the copy goes.
+  `client/web/vite.config.ts`), the window draws ahead of the engine by
+  it (`client/web/src/tiling/engine.ts`), and its `parity.test.ts`
+  replays the traces through it.
 - Its settings: `~/.config/banda/tiling.toml`.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).

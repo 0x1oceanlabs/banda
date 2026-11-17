@@ -4,7 +4,8 @@ import { execFile } from "node:child_process"
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { promisify } from "node:util"
-import { defineConfig, type Plugin } from "vite"
+import { normalizePath, type Plugin } from "vite"
+import { defineConfig } from "vitest/config"
 
 /**
  * The built page's maps, beside its scripts and named by none of them,
@@ -31,21 +32,31 @@ function placesOnly(): Plugin {
 
 /**
  * The engine's model of the workspaces as the page runs it (ADR 0088,
- * decision 11): `platform/tiling/wasm`, built for WebAssembly as the
- * module is first asked for, and handed over as base64 text, so the page,
+ * decision 11): `platform/tiling/wasm`, built for WebAssembly as
+ * `tiling/engine.wasm.ts` is first asked for, and handed over as base64 text, so the page,
  * a test and a browser load it the same way, with no fetch. Cargo builds
  * only what changed, and says where it wrote the file. A change to the
  * model's source builds it again in a server that stays.
  */
 function tilingModel(): Plugin {
-  const id = "virtual:banda/tiling-model"
   const root = join(import.meta.dirname, "../..")
   const source = join(root, "platform/tiling")
+  // The file the build writes in the place of.
+  const file = normalizePath(
+    join(import.meta.dirname, "src/tiling/engine.wasm.ts")
+  )
+  let built = false
   return {
     name: "banda:tiling-model",
-    resolveId: (asked) => (asked === id ? `\0${id}` : undefined),
+    // What `load` gives is not in the file's own text, by which Vitest
+    // would keep it from one run to the next.
+    configureVitest({ defineCacheKeyGenerator }) {
+      defineCacheKeyGenerator(({ id }) =>
+        id.split("?")[0] === file ? false : undefined
+      )
+    },
     async load(loaded) {
-      if (loaded !== `\0${id}`) return undefined
+      if (loaded.split("?")[0] !== file) return undefined
       for (const name of readdirSync(source, { recursive: true }))
         if (/\.(rs|toml)$/.test(String(name)))
           this.addWatchFile(join(source, String(name)))
@@ -63,7 +74,7 @@ function tilingModel(): Plugin {
         ],
         { cwd: root, maxBuffer: 64 * 1024 * 1024 }
       )
-      const built = stdout
+      const made = stdout
         .split("\n")
         .filter((line) => line.startsWith("{"))
         .flatMap((line) => {
@@ -71,9 +82,14 @@ function tilingModel(): Plugin {
           return said.filenames ?? []
         })
         .find((file) => file.endsWith("banda_tiling_wasm.wasm"))
-      if (!built) throw new Error("cargo built no banda_tiling_wasm.wasm")
-      const bytes = readFileSync(built).toString("base64")
+      if (!made) throw new Error("cargo built no banda_tiling_wasm.wasm")
+      const bytes = readFileSync(made).toString("base64")
+      built = true
       return `export default ${JSON.stringify(bytes)}`
+    },
+    // A page built with the file as it stands, empty, would never draw.
+    generateBundle() {
+      if (!built) this.error("The Tiling's model was not built into the page.")
     },
   }
 }

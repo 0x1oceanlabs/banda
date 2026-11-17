@@ -2,7 +2,7 @@
  * A key is drawn before the engine answers (ADR 0088, decision 11): the
  * Tiling draws the facts it heard of the arrangement with the commands it
  * sent and has not heard yet applied over them, in the order sent, by the
- * client's copy of the engine's commands (`arrangement.ts`). Each command
+ * engine's own model (`engine.ts`). Each command
  * is applied under its CommandId, the seed of every ID it makes, so a
  * Pane it opens has the ID the engine gives it: drawn again from the
  * facts, it stays the same Tile, its terminal and its page with it.
@@ -41,7 +41,8 @@ import {
   type Want,
   withAsked,
 } from "./arrange"
-import { apply, type Command, type Facts } from "./arrangement"
+import { apply } from "./engine"
+import type { Command, Facts } from "./engine"
 import { sameData, sameEach } from "@banda/core"
 import {
   type Column,
@@ -121,7 +122,7 @@ type Planned = { command: Command; want?: string; focus?: false }
 /**
  * `plan` sent under `id`, drawn at once: its command applied over what is
  * drawn now, a Pane with no place put where the engine would by `facts`.
- * A command the copy refuses draws nothing, and waits for the engine's
+ * A command the model refuses draws nothing, and waits for the engine's
  * answer all the same. Gives the Pane it focuses, if any, and the one it
  * opens, by the ID the engine gives it too.
  */
@@ -245,7 +246,7 @@ function settled(seen: Seen): Seen {
   return drawn({ ...seen, unheard, predicted })
 }
 
-/** `one` applied to `list`; none when the copy refuses it. */
+/** `one` applied to `list`; none when the model refuses it. */
 function applyOne(list: Kept[], one: Unheard) {
   const applied = apply(list, one.command, one.id, one.facts)
   return "refused" in applied ? undefined : applied
