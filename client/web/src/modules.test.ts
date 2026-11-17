@@ -15,7 +15,7 @@ import { modules } from "./modules"
 import { WINDOW_ACTIONS } from "./window/actions"
 import { windowModule } from "./registry"
 import { TILING_ACTIONS } from "./tiling/actions"
-import { widthIn } from "./tiling/arrangement"
+import { widthIn } from "./tiling/engine"
 import { samePane } from "./tiling/model"
 import { factsOf } from "./tiling/useTiling"
 import {

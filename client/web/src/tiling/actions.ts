@@ -40,7 +40,7 @@ import {
   type Step,
   workspaceMoved,
 } from "./arrange"
-import { refusedTo } from "./arrangement"
+import { refusedTo } from "./engine"
 import { isFlow, nextFlow } from "./flow"
 import { filling, grouping, regrouping, shiftingInside } from "./groups"
 import { floorsOf, roomLeft } from "./layout"
@@ -297,7 +297,7 @@ const moveFocused = (tiling: Tiling, how: (w: Workspaces) => Workspaces) =>
 
 /** Each workspace as the Pane menu's "To workspace" offers it to the
  * Pane at `spot`, as `moving` would move it: its Project, and whether the
- * engine refuses the move there, as the copy of its rule foresees (ADR
+ * engine refuses the move there, as its rule foresees (ADR
  * 0102, decision 6). */
 export function targetsOf(
   state: Workspaces,

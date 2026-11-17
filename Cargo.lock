@@ -914,6 +914,7 @@ dependencies = [
  "banda-tiling",
  "serde",
  "serde_json",
+ "ts-rs",
 ]
 
 [[package]]

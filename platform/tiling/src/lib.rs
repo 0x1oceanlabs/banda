@@ -7,8 +7,8 @@
 //! and its refusal (`banda-base`). So the same code runs in the
 //! engine, which keeps the arrangement (`banda-workspaces`), and, compiled
 //! to WebAssembly, in a client that draws ahead of the engine's answer
-//! (ADR 0088, decision 11; ADR 0135, step 3). Until a client runs it, the
-//! window's copy is held to it by the golden traces (`tests/traces.rs`).
+//! (ADR 0088, decision 11; ADR 0135, step 3): the window does
+//! (`platform/tiling/wasm`).
 
 pub mod columns;
 pub mod commands;

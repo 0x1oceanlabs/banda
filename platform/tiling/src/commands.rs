@@ -1,10 +1,11 @@
 //! The arrangement's commands, as functions of it with no store, and what
-//! each client's copy of the model is held to (ADR 0088, decision 11).
+//! a client runs to draw ahead of the engine (ADR 0088, decision 11).
 //! `apply` calls the model functions the module's handlers call, as they
 //! call them; `open` is the handler's own. `tests/traces.rs` records what
-//! `apply` does as golden traces, and the client's copy,
-//! `client/web/src/tiling/arrangement.ts`, replays them; compiled to
-//! WebAssembly (T1), `apply` is what a client calls instead.
+//! `apply` does as golden traces. Compiled to WebAssembly
+//! (`platform/tiling/wasm`), `apply` is what the window calls
+//! (`client/web/src/tiling/engine.ts`), and it replays the traces through
+//! the file it loads.
 //!
 //! What needs the module's store stays in the module: that it takes a
 //! window's arrangement once, the workspaces set aside, the last Arrange
@@ -17,7 +18,7 @@
 //!
 //! Where a Pane with no place goes, and which move the row refuses, is
 //! `placing`'s to say, by the `Facts` its caller knows: the engine its
-//! own, a client's copy what it believes the engine's are (ADR 0110,
+//! own, a client what it believes the engine's are (ADR 0110,
 //! decisions 5, 8 and 9). So a move runs here, behind that rule, for the
 //! window, an Agent and `banda` alike.
 
@@ -25,7 +26,7 @@ use crate::columns::Display;
 use crate::model::{
     self, Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Toward, WorkspaceId,
 };
-use crate::placing::{self, Asked, By, Facts, Moved, Via};
+use crate::placing::{self, Asked, By, Facts, Moved, Refused, Via};
 use banda_base::{ProjectId, Refusal};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -289,8 +290,10 @@ pub fn open(
     facts: &Facts,
     seed: &Seed,
 ) -> Result<(PaneId, bool), Refusal> {
-    let again = open.again == Some(true) || open.instead.is_some();
-    let new = again || model::showing(list, &open.shows).is_none();
+    let (again, new) = open.fresh(list);
+    if let Some(place) = open.brought(new) {
+        admit(list, facts, Moved::Brought(open.shows.project), place)?;
+    }
     let Open {
         shows,
         mut place,
@@ -300,7 +303,6 @@ pub fn open(
         scratch,
         mut instead,
         moved,
-        brought,
         width,
         grouped,
         via,
@@ -308,9 +310,6 @@ pub fn open(
     } = open;
     let grouped = grouped == Some(true);
     let project = shows.project;
-    if let Some(place) = place.as_ref().filter(|_| new && brought == Some(true)) {
-        admit(list, facts, Moved::Brought(project), place)?;
-    }
     // The Pane it was moved from to another Project, when it opens
     // elsewhere: from there, and that Pane leaves once the new one stands.
     let away = (instead.filter(|_| place.is_none() && moved == Some(true)))
@@ -356,6 +355,69 @@ pub fn open(
     Ok((pane, new))
 }
 
+/// The refusal the row gives the command `method`, by `facts`, with what
+/// it is of: for a Pane, a column or a Group moved, and a Pane brought to
+/// a place. None for a command the row lets go, for one that moves nothing
+/// between workspaces, and for one whose params do not fit, which `apply`
+/// refuses in its own words. A client asks it to word the engine's refusal
+/// by the names it knows (ADR 0110, decision 8).
+pub fn refused(list: &Arrangement, method: &str, params: Value, facts: &Facts) -> Option<Refused> {
+    let (moving, place) = match method {
+        "move_pane" => banda_base::decode::<MovePane>(params).ok()?.moved(),
+        "move_column" => banda_base::decode::<MoveColumn>(params).ok()?.moved(false),
+        "move_group" => banda_base::decode::<MoveColumn>(params).ok()?.moved(true),
+        "open" => {
+            let open: Open = banda_base::decode(params).ok()?;
+            let (_, new) = open.fresh(list);
+            (
+                Moved::Brought(open.shows.project),
+                open.brought(new)?.clone(),
+            )
+        }
+        _ => return None,
+    };
+    placing::refuses(list, facts, moving, &place)
+}
+
+impl Open {
+    /// Whether it opens a Pane `again`, though the workspaces show one of
+    /// the same; and whether its Pane is new then.
+    fn fresh(&self, list: &Arrangement) -> (bool, bool) {
+        let again = self.again == Some(true) || self.instead.is_some();
+        (again, again || model::showing(list, &self.shows).is_none())
+    }
+
+    /// The place it brings a `new` Pane to, which the row refuses as a
+    /// move there.
+    fn brought(&self, new: bool) -> Option<&Place> {
+        (self.place.as_ref()).filter(|_| new && self.brought == Some(true))
+    }
+}
+
+impl MovePane {
+    /// What it moves, as the row asks whose it is, and where to.
+    fn moved(&self) -> (Moved, Place) {
+        (Moved::Pane(self.pane), self.place.clone())
+    }
+}
+
+impl MoveColumn {
+    /// What it moves, the column alone or with its `whole` Group, as the
+    /// row asks whose it is, and where to.
+    fn moved(&self, whole: bool) -> (Moved, Place) {
+        let place = Place::Column {
+            workspace: self.workspace,
+            index: self.index,
+        };
+        let moving = if whole {
+            Moved::Group(self.column)
+        } else {
+            Moved::Column(self.column)
+        };
+        (moving, place)
+    }
+}
+
 /// Refuses a move the row refuses (`placing::refuses`).
 fn admit(list: &Arrangement, facts: &Facts, moving: Moved, place: &Place) -> Result<(), Refusal> {
     placing::refuses(list, facts, moving, place).map_or(Ok(()), |refused| Err(refused.into()))
@@ -368,13 +430,9 @@ pub fn move_pane(
     facts: &Facts,
     seed: &Seed,
 ) -> Result<(), Refusal> {
-    let MovePane {
-        pane,
-        place,
-        grouped,
-    } = moving;
-    admit(list, facts, Moved::Pane(pane), &place)?;
-    model::move_pane(list, pane, &place, grouped, seed)
+    let (moved, place) = moving.moved();
+    admit(list, facts, moved, &place)?;
+    model::move_pane(list, moving.pane, &place, moving.grouped, seed)
 }
 
 /// Moves a column as `workspaces.move_column` says, or with `whole` the
@@ -386,17 +444,16 @@ pub fn move_column(
     facts: &Facts,
     seed: &Seed,
 ) -> Result<(), Refusal> {
+    let (moved, place) = moving.moved(whole);
+    admit(list, facts, moved, &place)?;
     let MoveColumn {
         column,
         workspace,
         index,
     } = moving;
-    let place = Place::Column { workspace, index };
     if whole {
-        admit(list, facts, Moved::Group(column), &place)?;
         model::move_group(list, column, workspace, index, seed)
     } else {
-        admit(list, facts, Moved::Column(column), &place)?;
         model::move_column(list, column, workspace, index, seed)
     }
 }

@@ -6,7 +6,7 @@
 //! The engine reads it as a Pane opens ([`read`]), so a key, an Agent and
 //! `banda` get the same answer, and `placing` decides by it. A client that
 //! draws ahead takes the same file from the look, as `files["tiling.toml"]`,
-//! and gives its copy of the rule the same.
+//! and gives the rule the same.
 //!
 //! The Flow was `agents.toml`'s before, and the widths `look.toml`'s: what
 //! those files still say is read while this one does not say it (ADR 0069

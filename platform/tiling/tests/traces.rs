@@ -1,5 +1,6 @@
-//! The golden traces each client's copy of the arrangement replays
-//! (`client/web/src/tiling/parity.test.ts`; ADR 0088, decision 11). Each
+//! The golden traces, which the window replays through the model as it
+//! loads it (`client/web/src/tiling/parity.test.ts`; ADR 0088, decision
+//! 11). Each
 //! scenario holds rules of the arrangement: its commands run through
 //! `commands::apply`, on the model functions the module's handlers run,
 //! and it is written to
@@ -8,7 +9,7 @@
 //!
 //! A change to the model changes them. The test then writes them anew and
 //! fails once, as `cargo test` writes the TypeScript types: review what
-//! changed, make the client's copy do the same, and run it again.
+//! changed, and run it again.
 //!
 //! ```sh
 //! cargo test -p banda-tiling --test traces
@@ -1740,7 +1741,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
     ];
     let steps = || traces.iter().flat_map(|t| &t.trace.steps);
 
-    // Every command the client's copy runs is traced, and each way of
+    // Every command `apply` runs is traced, and each way of
     // every place, side and mouse a passing step takes.
     let used: BTreeSet<&str> = steps()
         .filter_map(|step| step.method.strip_prefix("workspaces."))

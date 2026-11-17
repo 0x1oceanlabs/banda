@@ -391,8 +391,8 @@ export function refusalOf({
 
 /** What the note under Pane `pane`, carried, says over each workspace but
  * the one it stands on, by their IDs, in the row and solo (ADR 0102,
- * decision 6): whose it is, if `refused`, as the copy of the engine's rule
- * foresees (`arrangement.ts`'s `refusedTo`), else where the Pane goes, a
+ * decision 6): whose it is, if `refused`, as the engine's rule
+ * foresees (`engine.ts`'s `refusedTo`), else where the Pane goes, a
  * Project's by `projectOf`. */
 export function notesOf(
   state: Workspaces,

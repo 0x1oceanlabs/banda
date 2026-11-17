@@ -9,8 +9,8 @@
  * A key still works out a move or a named place with `model.ts`; what
  * that puts where becomes one command. A Pane opened with no place named
  * goes where the engine says (`asking`; ADR 0110). The window draws each
- * command at once with the client's copy of the engine's commands
- * (`unheard.ts`), until the engine's event holds it. Pure, so plain tests
+ * command at once with the engine's own model
+ * (`unheard.ts`, `engine.ts`), until the engine's event holds it. Pure, so plain tests
  * cover it.
  */
 import {
@@ -31,12 +31,7 @@ import type {
 } from "@banda/contract/workspaces"
 import type { PaneState } from "@banda/ui/pane"
 import type { Source } from "@banda/ui/hooks/use-live"
-import {
-  type Command,
-  type Facts,
-  refusalFor,
-  type RowRefusal,
-} from "./arrangement"
+import { type Command, type Facts, refusalFor, type RowRefusal } from "./engine"
 import {
   clamp,
   type Column,
@@ -303,8 +298,8 @@ export function applyChange(state: Arranged, event: Event): Arranged {
 }
 
 /** The arrangement a window kept, for the engine to take (decision 2),
- * and the one it draws, as the engine keeps one, for the copy of the
- * engine's rules to answer over. */
+ * and the one it draws, as the engine keeps one, for the engine's model
+ * to answer over. */
 export function keptOf(state: Workspaces): Kept[] {
   return state.list.map((workspace) => ({
     id: workspace.id,
@@ -350,8 +345,8 @@ export function logged(error: unknown): void {
 /**
  * `plan`, a move or a Pane brought, as the row may refuse it (ADR 0102,
  * decision 6). The engine decides (ADR 0110, decision 8): the plan goes to
- * it all the same, and once it refuses, `say` words why, by what the copy
- * of its rule foresaw over `before` by `facts`. One foreseen refused
+ * it all the same, and once it refuses, `say` words why, by what its
+ * rule foresaw over `before` by `facts`. One foreseen refused
  * leaves the view where it is. Any other refusal is logged, as ever.
  */
 export function refusable(

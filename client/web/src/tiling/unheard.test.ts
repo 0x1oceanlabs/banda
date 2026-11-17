@@ -11,7 +11,7 @@ import { type CommandId, newId } from "@banda/contract"
 import type { Workspace as Kept } from "@banda/contract/workspaces"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { keptOf, NO_VIEW } from "./arrange"
-import { apply, type Command, type Facts, NO_FACTS } from "./arrangement"
+import { apply, type Command, type Facts, NO_FACTS } from "./engine"
 import { entries, focused } from "./model"
 import {
   ANSWER_WITHIN,

@@ -1,7 +1,7 @@
 //! The Tiling's model as a client loads it (ADR 0088, decision 11; ADR
 //! 0135): `banda-tiling` built for `wasm32-unknown-unknown`, with one
-//! door. A client writes a command as JSON into memory it asked for
-//! (`alloc`), calls `apply`, and reads the answer as JSON where `apply`
+//! door. A client writes what it asks as JSON into memory it asked for
+//! (`alloc`), calls `ask`, and reads the answer as JSON where `ask`
 //! says it is. Nothing is imported: the file runs wherever WebAssembly
 //! does.
 //!
@@ -11,72 +11,126 @@
 
 use banda_base::Refusal;
 use banda_tiling::commands;
-use banda_tiling::model::{Arrangement, Seed};
-use banda_tiling::placing::Facts;
+use banda_tiling::model::{Arrangement, PaneId, Seed, WorkspaceId};
+use banda_tiling::placing::{self, Facts, Refused};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use ts_rs::TS;
 
-/// A command as a client sends it: the arrangement it has, the command
-/// (`method` as in `commands::METHODS`, with its `params`), the engine's
-/// facts as the client knows them, and the command's ID, from which what
-/// the command makes takes its IDs.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Asked {
-    list: Arrangement,
-    method: String,
-    #[serde(default)]
-    params: Value,
-    #[serde(default)]
-    facts: Facts,
-    seed: String,
+/// What a client asks the model, each with the arrangement it has and
+/// the engine's facts as it knows them.
+#[derive(Deserialize, TS)]
+#[serde(tag = "ask", rename_all = "snake_case", deny_unknown_fields)]
+#[ts(export, export_to = "workspaces/", rename = "ModelAsked")]
+enum Asked {
+    /// Run a command (`method` as in `commands::METHODS`, with its
+    /// `params`) under its ID `seed`, from which what it makes takes its
+    /// IDs.
+    Apply {
+        list: Arrangement,
+        method: String,
+        #[serde(default)]
+        params: Value,
+        #[serde(default)]
+        facts: Facts,
+        seed: String,
+    },
+    /// The row's refusal of a command, with what it is of
+    /// (`commands::refused`).
+    Refused {
+        list: Arrangement,
+        method: String,
+        #[serde(default)]
+        params: Value,
+        facts: Facts,
+    },
+    /// The workspaces the row lets a Pane move to no more
+    /// (`placing::refused_to`).
+    RefusedTo {
+        list: Arrangement,
+        facts: Facts,
+        pane: PaneId,
+        whole: bool,
+    },
+    /// A new column's width for a Pane of a kind, where the command names
+    /// none (`Facts::width`).
+    Width { facts: Facts, kind: String },
 }
 
-/// The command's answer and the arrangement after it, or why it is
-/// refused, in the engine's words: `{"answer", "list"}` or `{"refused":
-/// {"code", "message"}}`.
+/// What the model answers. `apply`: the command's answer and the
+/// arrangement after it, `{"answer", "list"}`, or why it is refused, in
+/// the engine's words, `{"refused": {"code", "message"}}`. The rest: what their function gives, none as
+/// null.
 #[derive(Serialize)]
 #[serde(untagged)]
 enum Said {
-    Done { answer: Value, list: Arrangement },
-    Refused { refused: Refusal },
+    Done {
+        answer: Value,
+        list: Arrangement,
+    },
+    No {
+        refused: Refusal,
+    },
+    /// What was asked is no question of `Asked`'s: the client's fault,
+    /// which it throws.
+    Unread {
+        unread: String,
+    },
+    Refused(Option<Refused>),
+    RefusedTo(Vec<WorkspaceId>),
+    Width(Option<String>),
 }
 
 fn run(asked: &[u8]) -> Said {
-    let Asked {
-        mut list,
-        method,
-        params,
-        facts,
-        seed,
-    } = match serde_json::from_slice(asked) {
+    let asked = match serde_json::from_slice(asked) {
         Ok(asked) => asked,
         Err(e) => {
-            return Said::Refused {
-                refused: Refusal::invalid(format!("The model cannot read the command: {e}.")),
+            return Said::Unread {
+                unread: e.to_string(),
             };
         }
     };
-    match commands::apply(&mut list, &method, params, &facts, &Seed::of(&seed)) {
-        Ok(answer) => Said::Done { answer, list },
-        Err(refused) => Said::Refused { refused },
+    match asked {
+        Asked::Apply {
+            mut list,
+            method,
+            params,
+            facts,
+            seed,
+        } => match commands::apply(&mut list, &method, params, &facts, &Seed::of(&seed)) {
+            Ok(answer) => Said::Done { answer, list },
+            Err(refused) => Said::No { refused },
+        },
+        Asked::Refused {
+            list,
+            method,
+            params,
+            facts,
+        } => Said::Refused(commands::refused(&list, &method, params, &facts)),
+        Asked::RefusedTo {
+            list,
+            facts,
+            pane,
+            whole,
+        } => Said::RefusedTo(placing::refused_to(&list, &facts, pane, whole)),
+        Asked::Width { facts, kind } => Said::Width(facts.width(&kind)),
     }
 }
 
-/// `len` bytes of the model's memory for the client to write a command
-/// into. `apply` takes them back.
+/// `len` bytes of the model's memory for the client to write what it
+/// asks into. `ask` takes them back.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)]
 pub extern "C" fn alloc(len: usize) -> *mut u8 {
     Box::into_raw(vec![0u8; len].into_boxed_slice()).cast()
 }
 
-/// Runs the command written at `ptr`, `len` bytes that `alloc(len)` gave,
+/// Answers what is asked at `ptr`, `len` bytes that `alloc(len)` gave,
 /// and says where its answer is: the pointer in the high half, the length
-/// in the low one. The answer stays until the next `apply`.
+/// in the low one. The answer stays until the next `ask`.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)]
-pub extern "C" fn apply(ptr: *mut u8, len: usize) -> u64 {
+pub extern "C" fn ask(ptr: *mut u8, len: usize) -> u64 {
     use std::cell::RefCell;
     thread_local! {
         static ANSWER: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
@@ -106,6 +160,7 @@ mod tests {
     fn a_command_comes_back_with_its_answer_and_the_arrangement_after() {
         let start = banda_tiling::model::start_from(&Seed::of("start"));
         let asked = json!({
+            "ask": "apply",
             "list": start,
             "method": "open",
             "params": { "project": "a0000000-0000-4000-8000-000000000002", "kind": "t.t", "args": {} },
@@ -118,14 +173,32 @@ mod tests {
 
     #[test]
     fn a_refusal_comes_back_in_the_engines_words() {
-        let asked = json!({ "list": [], "method": "none", "seed": "s" });
+        let asked = json!({ "ask": "apply", "list": [], "method": "none", "seed": "s" });
         let said = said(&asked);
         assert_eq!(said["refused"]["code"], "invalid", "{said}");
     }
 
     #[test]
-    fn what_is_no_command_is_refused_not_a_panic() {
+    fn what_is_no_question_is_said_so_not_a_panic() {
         let said = serde_json::to_value(run(b"{")).unwrap();
-        assert_eq!(said["refused"]["code"], "invalid");
+        assert!(said["unread"].is_string(), "{said}");
+    }
+
+    #[test]
+    fn the_rows_say_and_a_kinds_width_come_as_their_functions_give_them() {
+        let facts = json!({ "flow": "row", "narrow": ["a.list"], "narrowest": "1/4" });
+        let width = |kind: &str| said(&json!({ "ask": "width", "facts": facts, "kind": kind }));
+        assert_eq!(width("a.list"), "1/4");
+        assert_eq!(width("a.other"), Value::Null);
+        let pane = "a0000000-0000-4000-8000-000000000003";
+        let to = said(&json!({
+            "ask": "refused_to", "list": [], "facts": facts, "pane": pane, "whole": false,
+        }));
+        assert_eq!(to, json!([]));
+        let refused = said(&json!({
+            "ask": "refused", "list": [], "facts": facts, "method": "close",
+            "params": { "pane": pane },
+        }));
+        assert_eq!(refused, Value::Null);
     }
 }

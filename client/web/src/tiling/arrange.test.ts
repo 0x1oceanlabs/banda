@@ -18,7 +18,7 @@ import {
   withAsked,
   workspaceMoved,
 } from "./arrange"
-import { apply } from "./arrangement"
+import { apply } from "./engine"
 import {
   close,
   current,
@@ -43,10 +43,10 @@ function pane(kind: string, args: Record<string, string> = {}): PaneState {
 }
 
 /** Two columns on the first workspace, the second a stack of two. */
-function arranged(): Workspaces {
-  let state = open(start(), A, pane("a.one"), { place: "right" })
-  state = open(state, A, pane("a.two"), { place: "right" })
-  state = open(state, A, pane("a.three"), { place: "below" })
+function arranged(project = A): Workspaces {
+  let state = open(start(), project, pane("a.one"), { place: "right" })
+  state = open(state, project, pane("a.two"), { place: "right" })
+  state = open(state, project, pane("a.three"), { place: "below" })
   return state
 }
 
@@ -389,10 +389,10 @@ describe("plans", () => {
   })
 
   test("closes an emptied workspace the window has left, a Project's too, and keeps the rest (ADR 0102, decision 2)", () => {
-    const state = arranged()
-    // As the engine names them, so its copy runs the command.
+    // As the engine names them, so its model runs the command.
     const uuid = (n: number) => `00000000-0000-4000-8000-00000000000${n}`
     const [mine, theirs] = [uuid(1), uuid(2)] as ProjectId[]
+    const state = arranged(uuid(0))
     const [busy, bottom] = state.list
     const closing: Workspaces = {
       list: [
