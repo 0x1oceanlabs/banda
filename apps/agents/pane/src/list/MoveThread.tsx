@@ -212,7 +212,7 @@ function MoveThread({
           }}
         >
           <DialogHeader>
-            <DialogTitle id={label}>Move Thread</DialogTitle>
+            <DialogTitle id={label}>Move Task</DialogTitle>
             <DialogDescription className="truncate">
               {listed.title}
             </DialogDescription>

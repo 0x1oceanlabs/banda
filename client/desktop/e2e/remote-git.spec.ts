@@ -86,8 +86,8 @@ async function onArc() {
 async function card(page: Page) {
   await page.keyboard.press("Control+Shift+KeyB")
   const details = page
-    .getByRole("complementary", { name: "Thread details" })
-    .or(page.getByRole("dialog", { name: "Thread details" }))
+    .getByRole("complementary", { name: "Task details" })
+    .or(page.getByRole("dialog", { name: "Task details" }))
   await expect(details).toBeVisible()
   return details
 }

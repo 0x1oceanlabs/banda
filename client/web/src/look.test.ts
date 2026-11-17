@@ -332,7 +332,7 @@ const LISTED: Listed[] = [
   },
   {
     rule: "design.13",
-    why: "Step 5: lengths off the grid elsewhere go onto Tailwind's steps: the Agent's pointer in the browser, an input group's addons, a trace's icon, a limit's line, a widget's nudge, a Thread setting's padding.",
+    why: "Step 5: lengths off the grid elsewhere go onto Tailwind's steps: the Agent's pointer in the browser, an input group's addons, a trace's icon, a limit's line, a widget's nudge, a Task setting's padding.",
     cases: [
       "apps/agents/pane/src/lines/limit.tsx: w-[1.5px]",
       "apps/agents/pane/src/settings/ThreadSettings.tsx: px-[7px]",

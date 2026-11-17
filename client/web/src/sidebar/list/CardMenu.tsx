@@ -215,7 +215,7 @@ export function CardMenu({
   return (
     <ContextMenu>
       <ContextMenuTrigger ref={card}>{children}</ContextMenuTrigger>
-      <ContextMenuContent aria-label="Thread menu" className="min-w-60">
+      <ContextMenuContent aria-label="Task menu" className="min-w-60">
         <Entries row={row} card={card} />
       </ContextMenuContent>
     </ContextMenu>

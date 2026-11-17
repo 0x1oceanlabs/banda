@@ -78,7 +78,7 @@ const INSIDE = "Every Agent runs inside it; your Terminals don't."
 /** What a new Thread starts with, unless the Person set its Harness's
  * mode in Settings → Agents (agents.toml's `[start.<id>]`). */
 const starts = (mode: string) =>
-  `New Threads start ${mode}, unless you set another mode for them.`
+  `New Tasks start ${mode}, unless you set another mode for them.`
 
 /** What a new Thread starts with where the fence does not hold whole. */
 const SUPERVISED = starts("Supervised")
@@ -160,8 +160,8 @@ function shownOf(fence: Fence, quit: string, there?: string): Shown {
           <>
             <Attention>
               You're in the docker group. Through Docker, an Agent could step
-              past the fence, so new Threads start Supervised. Leave the group,
-              or use rootless Docker, and they start Full access again.
+              past the fence, so new Tasks start Supervised. Leave the group, or
+              use rootless Docker, and they start Full access again.
             </Attention>
             <Links fence={fence} />
           </>
@@ -229,7 +229,7 @@ function shownOf(fence: Fence, quit: string, there?: string): Shown {
         <Note icon={InfoIcon}>
           {again.charAt(0).toUpperCase() + again.slice(1)} to start it now.
         </Note>,
-        "Until then, new Threads start as they did."
+        "Until then, new Tasks start as they did."
       )
     case "off":
       return off(
@@ -257,7 +257,7 @@ function Links({ fence }: { fence: Fence & { fence: "holds" } }) {
           <code className="font-mono break-all">{path}</code>
         </span>
       ))}
-      . Keep them as plain files and folders, and new Threads start Full access
+      . Keep them as plain files and folders, and new Tasks start Full access
       again.
     </Attention>
   )
@@ -354,7 +354,7 @@ export function FenceRow({
               onClick={onAgents}
             >
               <BotIcon data-icon="inline-start" />
-              New Threads' mode
+              New Tasks' mode
             </Button>
           )}
         </div>

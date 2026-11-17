@@ -70,7 +70,7 @@ export function LimitCard({
       : `resets at ${clock(until, now)}, in ${left(until, now)}`
   const said = [here?.out?.window, when].filter(Boolean).join(" · ")
   const about = waits
-    ? "The Thread is put off till the reset and goes on by itself."
+    ? "The Task is put off till the reset and goes on by itself."
     : `${said ? `${said[0].toUpperCase()}${said.slice(1)}. ` : ""}The turn goes on where it stopped.`
   const title = waits
     ? `Waiting for ${account}'s reset${until === undefined ? "" : ` · goes on at ${clock(until, now)}`}`
@@ -130,7 +130,7 @@ function noteOf(move: Move): string {
   const name = move.harness.name
   if (move.same) return `${name}: the same session, nothing lost.`
   if (move.back) return `${name} goes back to its own session.`
-  return `${name} gets the Thread's history.`
+  return `${name} gets the Task's history.`
 }
 
 /** A limit the Thread went on from: what stopped there, in one quiet
@@ -292,7 +292,7 @@ function MoveAll({ from, to }: { from: Move; to: Move }) {
       onClick={() => void moveAll(engine, waiting, to.harness.id)}
     >
       <WorkflowIcon />
-      Move all {waiting.length} Threads of {from.harness.name} to{" "}
+      Move all {waiting.length} Tasks of {from.harness.name} to{" "}
       {to.harness.name}
     </DropdownMenuItem>
   )

@@ -12,7 +12,7 @@ afterEach(() => {
 
 /** An App's act, as Threads' Later. */
 const later: Act = {
-  title: "Put the Thread off",
+  title: "Put the Task off",
   at: "owner",
   app: "agents",
   here: true,

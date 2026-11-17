@@ -65,9 +65,9 @@ export function ThreadDetails({
     <Button
       variant="ghost"
       size="icon-xs"
-      aria-label="Thread details"
+      aria-label="Task details"
       aria-pressed={shown}
-      title="Thread details (Ctrl+Shift+B)"
+      title="Task details (Ctrl+Shift+B)"
       className="shrink-0 aria-pressed:bg-muted"
       onClick={wide ? () => onShown(!shown) : undefined}
     >
@@ -80,7 +80,7 @@ export function ThreadDetails({
         <InHeader>{button}</InHeader>
         {shown && (
           <aside
-            aria-label="Thread details"
+            aria-label="Task details"
             style={{ width: CARD, top: GAP / 2, right: GAP }}
             className="absolute z-10 rounded-card bg-popover/80 p-1.5 shadow-float ring-1 ring-foreground/10 backdrop-blur"
           >
@@ -94,7 +94,7 @@ export function ThreadDetails({
       <Popover open={shown} onOpenChange={onShown}>
         <PopoverTrigger render={button} />
         <PopoverContent
-          aria-label="Thread details"
+          aria-label="Task details"
           style={{ width: CARD }}
           className="p-1.5"
         >

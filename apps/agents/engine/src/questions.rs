@@ -726,7 +726,7 @@ mod tests {
         assert_eq!(Some(filled.kept), kept);
         assert!(
             matches!(&body, Body::Question { values, .. } if *values == kept),
-            "the Thread never holds a secret"
+            "the Task never holds a secret"
         );
 
         let mut skipped = form();

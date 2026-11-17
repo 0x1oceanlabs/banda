@@ -105,7 +105,7 @@ const LOOK: Record<ProjectEntry, { icon: LucideIcon; title: string }> = {
   locate: { icon: FolderSearchIcon, title: LOCATE },
   folder: { icon: FolderOpenIcon, title: "Open folder" },
   settings: { icon: SettingsIcon, title: "Project settings…" },
-  archive: { icon: CheckCheckIcon, title: "Archive its Threads" },
+  archive: { icon: CheckCheckIcon, title: "Archive its Tasks" },
   remove: { icon: Trash2Icon, title: "Remove from Banda…" },
 }
 

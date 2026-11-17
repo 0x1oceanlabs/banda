@@ -54,7 +54,7 @@ impl Card {
             Ok(())
         });
         if let Err(error) = told.await {
-            tracing::warn!(%error, "the Thread's Agent was not told what git did");
+            tracing::warn!(%error, "the Task's Agent was not told what git did");
         }
     }
 }

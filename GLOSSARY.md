@@ -12,7 +12,7 @@ One body of work and its folder on disk: any folder, a git repository too,
 or a new one in `~/Banda/<name>/`. The folder holds the files that the
 Person and the Agents work on, and nothing of Banda's: the Project's data
 and event log are in the engine's data, `~/.local/share/banda/projects/<id>/`
-(ADR 0026, ADR 0069). A Thread started without one is in **No Project**,
+(ADR 0026, ADR 0069). A Task started without one is in **No Project**,
 in a small Project of its own under `~/Banda/scratch/` (ADR 0046).
 _Avoid_: space (its name before ADR 0069; the ADRs before it say Space),
 workspace (that is a screen of Panes).
@@ -35,11 +35,11 @@ computer's user, who owns every Project there.
 _Avoid_: user (outside code that talks to the operating system).
 
 **Agent**:
-The AI at work in one Thread, through that Thread's Harness. Each Thread has
+The AI at work in one Task, through that Task's Harness. Each Task has
 its own Agent, with no name or settings of its own (ADR 0006).
 
 **Harness**:
-The agent program a Thread runs on, for example Claude Code or Codex. The
+The agent program a Task runs on, for example Claude Code or Codex. The
 engine reaches it through an adapter, ACP first. It reads what a Harness can
 do from the Harness's declared capabilities.
 
@@ -48,7 +48,7 @@ One sign-in of a Harness: a subscription, an API key or a gateway. In
 `harnesses.toml` it is an entry `of` its Harness, with its own name, folder
 and Emblem (ADR 0078, ADR 0093). Its name is its Harness's until the Person
 renames it. A Harness's own entry is its first account. An environment
-sign-in is one too, made for boxes (ADR 0084). A new Thread starts on the
+sign-in is one too, made for boxes (ADR 0084). A new Task starts on the
 default account, or on the fallback while the default is out (ADR 0093).
 _Avoid_: profile, instance, provider.
 
@@ -86,26 +86,28 @@ Harness, never in a terminal. In an isolated Project it runs in the box
 (ADR 0084).
 _Avoid_: console, shell (that is one program a terminal runs).
 
-**Thread**:
+**Task**:
 One session with a Harness in a Project: starting one is all it takes. Its
 Harness is chosen when it starts and stays with it. It shows entries:
 messages, the Agent's thoughts, tool calls, its plans, Visuals, notices,
 Issues and Questions.
-A Harness keeps a session of its own for it, which a Thread holds as
+A Harness keeps a session of its own for it, which a Task holds as
 evidence.
 Its Person may move it to another Project, on its machine or another's:
 it goes whole, and is in one Project (ADR 0098, ADR 0116).
-_Avoid_: chat.
+It was called a Thread until ADR 0138, and the code, the methods and an
+Agent's tools say `thread` until that ADR's steps 2 and 3.
+_Avoid_: thread, chat.
 
 **Entry**:
-One thing a Thread shows, one for each kind of its body: a message, a
+One thing a Task shows, one for each kind of its body: a message, a
 thought, a call, a plan, a Question, a notice, an Issue, a Visual, a
 sub-agent's row where it started (ADR 0103). Each kind is drawn by a file
 of its own (ADR 0091).
 _Avoid_: item (that is `item@1`), event.
 
 **Line**:
-What a Thread's timeline adds between its entries: the work line, a fold,
+What a Task's timeline adds between its entries: the work line, a fold,
 the live line, a turn that ended, a turn's changes, a proposed plan (ADR
 0091), the group of sub-agents one message started (ADR 0103).
 _Avoid_: row (that is how the sidebar list draws an Item).
@@ -123,18 +125,18 @@ which switch plan mode.
 _Avoid_: command (that is a request to an App).
 
 **Visual**:
-One finished HTML page an Agent shows its Person in its Thread: a mockup,
+One finished HTML page an Agent shows its Person in its Task: a mockup,
 a chart, a diagram, an animation, a sound. It wears the look and runs apart
 from Banda; it opens larger as a preview or as a Pane of its own (ADR 0037).
 _Avoid_: page (that is the browser's), artifact, render.
 
 **Turn**:
-One stretch of an Agent's work in a Thread. It begins at a message to the
+One stretch of an Agent's work in a Task. It begins at a message to the
 Agent, or when the Agent goes on by itself, and ends when the Agent stops
 or is stopped.
 
 **Queue**:
-The messages of a Thread that wait for their turns, in order, after the
+The messages of a Task that wait for their turns, in order, after the
 turn that runs. A Person can change one, take it back or send it into the
 turn that runs. A stop, a restart or a Harness that stopped holds the queue
 until the Person continues.
@@ -156,27 +158,27 @@ answer goes back to the Harness unchanged.
 _Avoid_: prompt, approval request.
 
 **Sub-agent**:
-A Harness's helper at work inside a Thread, such as Claude Code's Agent
-tool or Codex's `spawn_agent`. It is part of the Thread's Agent, with no
-name, settings or pass of its own, and no card: its Thread's host keeps it
-with the Thread, which shows it as a row and as a satellite of its Mark,
+A Harness's helper at work inside a Task, such as Claude Code's Agent
+tool or Codex's `spawn_agent`. It is part of the Task's Agent, with no
+name, settings or pass of its own, and no card: its Task's host keeps it
+with the Task, which shows it as a row and as a satellite of its Mark,
 and opens it beside, read only. The Person reaches it through the Agent:
 Ask Claude about it (ADR 0103).
-_Avoid_: subagent, task, child Thread (that is a Thread another Agent
+_Avoid_: subagent, task, child Task (that is a Task another Agent
 started, ADR 0019).
 
 **Crew**:
-The sub-agents one Thread set to work together in **phases**, the steps
+The sub-agents one Task set to work together in **phases**, the steps
 its script names, such as Scan, Fix and Verify: what Claude Code calls a
 workflow. Its title is the Harness's name for it. It shows as one card in
-the Thread and as the Crew Pane in the Thread's Group (ADR 0103).
+the Task and as the Crew Pane in the Task's Group (ADR 0103).
 _Avoid_: workflow (that is steps across Apps), task, swarm, team.
 
 ## Shape
 
 **Engine**:
 The one process on a host, `banda serve`, that owns the host's Projects,
-their Threads and every App's data there. It is the machine's service and
+their Tasks and every App's data there. It is the machine's service and
 outlives the window (ADR 0086). Clients reach it through its API.
 _Avoid_: server (that is a machine), backend.
 
@@ -234,7 +236,7 @@ _Avoid_: plugin (an App from elsewhere is an App), feature.
 
 **App**:
 What a Person installs, opens and arranges, built on the Banda App SDK:
-Threads, Browser, Git, Files, Terminal, Usage, and Apps from elsewhere. A
+Tasks, Browser, Git, Files, Terminal, Usage, and Apps from elsewhere. A
 host installs it, a Project turns it on, and the Project keeps its data
 (ADR 0062, ADR 0085).
 _Avoid_: plugin; module (a unit in the code); extension (that is a Chrome
@@ -258,7 +260,7 @@ says, such as what it hears, calls and asks of a device (ADR 0082).
 `banda modules` prints all three.
 
 **Source**:
-Where the Banda menu finds a module's rows: Files, or New Thread with the
+Where the Banda menu finds a module's rows: Files, or New Task with the
 words typed (ADR 0022, decision 4).
 
 **Unstable mark**:
@@ -271,7 +273,7 @@ without naming who handles it. In v1 one App handles each (ADR 0082).
 
 **Slot**:
 A place in one App's thing that other Apps fill with Items, such as a
-Thread's details or the Pane header (ADR 0082). Until an App's view
+Task's details or the Pane header (ADR 0082). Until an App's view
 answers a Tree (V2), a module fills one with code of its own, its `slots`
 (ADR 0087).
 
@@ -282,7 +284,7 @@ its things as Items, and the sidebar list, the bar and push read them; a
 Slot holds Items too. A row is how the sidebar list draws an Item (ADR
 0082, ADR 0087).
 _Avoid_: row and card for what an App lists or puts in a Slot (a card is
-a Thread's block).
+a Task's block).
 
 **Web App**:
 A site as an App, in a webview of its own with its own sign-in. Its
@@ -290,14 +292,14 @@ manifest is the Person's (ADR 0062).
 
 **MCP App**:
 An MCP server whose tools bring `ui://` pages, shown in a Frame in a
-Thread or as a Pane (ADR 0062).
+Task or as a Pane (ADR 0062).
 
 **Catalogue**:
 The fixed set of components in Banda's client release that every App is
 drawn with: shadcn's, Banda's own, and the live components (ADR 0062).
 
 **Live component**:
-A catalogue component that needs every frame or a fast stream: a Thread
+A catalogue component that needs every frame or a fast stream: a Task
 with its message box, a terminal, a browser's page, a file's view (ADR
 0062). It obeys its Tile's Configure (ADR 0088).
 
@@ -398,7 +400,7 @@ the Tiling's Flow, widths and rules (`tiling.toml`), `[notify]`, themes. Every
 machine keeps a full copy, and a device uses
 only its own machine's. Copying them between machines is the sync, not
 built yet (ADR 0101, decision 3). Seen marks are not among them: they are
-the Thread's (ADR 0096).
+the Task's (ADR 0096).
 _Avoid_: Person document; replica.
 
 **Forward**:
@@ -488,11 +490,6 @@ Steps across Apps, such as a commit then a push, run on the host as its
 App's runs (ADR 0082, ADR 0085).
 _Avoid_: task.
 
-**Task**:
-Reserved, as `task@1`. Until it exists, the turn is the unit of work (ADR
-0085).
-_Avoid_: job.
-
 **Address**:
 How a thing is named anywhere: its scope (a Project, the Person or a
 Host), its App and its id. It never names a Project's host (ADR 0082).
@@ -515,7 +512,7 @@ law 4).
 
 **Visible queue**:
 Commands the Person chose to "send when back", shown with when they will
-be dropped: 10 minutes by default, 7 days at most (ADR 0082). A Thread's
+be dropped: 10 minutes by default, 7 days at most (ADR 0082). A Task's
 Queue is another thing.
 
 **Route**:
@@ -532,7 +529,7 @@ _Avoid_: sandbox (that is an environment).
 
 **Pass**:
 What an Agent's or an App's session shows Banda: who it is (its Agent,
-Thread and Project, or its App), its tools, its audience and its expiry
+Task and Project, or its App), its tools, its audience and its expiry
 (ADR 0083).
 _Avoid_: token (ADR 0019's word).
 
@@ -557,7 +554,7 @@ of MCP servers. It reaches the Person as a Call, and changes nothing until
 they accept (ADR 0083).
 
 **Lend**:
-The Person gives a Thread one of their tabs to drive, until they take it
+The Person gives a Task one of their tabs to drive, until they take it
 back, the tab closes or the session ends (ADR 0083).
 
 **Trusted**:
@@ -710,7 +707,7 @@ host keeps it. A Pane never reads it to draw (ADR 0087).
 _Avoid_: focus (the keyboard's, and the focused Pane).
 
 **Pane**:
-An App's view opened for one Project, such as a Thread or a browser page,
+An App's view opened for one Project, such as a Task or a browser page,
 with what it shows kept in the arrangement. It stands in a Tile, the
 Drawer, Quick Look or a window of its own, and looks the same on every
 client. It names its Project and the one thing it shows, never a host, and
@@ -738,20 +735,20 @@ column or workspace, its own window, close. Its button at the header's
 right end and a right click on the header open it.
 _Avoid_: window menu, layout menu.
 
-**Thread menu**:
-What the Person can do to a Thread: rename it, suggest a title, mark it
+**Task menu**:
+What the Person can do to a Task: rename it, suggest a title, mark it
 unread, archive it. A click on the title in its Pane's header and a right
 click on its row in the sidebar open it (ADR 0077). The Pane menu is
-another: it acts on the Pane, not the Thread. Its rows are item actions:
-the Threads App's, then Banda's own (ADR 0087).
+another: it acts on the Pane, not the Task. Its rows are item actions:
+the Tasks App's, then Banda's own (ADR 0087).
 
 **Item action**:
-An action that takes one Item, such as renaming a Thread or putting it off until Later. The
+An action that takes one Item, such as renaming a Task or putting it off until Later. The
 Item's App gives its own; Banda gives marking it unread and archiving it
 (ADR 0087).
 
 **Message box**:
-Where the Person writes to an Agent, at a Thread's foot (ADR 0062).
+Where the Person writes to an Agent, at a Task's foot (ADR 0062).
 _Avoid_: composer (that is the tiling).
 
 **Tab**:
@@ -829,8 +826,8 @@ _Avoid_: tabs, tabbed column (a Tab is a browser page's).
 **Group**:
 Columns side by side on one workspace, held together, so they move and
 look as one: a plate behind them, in the colour of their Agent's state
-(ADR 0065). `Alt+G` starts one; an Agent's Thread is a Group from its
-opening, and what its Thread opens joins it: what its Agent opens, and
+(ADR 0065). `Alt+G` starts one; an Agent's Task is a Group from its
+opening, and what its Task opens joins it: what its Agent opens, and
 what the Person opens with a click in it. What the Person opens by a key
 opens beside it (ADR 0134). The mod and a drag of
 any of its Panes move it whole. It lays out only, and gives no access.
@@ -869,7 +866,7 @@ _Avoid_: viewer, renderer.
 A workspace that holds Panes of any Project and of none, as the Flow
 `free` does. In the row and solo there can be any number of them; the
 empty one at the bottom becomes one when a Pane is put on it, and a
-Thread of no Project opens on the first (ADR 0102).
+Task of no Project opens on the first (ADR 0102).
 
 **Sheet**:
 Settings, Usage or the notifications, come in from the right edge over
@@ -877,42 +874,42 @@ the workspace, in the top layer. The row stays as it is, and `Esc`
 takes it away (ADR 0102).
 
 **Drawer**:
-A quick Thread that drops from the top over the workspace (`` Alt+` ``)
+A quick Task that drops from the top over the workspace (`` Alt+` ``)
 and is lifted again as it was. It is in no workspace until its pin makes
 it a column of the one on screen.
 
 **Sidebar**:
 The Window's area at its left edge, and Banda's list that fills it, the
-sidebar list: every Thread of every Project, and whatever else an App
+sidebar list: every Task of every Project, and whatever else an App
 lists as an Item. Each row shows its own Mark. It is the Person's inbox:
 tabs Inbox, Working, Later and Archive, grouped by Project or not, every
 card of three, two or one lines as the Person picks, and the Person's own keys change any part of it (ADR 0098). The list is a part of Banda,
-not of the Threads App: it reads only what Apps list (ADR 0087). On a
+not of the Tasks App: it reads only what Apps list (ADR 0087). On a
 phone it is the home screen. Where the two must be told apart, say "the
 Sidebar" for the area and "the sidebar list" for the list.
 _Avoid_: panel. Inbox is its first tab.
 
 **Archive**:
-Where the Threads the Person put away wait, folded at the sidebar's
-bottom. Only the Person archives a Thread; anything new in it brings it
-back to the list (ADR 0069). The Thread's host keeps the mark, beside its
-Later, so a Thread archived on one machine is archived on all (ADR
+Where the Tasks the Person put away wait, folded at the sidebar's
+bottom. Only the Person archives a Task; anything new in it brings it
+back to the list (ADR 0069). The Task's host keeps the mark, beside its
+Later, so a Task archived on one machine is archived on all (ADR
 0096). A Project is archived too, which hides it from the pickers until
 the Person brings it back (ADR 0026).
 _Avoid_: settled (its name before ADR 0069).
 
 **Later**:
-A Thread put away until a time, until its turn ends, until its usage limit
+A Task put away until a time, until its turn ends, until its usage limit
 resets, or Someday, with no time; on the sidebar's Later tab. A new call
-wakes it early; a Thread that asks may be put off, and comes back with the
+wakes it early; a Task that asks may be put off, and comes back with the
 same question. The engine keeps it, so every window, machine and Agent
-sees it; an Agent may put its own Thread off (ADR 0074, ADR 0098).
+sees it; an Agent may put its own Task off (ADR 0074, ADR 0098).
 _Avoid_: snooze, remind.
 
 **Seen**:
-The Person's mark that they saw how a Thread's latest turn ended: that
+The Person's mark that they saw how a Task's latest turn ended: that
 turn's ID, never a time. A finished or failed turn calls until it is
-seen. The Thread's host keeps it, beside its Later, so every window and
+seen. The Task's host keeps it, beside its Later, so every window and
 machine agrees; a window marks it only while the Person is there, and
 "Mark as unread" takes it back. Only the Person marks it (ADR 0096).
 _Avoid_: read (the menu's word for the action, not the mark).
@@ -961,7 +958,7 @@ a switcher (that was the agents widget, ADR 0065).
 **Update**:
 A newer Banda of the same channel, which Banda downloads by itself and
 installs when it quits. The bar shows one that downloads or is ready,
-and names it once it is ready. While Threads work or a program runs in
+and names it once it is ready. While Tasks work or a program runs in
 one of this machine's terminals, Banda restarts into it once they stop,
 and the new Banda says it updated (ADR 0041, ADR 0072, ADR 0106).
 
@@ -972,9 +969,9 @@ failed (an octagon), finished, woke from Later, is open, sleeps until
 later, or the engine is offline; while it works it shows what its Agent
 does: reads, edits, runs `>_`, waits on sub-agents, which circle it as
 satellites, red for one that failed (ADR 0099, ADR 0103). In the bar
-it shows the loudest of every Thread, on its top tile only; in the
-sidebar, each Thread's own. A finished or failed
-turn settles once the Person has looked at its Thread; a Question asks until
+it shows the loudest of every Task, on its top tile only; in the
+sidebar, each Task's own. A finished or failed
+turn settles once the Person has looked at its Task; a Question asks until
 it is answered.
 
 **Watch**:
@@ -986,14 +983,14 @@ Calls instead, and the Watches go once calls are worked out on the host
 (ADR 0082, ADR 0087).
 
 **Call**:
-Something that calls for the Person now: a Thread finished while they were
+Something that calls for the Person now: a Task finished while they were
 away, asks them, or failed. Its host works it out, so it calls with no
 window open (ADR 0081). A client tells them where they look: nothing while
 they look at it, its sound, a toast in the window, or a system
 notification when the window is behind. `Alt+U` goes to it.
 
 **Inbox**:
-The sidebar's first tab: what is the Person's turn, the Threads open with
+The sidebar's first tab: what is the Person's turn, the Tasks open with
 no turn, and a shelf of those at work (ADR 0098). Its calls are every Call
 of every host, merged by the client. Each row keeps its host,
 so an answer goes back there (ADR 0081, ADR 0082). It is a part of Banda,
@@ -1006,21 +1003,21 @@ notification or calling Mark, while the inbox still fills; set from the
 sidebar's foot (ADR 0098).
 
 **Toast**:
-A short card at the window's top right that tells of a Call whose Thread is
+A short card at the window's top right that tells of a Call whose Task is
 not on screen, less than half of its Tile in view (ADR 0087), of a new
 Problem, of an action that does not run where its values are, as "Not on
 arc yet: Open in a browser" (ADR 0106), or of how a commit, push or pull
-from a Thread's card ended out of its sight; Sonner's, stacked (ADR 0048). It goes away by itself; the Mark
+from a Task's card ended out of its sight; Sonner's, stacked (ADR 0048). It goes away by itself; the Mark
 remembers, and the bell shows the last ones again.
 
 **Pull request**:
-A GitHub pull request linked to a Thread: by Create PR, by the Agent's
+A GitHub pull request linked to a Task: by Create PR, by the Agent's
 `gh pr create` or its tool, or by the Person. Banda never guesses it from a
 branch. The `pulls` module reads a Project's linked PRs, works out what each
 needs and whose turn it is, and the bar's `pulls.status` shows them (ADR
 0076).
 
 **Auto-fix**:
-Banda watching a Thread's pull request and telling the Thread that works on
+Banda watching a Task's pull request and telling the Task that works on
 it what is new: checks failed or passed, a review, a conflict, a merge. On
-for a PR made in a Thread; the Agent never polls GitHub itself (ADR 0076).
+for a PR made in a Task; the Agent never polls GitHub itself (ADR 0076).

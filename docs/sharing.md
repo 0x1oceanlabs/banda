@@ -80,7 +80,7 @@ While **Send usage counts** is on: once a day, the UTC day before, if it was on 
 | `properties.day` | The day it counts. |
 | `properties.locale` | The system's language and the country in it, from your settings. |
 | `properties.country` | The country in the locale. |
-| `properties.threads` | The Threads started that day, by Harness. |
+| `properties.threads` | The Tasks started that day, by Harness. |
 | `properties.turns` | The Turns started that day. |
 | `properties.panes` | The Panes opened that day, by kind. |
 | `properties.projects` | How many Projects there are. |

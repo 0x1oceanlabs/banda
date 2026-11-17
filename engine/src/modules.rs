@@ -374,7 +374,7 @@ fn topic(offers: &[Offer]) -> String {
         .unwrap();
         let tools: Vec<&Method> = methods.iter().filter(|m| m.tool.is_some()).collect();
         if !tools.is_empty() {
-            text.push_str("\nWhat an Agent in a Thread may call as a tool of `banda mcp`:\n\n");
+            text.push_str("\nWhat an Agent in a Task may call as a tool of `banda mcp`:\n\n");
             for method in tools {
                 let tool = method.tool.unwrap_or_default();
                 writeln!(text, "- `{tool}`: {}", method.about).unwrap();

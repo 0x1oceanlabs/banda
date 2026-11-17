@@ -172,8 +172,8 @@ async function suggestIntoField(window: WindowApi, at: At): Promise<void> {
 /** The Thread's own title, renamed: its field, or a title given. */
 const rename: ItemAction = {
   id: "thread.rename",
-  section: "Threads",
-  title: "Rename the Thread you look at",
+  section: "Tasks",
+  title: "Rename the Task you look at",
   keys: [{ code: "F2" }],
   args: itemArgs({
     title: "its new title; an empty one gives back the title it had by itself",
@@ -202,8 +202,8 @@ const rename: ItemAction = {
  * is open, else at once, with Undo. */
 const suggest: ItemAction = {
   id: "thread.suggest-title",
-  section: "Threads",
-  title: "Suggest a title for the Thread you look at, and rename it",
+  section: "Tasks",
+  title: "Suggest a title for the Task you look at, and rename it",
   keys: [{ code: "F2", shift: true }],
   args: itemArgs(),
   group: "name",
@@ -221,8 +221,8 @@ const suggest: ItemAction = {
 /** The title the Thread had before its last rename. */
 const previous: ItemAction = {
   id: "agents.previous-title",
-  section: "Threads",
-  title: "Give the Thread you look at the title it had before",
+  section: "Tasks",
+  title: "Give the Task you look at the title it had before",
   unlisted: true,
   args: itemArgs(),
   group: "name",
@@ -243,8 +243,8 @@ const previous: ItemAction = {
  * it is until the Person leaves the Thread and comes back. */
 const unread: ItemAction = {
   id: "thread.unread",
-  section: "Threads",
-  title: "Mark the Thread you look at as unread, or as read",
+  section: "Tasks",
+  title: "Mark the Task you look at as unread, or as read",
   keys: [{ code: "KeyU", mod: true, shift: true }],
   args: itemArgs(),
   group: "name",
@@ -271,8 +271,8 @@ const unread: ItemAction = {
  * already open: the Thread's Pane does it, by its scope. It has no row. */
 const unseen: ItemAction = {
   id: "agents.thread.unseen",
-  section: "Threads",
-  title: "Go to where the unseen begins in the Thread you look at",
+  section: "Tasks",
+  title: "Go to where the unseen begins in the Task you look at",
   unlisted: true,
   args: itemArgs(),
   group: "other",
@@ -285,8 +285,8 @@ const unseen: ItemAction = {
  * Window's dialog, which keeps the Thread and its history. */
 const makeProject: ItemAction = {
   id: "agents.make-project",
-  section: "Threads",
-  title: "Make a Project from the Thread you look at, in No Project",
+  section: "Tasks",
+  title: "Make a Project from the Task you look at, in No Project",
   unlisted: true,
   args: itemArgs(),
   group: "other",
@@ -357,8 +357,8 @@ function untilOf(args?: Args): Until | undefined {
  * the Window's picker asks when, and wakes one that sleeps. */
 const later: ItemAction = {
   id: "thread.later",
-  section: "Threads",
-  title: "Move the Thread you look at to Later, or wake it",
+  section: "Tasks",
+  title: "Move the Task you look at to Later, or wake it",
   keys: [{ code: "KeyZ", mod: true }],
   args: itemArgs({
     until: { number: "when it wakes, in milliseconds since 1970" },
@@ -389,8 +389,8 @@ const later: ItemAction = {
 /** Wake now, for a Thread that sleeps. */
 const wake: ItemAction = {
   id: "thread.wake",
-  section: "Threads",
-  title: "Wake the Thread you look at from Later",
+  section: "Tasks",
+  title: "Wake the Task you look at from Later",
   args: itemArgs(),
   group: "other",
   does: "wake",
@@ -417,8 +417,8 @@ const wake: ItemAction = {
  */
 const archive: ItemAction = {
   id: "agents.archive-thread",
-  section: "Threads",
-  title: "Archive a Thread on its host, or bring it back",
+  section: "Tasks",
+  title: "Archive a Task on its host, or bring it back",
   unlisted: true,
   args: {
     ...itemArgs({
@@ -461,13 +461,13 @@ const archive: ItemAction = {
  */
 const remove: ItemAction = {
   id: "agents.delete-thread",
-  section: "Threads",
-  title: "Delete a Thread on its host, for good",
+  section: "Tasks",
+  title: "Delete a Task on its host, for good",
   unlisted: true,
   args: takes(
     {
-      project: "the Project of the Thread it deletes",
-      item: "the Thread's id in its Project",
+      project: "the Project of the Task it deletes",
+      item: "the Task's id in its Project",
     },
     ["project", "item"]
   ),
@@ -517,8 +517,8 @@ function hostOf(window: WindowApi, project: string): string | undefined | null {
  */
 const move: ItemAction = {
   id: "agents.move-thread",
-  section: "Threads",
-  title: "Move a Thread to another Project",
+  section: "Tasks",
+  title: "Move a Task to another Project",
   unlisted: true,
   args: itemArgs({
     to: "the Project it moves to, on its machine or another; none asks",
@@ -581,8 +581,8 @@ function withView(
  * that ended meanwhile has nothing to stop. */
 const stop: ItemAction = {
   id: "agents.stop-thread",
-  section: "Threads",
-  title: "Stop the turn a Thread works on",
+  section: "Tasks",
+  title: "Stop the turn a Task works on",
   unlisted: true,
   args: itemArgs(),
   group: "other",
@@ -607,8 +607,8 @@ const stop: ItemAction = {
  * the Window draws. One with no such turn yet says so. */
 const fork: ItemAction = {
   id: "agents.fork-thread",
-  section: "Threads",
-  title: "Fork a Thread at its last reply, and open the fork",
+  section: "Tasks",
+  title: "Fork a Task at its last reply, and open the fork",
   unlisted: true,
   args: itemArgs(),
   group: "other",
@@ -644,8 +644,8 @@ const fork: ItemAction = {
  * draws. */
 const copy: ItemAction = {
   id: "agents.copy-thread",
-  section: "Threads",
-  title: "Copy a Thread as Markdown",
+  section: "Tasks",
+  title: "Copy a Task as Markdown",
   unlisted: true,
   args: itemArgs(),
   group: "other",

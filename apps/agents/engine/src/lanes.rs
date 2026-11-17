@@ -374,7 +374,7 @@ fn cut_words(cut: &Cut, harness: &str) -> String {
     match cut {
         Cut::Trust => "Stopped when you changed the Project's trust.".to_owned(),
         Cut::Account => format!("Stopped when {harness}'s account changed."),
-        Cut::Moved(to) => format!("Stopped when the Thread moved to {to}."),
+        Cut::Moved(to) => format!("Stopped when the Task moved to {to}."),
     }
 }
 
@@ -448,7 +448,7 @@ impl Lane {
         let record = match kept {
             Ok(Some(record)) => record,
             Ok(None) => {
-                tracing::warn!("a sub-agent started in a Thread with no turn");
+                tracing::warn!("a sub-agent started in a Task with no turn");
                 return None;
             }
             Err(error) => {
@@ -875,10 +875,7 @@ mod tests {
             (
                 idle(IdleWhy::Cancelled),
                 Some(Cut::Moved("Codex".to_owned())),
-                is(
-                    SubagentState::Lost,
-                    "Stopped when the Thread moved to Codex.",
-                ),
+                is(SubagentState::Lost, "Stopped when the Task moved to Codex."),
             ),
             (
                 idle(IdleWhy::Cancelled),

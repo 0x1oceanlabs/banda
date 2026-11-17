@@ -141,7 +141,7 @@ async fn found(places: &crate::places::Places) -> banda_environments::Fenced {
     #[cfg(not(target_os = "linux"))]
     {
         let _ = places;
-        let words = "Banda has no fence on this system: new Threads start Supervised.";
+        let words = "Banda has no fence on this system: new Tasks start Supervised.";
         Local::unfenced(Fence::missing(FenceWhy::UnsupportedOs, words))
     }
 }
@@ -172,14 +172,14 @@ fn logged(fence: &banda_kernel::Fence) {
         Fence::Holds { layers, .. } if !fence.holds_whole() => {
             tracing::warn!(
                 ?layers,
-                "the fence holds partly: new Threads start Supervised"
+                "the fence holds partly: new Tasks start Supervised"
             )
         }
         Fence::Holds { layers, .. } => tracing::info!(?layers, "the fence holds"),
         Fence::Missing { why, words } => tracing::warn!(
             ?why,
             words,
-            "the fence does not hold: new Threads start Supervised"
+            "the fence does not hold: new Tasks start Supervised"
         ),
     }
 }

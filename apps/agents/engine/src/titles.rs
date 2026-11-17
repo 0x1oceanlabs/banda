@@ -77,16 +77,16 @@ pub fn rename(
     title: Option<String>,
 ) -> Result<(), Error> {
     if author.agent().is_some() {
-        return Err(Refusal::forbidden("Only a Person renames a Thread.").into());
+        return Err(Refusal::forbidden("Only a Person renames a Task.").into());
     }
     let named = title::named(title.as_deref())?;
     let (was, agent) = store::title_and_agent(tx.sql(), thread)?
-        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        .ok_or_else(|| Refusal::not_found("There is no such Task."))?;
     let title = match named {
         Some(title) => title,
         None => {
             let (text, images) = store::first_message(tx.sql(), thread, agent)?
-                .ok_or_else(|| Refusal::conflict("This Thread has no message to name it by."))?;
+                .ok_or_else(|| Refusal::conflict("This Task has no message to name it by."))?;
             message::title(&text, &images)
         }
     };

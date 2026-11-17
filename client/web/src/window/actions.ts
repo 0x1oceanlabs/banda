@@ -359,8 +359,8 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   archiving,
   {
     id: "drawer.toggle",
-    section: "Threads",
-    title: "The drawer: a quick Thread over the workspace",
+    section: "Tasks",
+    title: "The drawer: a quick Task over the workspace",
     // As a terminal that drops down is: the key under Esc.
     keys: [{ code: "Backquote", mod: true }],
     overDialogs: true,
@@ -368,7 +368,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "calls.answer",
-    section: "Threads",
+    section: "Tasks",
     title: "Go to what calls you",
     keys: [{ code: "KeyU", mod: true }],
     run: (shell) => shell.answer(),
@@ -378,11 +378,11 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // Window's, for a Project of No Project alone, missing or not, as the
     // Thread menu shows its row.
     id: "project.make",
-    args: takes({ project: "the No Project's Project its Thread is in" }, [
+    args: takes({ project: "the No Project's Project its Task is in" }, [
       "project",
     ]),
-    section: "Threads",
-    title: "Make a Project from a Thread in No Project",
+    section: "Tasks",
+    title: "Make a Project from a Task in No Project",
     unlisted: true,
     run: (_, args) => {
       if (typeof args?.project === "string")
@@ -394,8 +394,8 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // a Thread's App asks it when.
     id: "sidebar.later-picker",
     args: itemArgs(),
-    section: "Threads",
-    title: "Pick when the Thread you look at wakes",
+    section: "Tasks",
+    title: "Pick when the Task you look at wakes",
     unlisted: true,
     run: (shell, args) => {
       const at = itemOf(shell, args)
@@ -505,7 +505,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // The words go in the message, as the Person's.
     runsAsPerson: ["comment", "text"],
     section: "Banda",
-    title: "Add a file to a Thread's message",
+    title: "Add a file to a Task's message",
     unlisted: true,
     run: (shell, args) =>
       present(shell, args, (path, project) =>
@@ -758,7 +758,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "sidebar.toggle",
-    section: "Threads",
+    section: "Tasks",
     title: "Show or hide the sidebar",
     keys: [{ code: "KeyA", mod: true }],
     run: (shell) => shell.toggleSidebar(),
@@ -767,7 +767,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // Quiet (ADR 0098, decision 21): on until turned off, or off at once,
     // however long it was on for. The foot's bell turns it on for a while.
     id: "quiet.toggle",
-    section: "Threads",
+    section: "Tasks",
     title: "Turn Quiet on or off",
     keys: [{ code: "KeyQ", mod: true }],
     run: () => quiet.turn(quiet.on() ? "off" : "on"),
@@ -777,7 +777,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     args: takes({
       tab: "the tab it shows, with the focus in its list: inbox, working, later or archive",
     }),
-    section: "Threads",
+    section: "Tasks",
     title: "Show the sidebar",
     // The notice of many calls shows it, which lists them all; the small
     // inbox's "7 at work ›", on Working (ADR 0098, decision 22).

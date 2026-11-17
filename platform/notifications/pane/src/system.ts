@@ -114,7 +114,7 @@ export function joinedOf(calls: readonly Call[], detail: boolean): Told {
   return {
     key: JOINED,
     kind: "done",
-    title: `${calls.length} Threads done`,
+    title: `${calls.length} Tasks done`,
     body: calls
       .map((call) =>
         detail && call.detail ? `${call.title}: ${call.detail}` : call.title
@@ -128,7 +128,7 @@ export function joinedOf(calls: readonly Call[], detail: boolean): Told {
 export function summaryOf(calls: readonly Call[]): Notice {
   return {
     key: SUMMARY,
-    title: `${calls.length} Threads call you`,
+    title: `${calls.length} Tasks call you`,
     body: calls.map((call) => call.title).join(", "),
     answer: "Show",
     lasts: calls.some((call) => call.chime !== "done"),

@@ -186,7 +186,7 @@ export function ThreadMenu({
   acts: ThreadActs
 }) {
   return (
-    <ContextMenuContent aria-label="Thread" className="min-w-56">
+    <ContextMenuContent aria-label="Task" className="min-w-56">
       {at && <Items at={at} acts={acts} />}
     </ContextMenuContent>
   )

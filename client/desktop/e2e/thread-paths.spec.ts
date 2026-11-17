@@ -77,7 +77,7 @@ test("a reply's paths link to their files, which a click opens and the menu acts
 
   // Its menu: open, Quick Look, show, copy either path, name it in the
   // message.
-  const menu = page.getByRole("menu", { name: "Thread" })
+  const menu = page.getByRole("menu", { name: "Task" })
   await chip.click({ button: "right" })
   await expect(menu.getByRole("menuitem")).toHaveText([
     "Open in Banda",

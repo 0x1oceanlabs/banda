@@ -71,7 +71,7 @@ export function AccountCard(props: CardProps) {
   ) : (
     <Frame {...props} dim>
       <p className="text-meta text-muted-foreground">
-        Off: no new Thread starts on it.
+        Off: no new Task starts on it.
       </p>
     </Frame>
   )

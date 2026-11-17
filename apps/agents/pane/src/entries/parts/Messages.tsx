@@ -151,9 +151,8 @@ function EditFromHere({
           <DialogHeader>
             <DialogTitle>Edit from here?</DialogTitle>
             <DialogDescription>
-              The Thread goes back to before this message, and its text and
-              images return to the composer. Files the Agent changed stay as
-              they are.
+              The Task goes back to before this message, and its text and images
+              return to the composer. Files the Agent changed stay as they are.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -294,7 +293,7 @@ export function Writer({
       {!gone && <Emblem of={emblemOf([], thread.harness)} />}
       {says}
       <span className="truncate text-foreground">
-        {gone ? "another Thread" : thread.title || "New Thread"}
+        {gone ? "another Task" : thread.title || "New Task"}
       </span>
     </Button>
   )

@@ -1038,8 +1038,8 @@ function HostRow({
             <DialogDescription>Its Projects stay on {name}.</DialogDescription>
           </DialogHeader>
           <p className="text-ui text-muted-foreground">
-            This window stops showing its Projects and Threads, and Banda goes
-            on running there. Add it again to see them.
+            This window stops showing its Projects and Tasks, and Banda goes on
+            running there. Add it again to see them.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoving(false)}>

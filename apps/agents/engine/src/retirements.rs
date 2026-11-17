@@ -32,7 +32,7 @@ pub fn quiet(tx: &mut Tx<'_>, harnesses: &Harnesses) -> Result<(), Error> {
         let Some((to, by)) = (match harnesses.replacement(&old.id) {
             Ok(destination) => destination,
             Err(error) => {
-                tracing::warn!(%error, "a removed Account's Threads could not move");
+                tracing::warn!(%error, "a removed Account's Tasks could not move");
                 continue;
             }
         }) else {

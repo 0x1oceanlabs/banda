@@ -175,8 +175,8 @@ export function cardWindows(limits: Limits | undefined): LimitWindow[] {
 
 /** "1 Thread", "No Threads". */
 export function threadsWords(threads: number): string {
-  if (threads === 0) return "No Threads"
-  return `${threads} Thread${threads === 1 ? "" : "s"}`
+  if (threads === 0) return "No Tasks"
+  return `${threads} Task${threads === 1 ? "" : "s"}`
 }
 
 /** When an account was last used: "Used now", "Used 2h ago", "Used

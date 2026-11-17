@@ -141,7 +141,7 @@ function Project({ engine, lit, run, runs }: Props) {
           <RowFrame
             dataKey="folder"
             title="Folder is missing"
-            about="Its Threads open again once you locate the folder its work is in now."
+            about="Its Tasks open again once you locate the folder its work is in now."
           >
             {locate.runs ? (
               <Button
@@ -258,8 +258,8 @@ function Project({ engine, lit, run, runs }: Props) {
           title="Archive"
           about={
             project.archived
-              ? "Hidden from Project pickers. Threads and files are kept."
-              : "Hides the Project from Project pickers. Threads and files are kept."
+              ? "Hidden from Project pickers. Tasks and files are kept."
+              : "Hides the Project from Project pickers. Tasks and files are kept."
           }
         >
           <Button
@@ -276,7 +276,7 @@ function Project({ engine, lit, run, runs }: Props) {
         <RowFrame
           dataKey="remove"
           title="Remove Project"
-          about="Deletes the Project entry and its Threads. Files on disk are not touched."
+          about="Deletes the Project entry and its Tasks. Files on disk are not touched."
         >
           <Button
             size="sm"

@@ -235,7 +235,7 @@ struct Came {
 fn person_only(call: &Call) -> Result<(), Refusal> {
     if call.participant().agent().is_some() {
         return Err(Refusal::forbidden(
-            "Only a Person moves a Thread to another machine.",
+            "Only a Person moves a Task to another machine.",
         ));
     }
     Ok(())
@@ -277,7 +277,7 @@ fn staging(data: &Path, id: Uuid) -> PathBuf {
 }
 
 fn no_move() -> Refusal {
-    Refusal::not_found("There is no such move: pack the Thread again.")
+    Refusal::not_found("There is no such move: pack the Task again.")
 }
 
 /// A machine's name as a window gave it: one short line, or none.
@@ -384,7 +384,7 @@ fn settled(
         Ok(same) if same.sessions() == ran.sessions => same,
         _ => harnesses.keeping(&ran.sessions).ok_or_else(|| {
             Refusal::conflict(format!(
-                "{here} has no {}: add it there, or move the Thread to another Harness first.",
+                "{here} has no {}: add it there, or move the Task to another Harness first.",
                 ran.name
             ))
         })?,
@@ -608,7 +608,7 @@ pub async fn take_piece(
     match kept.await.map_err(Error::from)? {
         true => Ok(()),
         false => Err(Refusal::conflict(
-            "That piece is not the next one: carry the Thread again.",
+            "That piece is not the next one: carry the Task again.",
         )),
     }
 }
@@ -637,7 +637,7 @@ pub async fn unpack(
     let carried = opened.map_err(|error| match error.kind() {
         io::ErrorKind::NotFound => no_move(),
         io::ErrorKind::InvalidData => {
-            Refusal::conflict("The Thread did not come whole: carry it again.")
+            Refusal::conflict("The Task did not come whole: carry it again.")
         }
         _ => Error::from(error).into(),
     })?;
@@ -655,8 +655,8 @@ pub async fn unpack(
     let ours = here.read(ThreadRows::shape).await?;
     if version != VERSION || shape != ours {
         return Err(Refusal::conflict(
-            "This machine keeps a Thread another way than the one it comes from: update Banda \
-             on both, then move the Thread.",
+            "This machine keeps a Task another way than the one it comes from: update Banda \
+             on both, then move the Task.",
         ));
     }
     let _held = live.hold(thread, Hold::Moving).map_err(Hold::refused)?;
@@ -845,7 +845,7 @@ pub async fn give_back(live: &Live, call: &Call, OneMove { id }: OneMove) -> Res
         match ThreadRows::read(tx.sql(), thread)? {
             None => return Ok(()),
             Some(there) if !there.came_with(&rows) => {
-                let went_on = "The Thread went on here since it came, so its copy stays.";
+                let went_on = "The Task went on here since it came, so its copy stays.";
                 return Err(Refusal::conflict(went_on).into());
             }
             Some(_) => {}

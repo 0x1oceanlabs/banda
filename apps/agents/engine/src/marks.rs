@@ -63,7 +63,7 @@ const MOST: usize = 10_000;
 pub fn person(call: &Call) -> Result<Participant, Refusal> {
     let author = call.participant();
     match author.agent() {
-        Some(_) => Err(Refusal::forbidden("Only a Person marks a Thread.")),
+        Some(_) => Err(Refusal::forbidden("Only a Person marks a Task.")),
         None => Ok(author),
     }
 }
@@ -226,5 +226,5 @@ pub(crate) fn state(sql: &Connection, thread: ThreadId) -> Result<(bool, bool), 
 }
 
 fn no_thread() -> Refusal {
-    Refusal::not_found("There is no such Thread.")
+    Refusal::not_found("There is no such Task.")
 }

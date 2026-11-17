@@ -69,7 +69,7 @@ test("the settings say where new Threads start while the default is out", () => 
     signedIn
   )!
   expect(startsOnWords(out, harnesses)).toBe(
-    "Work is out: new Threads start on Codex till Work has room."
+    "Work is out: new Tasks start on Codex till Work has room."
   )
   const none = startsOn(
     listOf(harnesses, { account: "work" }),
@@ -78,7 +78,7 @@ test("the settings say where new Threads start while the default is out", () => 
     signedIn
   )!
   expect(startsOnWords(none, harnesses)).toBe(
-    "Work is out: new Threads start on it still, as no signed-in fallback has room."
+    "Work is out: new Tasks start on it still, as no signed-in fallback has room."
   )
   expect(
     startsOnWords(
@@ -107,7 +107,7 @@ test("fallback requires a confirmed sign-in and also covers a signed-out default
   const starts = startsOn(listOf(harnesses, agents), [], NOW, signedOut)!
   expect(starts.id).toBe("codex")
   expect(startsOnWords(starts, harnesses)).toBe(
-    "Work is signed out: new Threads start on Codex till Work signs in again."
+    "Work is signed out: new Tasks start on Codex till Work signs in again."
   )
   expect(startsOn(listOf(harnesses, agents), [], NOW, signedIn)?.id).toBe(
     "work"

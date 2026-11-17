@@ -273,7 +273,7 @@ fn changes(was: &[ProjectSummary], now: &[ProjectSummary]) -> Vec<ProjectChanged
 const BROWSED: usize = 200;
 
 /// Why the scratch Project of a Thread in No Project is never untrusted.
-const SCRATCH_TRUSTED: &str = "A Thread in No Project is trusted: its folder is Banda's own.";
+const SCRATCH_TRUSTED: &str = "A Task in No Project is trusted: its folder is Banda's own.";
 
 /// Where the scratch Projects' folders go, under the root (ADR 0046).
 const SCRATCH: &str = "scratch";
@@ -788,19 +788,19 @@ impl Kernel {
             }
             (true, true, true) => {
                 return Err(Refusal::invalid(
-                    "A Thread in No Project has no name until it becomes a Project.",
+                    "A Task in No Project has no name until it becomes a Project.",
                 ));
             }
             (true, false, false) => {
                 return Err(Refusal::invalid(
-                    "A Project made of a Thread in No Project needs a name.",
+                    "A Project made of a Task in No Project needs a name.",
                 ));
             }
             _ => {}
         }
         if target.is_some() && update.scratch != Some(false) {
             return Err(Refusal::invalid(
-                "A folder move must make a Project from a Thread in No Project.",
+                "A folder move must make a Project from a Task in No Project.",
             ));
         }
         let opened = match entry {
@@ -832,7 +832,7 @@ impl Kernel {
         if let Some(target) = relocating {
             if !was {
                 return Err(Refusal::invalid(
-                    "Only a Thread in No Project can move its folder this way.",
+                    "Only a Task in No Project can move its folder this way.",
                 ));
             }
             if std::fs::symlink_metadata(target).is_ok() {

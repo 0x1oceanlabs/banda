@@ -33,10 +33,7 @@ pub struct TurnFacts {
     /// A sub-agent of its Thread is at work: it runs or asks (ADR 0103).
     pub lanes: bool,
     /// A direct one is, one the Agent started itself.
-    #[expect(
-        dead_code,
-        reason = "the Thread's Stop reaches them from ADR 0103's E2"
-    )]
+    #[expect(dead_code, reason = "the Task's Stop reaches them from ADR 0103's E2")]
     pub lanes_direct: bool,
 }
 
@@ -166,7 +163,7 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
     let to = |state| Ok(Step::to(state));
     let state = turn.state;
     // A Thread runs one turn at a time.
-    let other = || Err(Refusal::conflict("Another turn runs in this Thread."));
+    let other = || Err(Refusal::conflict("Another turn runs in this Task."));
     match event {
         Event::Queue | Event::Open | Event::Start if state != Queued => {
             Err(Refusal::conflict("This turn no longer waits."))
@@ -180,9 +177,7 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
         // waits until a Person lets the queue go. One that finds the
         // Agent's own turn running takes it over, as the Harness takes its
         // prompt into what it does.
-        Event::Start if turn.held => {
-            Err(Refusal::conflict("The Thread's queue waits for a Person."))
-        }
+        Event::Start if turn.held => Err(Refusal::conflict("The Task's queue waits for a Person.")),
         Event::Start if turn.own_works => Ok(Step::to(Running).then(Then::HandOver)),
         Event::Start if turn.works => other(),
         Event::Start => to(Running),
@@ -220,19 +215,19 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
             "Only a turn that failed or was cut short can be tried again.",
         )),
         Event::Retry if !turn.latest => Err(Refusal::invalid(
-            "Only the Thread's latest turn can be tried again.",
+            "Only the Task's latest turn can be tried again.",
         )),
         Event::Retry => to(state),
         // It ran and ended, and its Thread does not work now.
         Event::Fork if matches!(state, Queued | Running | Withdrawn) => Err(Refusal::conflict(
-            "A Thread is forked at the end of a turn that ran.",
+            "A Task is forked at the end of a turn that ran.",
         )),
         Event::Fork if turn.works => Err(Refusal::conflict(
-            "The Thread can be forked once its turn ends.",
+            "The Task can be forked once its turn ends.",
         )),
         // A fork's session could not reach a sub-agent still at work.
         Event::Fork if turn.lanes => Err(Refusal::conflict(
-            "The Thread can be forked once its sub-agents end.",
+            "The Task can be forked once its sub-agents end.",
         )),
         Event::Fork => to(state),
         // A Person's message a turn ran first, that turn ended, and
@@ -241,13 +236,13 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
             "Only a message a Person sent is edited from here.",
         )),
         Event::Rewind if matches!(state, Queued | Running | Withdrawn) => Err(Refusal::conflict(
-            "A Thread goes back to a message a turn ran.",
+            "A Task goes back to a message a turn ran.",
         )),
         Event::Rewind if turn.works || turn.waits => Err(Refusal::conflict(
-            "The Thread can go back once nothing runs or waits in it.",
+            "The Task can go back once nothing runs or waits in it.",
         )),
         Event::Rewind if turn.lanes => Err(Refusal::conflict(
-            "The Thread can go back once its sub-agents end.",
+            "The Task can go back once its sub-agents end.",
         )),
         Event::Rewind => to(state),
         // A turn ends once, and the queue waits behind it when its Harness
@@ -398,8 +393,8 @@ mod tests {
             ("the Agent's own",  own(Running),                              Event::Stop,       "Running H AskStop"),
             ("the Agent's own",  own(Failed),                               Event::Retry,      "-"),
             ("not the latest",   TurnFacts { latest: false, ..of(Failed) }, Event::Retry,      "-"),
-            ("its Thread works", works(Done),                               Event::Fork,       "-"),
-            ("its Thread works", works(Done),                               Event::Rewind,     "-"),
+            ("its Task works", works(Done),                               Event::Fork,       "-"),
+            ("its Task works", works(Done),                               Event::Rewind,     "-"),
             ("a turn waits",     TurnFacts { waits: true, ..of(Done) },     Event::Rewind,     "-"),
             ("a waiting fork",   TurnFacts { waits: true, ..of(Done) },     Event::Fork,       "Done"),
             ("an Agent's word",  TurnFacts { by_person: false, ..of(Done) }, Event::Rewind,    "-"),

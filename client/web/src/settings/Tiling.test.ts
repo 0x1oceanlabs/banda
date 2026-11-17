@@ -43,7 +43,7 @@ test("each kind of Pane names itself in a word or two, for a rule's row to read"
   expect(named).toMatchObject({
     "terminal.terminal": "Terminal",
     "browser.browser": "Browser",
-    "agents.thread": "Thread",
+    "agents.thread": "Task",
     "git.diff": "Diff",
     "files.tree": "Files",
     "files.file": "File",

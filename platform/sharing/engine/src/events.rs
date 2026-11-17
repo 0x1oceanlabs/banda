@@ -128,7 +128,7 @@ const EVENTS: &[Declared] = &[
             ("properties.country", "The country in the locale."),
             (
                 "properties.threads",
-                "The Threads started that day, by Harness.",
+                "The Tasks started that day, by Harness.",
             ),
             ("properties.turns", "The Turns started that day."),
             ("properties.panes", "The Panes opened that day, by kind."),

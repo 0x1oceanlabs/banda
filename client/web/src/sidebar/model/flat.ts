@@ -45,8 +45,8 @@ export type Item = {
 /** What each place's region is called: Your turn and Open are one, the
  * Threads that are the Person's. */
 const PLACES: Readonly<Record<Stand, string>> = {
-  turn: "Threads",
-  open: "Threads",
+  turn: "Tasks",
+  open: "Tasks",
   working: STAND_WORDS.working,
   later: STAND_WORDS.later,
   archived: STAND_WORDS.archived,

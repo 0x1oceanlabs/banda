@@ -20,8 +20,8 @@
   "actions": [
     {
       "id": "thread.new",
-      "title": "New Thread",
-      "section": "Threads",
+      "title": "New Task",
+      "section": "Tasks",
       "keys": [
         {
           "code": "Enter",
@@ -57,35 +57,35 @@
     {
       "id": "agents.answer",
       "title": "Answer a Question",
-      "section": "Threads",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true
     },
     {
       "id": "agents.retry",
       "title": "Try a turn again",
-      "section": "Threads",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true
     },
     {
       "id": "agents.show",
-      "title": "Show a Thread",
-      "section": "Threads",
+      "title": "Show a Task",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true
     },
     {
       "id": "agents.subagent.open",
-      "title": "Open a sub-agent beside its Thread",
-      "section": "Threads",
+      "title": "Open a sub-agent beside its Task",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true
     },
     {
       "id": "agents.crew.open",
-      "title": "Open a Crew beside its Thread",
-      "section": "Threads",
+      "title": "Open a Crew beside its Task",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true
     },
@@ -160,8 +160,8 @@
     },
     {
       "id": "agents.thread.zoom-in",
-      "title": "Zoom the Thread in",
-      "section": "Thread",
+      "title": "Zoom the Task in",
+      "section": "Task",
       "keys": [
         {
           "code": "Equal",
@@ -177,8 +177,8 @@
     },
     {
       "id": "agents.thread.zoom-out",
-      "title": "Zoom the Thread out",
-      "section": "Thread",
+      "title": "Zoom the Task out",
+      "section": "Task",
       "keys": [
         {
           "code": "Minus",
@@ -189,8 +189,8 @@
     },
     {
       "id": "agents.thread.zoom-reset",
-      "title": "The Thread at its own size",
-      "section": "Thread",
+      "title": "The Task at its own size",
+      "section": "Task",
       "keys": [
         {
           "code": "Digit0",
@@ -201,8 +201,8 @@
     },
     {
       "id": "agents.thread.details",
-      "title": "Show or hide the Thread's details",
-      "section": "Thread",
+      "title": "Show or hide the Task's details",
+      "section": "Task",
       "keys": [
         {
           "code": "KeyB",
@@ -224,8 +224,8 @@
     },
     {
       "id": "agents.thread.find",
-      "title": "Find in the Thread",
-      "section": "Thread",
+      "title": "Find in the Task",
+      "section": "Task",
       "keys": [
         {
           "code": "KeyF",
@@ -236,8 +236,8 @@
     },
     {
       "id": "agents.thread.account-previous",
-      "title": "Move the Thread to the previous account of its Harness",
-      "section": "Thread",
+      "title": "Move the Task to the previous account of its Harness",
+      "section": "Task",
       "keys": [
         {
           "code": "ArrowUp",
@@ -249,8 +249,8 @@
     },
     {
       "id": "agents.thread.account-next",
-      "title": "Move the Thread to the next account of its Harness",
-      "section": "Thread",
+      "title": "Move the Task to the next account of its Harness",
+      "section": "Task",
       "keys": [
         {
           "code": "ArrowDown",
@@ -262,7 +262,7 @@
     },
     {
       "id": "agents.subagent.up",
-      "title": "Go back up, to the sub-agent that started this one or to its Thread",
+      "title": "Go back up, to the sub-agent that started this one or to its Task",
       "section": "Sub-agent",
       "keys": [
         {
@@ -273,7 +273,7 @@
     },
     {
       "id": "agents.crew.back",
-      "title": "Close the agent's detail, or go back to the Thread from its Crew",
+      "title": "Close the agent's detail, or go back to the Task from its Crew",
       "section": "Crew",
       "keys": [
         {
@@ -325,8 +325,8 @@
     },
     {
       "id": "thread.rename",
-      "title": "Rename the Thread you look at",
-      "section": "Threads",
+      "title": "Rename the Task you look at",
+      "section": "Tasks",
       "keys": [
         {
           "code": "F2"
@@ -341,7 +341,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           },
           "title": {
             "type": "string",
@@ -357,8 +357,8 @@
     },
     {
       "id": "thread.suggest-title",
-      "title": "Suggest a title for the Thread you look at, and rename it",
-      "section": "Threads",
+      "title": "Suggest a title for the Task you look at, and rename it",
+      "section": "Tasks",
       "keys": [
         {
           "code": "F2",
@@ -374,7 +374,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -382,8 +382,8 @@
     },
     {
       "id": "agents.previous-title",
-      "title": "Give the Thread you look at the title it had before",
-      "section": "Threads",
+      "title": "Give the Task you look at the title it had before",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -395,7 +395,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -403,8 +403,8 @@
     },
     {
       "id": "thread.unread",
-      "title": "Mark the Thread you look at as unread, or as read",
-      "section": "Threads",
+      "title": "Mark the Task you look at as unread, or as read",
+      "section": "Tasks",
       "keys": [
         {
           "code": "KeyU",
@@ -421,7 +421,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -429,8 +429,8 @@
     },
     {
       "id": "agents.thread.unseen",
-      "title": "Go to where the unseen begins in the Thread you look at",
-      "section": "Threads",
+      "title": "Go to where the unseen begins in the Task you look at",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -442,7 +442,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -450,8 +450,8 @@
     },
     {
       "id": "agents.make-project",
-      "title": "Make a Project from the Thread you look at, in No Project",
-      "section": "Threads",
+      "title": "Make a Project from the Task you look at, in No Project",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -463,7 +463,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -471,8 +471,8 @@
     },
     {
       "id": "thread.later",
-      "title": "Move the Thread you look at to Later, or wake it",
-      "section": "Threads",
+      "title": "Move the Task you look at to Later, or wake it",
+      "section": "Tasks",
       "keys": [
         {
           "code": "KeyZ",
@@ -488,7 +488,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           },
           "until": {
             "type": "number",
@@ -512,8 +512,8 @@
     },
     {
       "id": "thread.wake",
-      "title": "Wake the Thread you look at from Later",
-      "section": "Threads",
+      "title": "Wake the Task you look at from Later",
+      "section": "Tasks",
       "keys": [],
       "args": {
         "type": "object",
@@ -524,7 +524,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -532,8 +532,8 @@
     },
     {
       "id": "agents.archive-thread",
-      "title": "Archive a Thread on its host, or bring it back",
-      "section": "Threads",
+      "title": "Archive a Task on its host, or bring it back",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -545,7 +545,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           },
           "archived": {
             "type": "boolean",
@@ -560,8 +560,8 @@
     },
     {
       "id": "agents.delete-thread",
-      "title": "Delete a Thread on its host, for good",
-      "section": "Threads",
+      "title": "Delete a Task on its host, for good",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -569,11 +569,11 @@
         "properties": {
           "project": {
             "type": "string",
-            "description": "the Project of the Thread it deletes"
+            "description": "the Project of the Task it deletes"
           },
           "item": {
             "type": "string",
-            "description": "the Thread's id in its Project"
+            "description": "the Task's id in its Project"
           }
         },
         "required": [
@@ -586,8 +586,8 @@
     },
     {
       "id": "agents.move-thread",
-      "title": "Move a Thread to another Project",
-      "section": "Threads",
+      "title": "Move a Task to another Project",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -599,7 +599,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           },
           "to": {
             "type": "string",
@@ -612,8 +612,8 @@
     },
     {
       "id": "agents.stop-thread",
-      "title": "Stop the turn a Thread works on",
-      "section": "Threads",
+      "title": "Stop the turn a Task works on",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -625,7 +625,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -633,8 +633,8 @@
     },
     {
       "id": "agents.fork-thread",
-      "title": "Fork a Thread at its last reply, and open the fork",
-      "section": "Threads",
+      "title": "Fork a Task at its last reply, and open the fork",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -646,7 +646,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -654,8 +654,8 @@
     },
     {
       "id": "agents.copy-thread",
-      "title": "Copy a Thread as Markdown",
-      "section": "Threads",
+      "title": "Copy a Task as Markdown",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -667,7 +667,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -682,7 +682,7 @@
     },
     {
       "id": "thread",
-      "title": "Thread"
+      "title": "Task"
     },
     {
       "id": "subagent",

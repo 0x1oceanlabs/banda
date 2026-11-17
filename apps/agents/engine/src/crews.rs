@@ -457,7 +457,7 @@ fn cut_words(cut: &Cut, harness: &str) -> String {
     match cut {
         Cut::Trust => "Stopped when you changed the Project's trust.".to_owned(),
         Cut::Account => format!("Stopped when {harness}'s account changed."),
-        Cut::Moved(to) => format!("Stopped when the Thread moved to {to}."),
+        Cut::Moved(to) => format!("Stopped when the Task moved to {to}."),
     }
 }
 
@@ -681,7 +681,7 @@ impl Hearer {
             .await
             .map_err(plain)?;
         let Some(record) = kept else {
-            tracing::warn!("a Crew started in a Thread with no turn");
+            tracing::warn!("a Crew started in a Task with no turn");
             return Ok(None);
         };
         if !record.state.works() {

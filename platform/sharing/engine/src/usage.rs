@@ -212,7 +212,7 @@ pub fn about(day: i64, counts: &Counts) -> String {
     let threads: u64 = counts.threads.values().sum();
     let panes: u64 = counts.panes.values().sum();
     format!(
-        "{} · {threads} Threads, {} Turns, {panes} Panes",
+        "{} · {threads} Tasks, {} Turns, {panes} Panes",
         date(day),
         counts.turns
     )
@@ -323,7 +323,7 @@ mod tests {
         );
         assert_eq!(
             about(day_, &counts),
-            "2026-11-03 · 4 Threads, 31 Turns, 6 Panes"
+            "2026-11-03 · 4 Tasks, 31 Turns, 6 Panes"
         );
     }
 }

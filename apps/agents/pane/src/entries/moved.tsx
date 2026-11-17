@@ -64,7 +64,7 @@ export function MovedEntry({ item }: EntryProps<"moved">) {
           <span
             title={
               how.kind === "same"
-                ? "Its first turn here reads the Thread without the cache."
+                ? "Its first turn here reads the Task without the cache."
                 : how.kind === "handoff"
                   ? `${now.name} started a session of its own: there was nothing before to hand it.`
                   : `${was.name} went on with its own session, and read only what it missed.`

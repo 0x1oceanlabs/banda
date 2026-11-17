@@ -62,6 +62,6 @@ export const agentsSection: Section = {
     { name: "agents.toml", title: "Writing to an Agent" },
   ],
   about:
-    "The Harnesses Banda starts Threads with, and what a message written while an Agent works does.",
+    "The Harnesses Banda starts Tasks with, and what a message written while an Agent works does.",
   Body: Agents,
 }

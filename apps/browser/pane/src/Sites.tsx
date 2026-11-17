@@ -37,7 +37,7 @@ export function BrowserSites({ lit, device }: SectionProps) {
         )}
       </Group>
       <p className="px-1 text-meta text-muted-foreground">
-        A site covers its subdomains. “Once” lasts for its Thread until Banda
+        A site covers its subdomains. “Once” lasts for its Task until Banda
         restarts; localhost never asks.
       </p>
     </div>

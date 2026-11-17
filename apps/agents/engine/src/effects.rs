@@ -571,7 +571,7 @@ async fn work(
         .map(|summary| summary.harness)
         .unwrap_or_default();
     let harness = match harness_id.as_str() {
-        "" => Err("This Thread names no Harness: its Agent's file is gone.".to_owned()),
+        "" => Err("This Task names no Harness: its Agent's file is gone.".to_owned()),
         id => harnesses.get(id),
     }
     .map_err(unplanned)?;
@@ -638,7 +638,7 @@ async fn work(
     if let Opened::New { evidence, lost } = opened {
         let (id, agent) = (turn.id, Participant::Agent(turn.agent));
         let afresh = format!(
-            "{} could not pick up this Thread's earlier conversation, \
+            "{} could not pick up this Task's earlier conversation, \
              so it starts afresh and does not remember what was said before.",
             harness.name
         );

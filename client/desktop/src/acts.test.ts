@@ -148,7 +148,7 @@ it.effect(
 )
 
 it.effect(
-  "a window that opens now hears the action once its page has loaded, as the menu bar's row opens a Thread",
+  "a window that opens now hears the action once its page has loaded, as the menu bar's row opens a Task",
   () => {
     const shown = page(1, true)
     return Effect.gen(function* () {

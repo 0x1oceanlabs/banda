@@ -528,7 +528,7 @@ test("the Banda menu opens an address in a browser, and a file of the focused Pr
   await bandaMenu(page)
   await search.fill(site)
   await expect(menu.getByRole("option")).toHaveText([
-    new RegExp(`New Thread: “${site}”`),
+    new RegExp(`New Task: “${site}”`),
     `Open ${site}`,
   ])
   await search.press("ArrowDown")
@@ -754,10 +754,10 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
 
   // The mark at the address's end lists the Project's Threads, and the
   // Person lends the tab to one.
-  const lend = page.getByRole("button", { name: "Lend this tab to a Thread" })
+  const lend = page.getByRole("button", { name: "Lend this tab to a Task" })
   const picker = page.getByRole("menu")
   const pick = async () => {
-    await expect(picker).toContainText("Lend this tab to a Thread in Work")
+    await expect(picker).toContainText("Lend this tab to a Task in Work")
     await expect(picker).toContainText(
       "It sees and drives only this tab, until you take it back."
     )
@@ -777,7 +777,7 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
   // The Thread says so, quoting the page's title, and its Agent sees and
   // drives the tab, signed in as the Person.
   await expect(
-    thread.getByText("You lent this Thread a tab · “Signed in”")
+    thread.getByText("You lent this Task a tab · “Signed in”")
   ).toBeVisible()
   const [lent] = await tabs()
   expect(lent).toMatchObject({
@@ -823,7 +823,7 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
   await chip.click()
   const card = page
     .getByRole("dialog")
-    .filter({ hasText: "This Thread sees and drives this tab." })
+    .filter({ hasText: "This Task sees and drives this tab." })
   await expect(card).toContainText(
     "The lend ends when you take it back, close the tab, or its session ends."
   )
@@ -844,7 +844,7 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
   // Alt+Shift+L, from the page, opens the picker with its first Thread
   // ready for Enter, and takes the tab back.
   await pressInPage(app, "L", ["alt", "shift"])
-  await expect(picker).toContainText("Lend this tab to a Thread in Work")
+  await expect(picker).toContainText("Lend this tab to a Task in Work")
   await expect(picker.getByRole("menuitem", { name: /hello/ })).toBeFocused()
   await page.keyboard.press("Enter")
   await expect(chip).toBeVisible()
@@ -862,7 +862,7 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
     .getByRole("button", { name: "Close Signed in", description: /^Close tab/ })
     .click()
   await expect(
-    thread.getByText("The tab you lent closed. This Thread no longer sees it.")
+    thread.getByText("The tab you lent closed. This Task no longer sees it.")
   ).toBeVisible()
   expect(await tabs()).toEqual([])
 })

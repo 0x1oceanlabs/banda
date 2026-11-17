@@ -565,15 +565,15 @@ function sheetOf(section: string): string[] {
 
 test("the key sheet lists the Threads' and the Panes' rows by owner: the Apps', the Tiling's, then the Window's own (#1731)", () => {
   // Pinned, so an owner that takes its actions out moves no row unseen.
-  expect(sheetOf("Threads")).toEqual([
-    "New Thread",
-    "Rename the Thread you look at",
-    "Suggest a title for the Thread you look at, and rename it",
-    "Mark the Thread you look at as unread, or as read",
-    "Move the Thread you look at to Later, or wake it",
-    "Wake the Thread you look at from Later",
-    "Archive the Thread you look at, or bring it back",
-    "The drawer: a quick Thread over the workspace",
+  expect(sheetOf("Tasks")).toEqual([
+    "New Task",
+    "Rename the Task you look at",
+    "Suggest a title for the Task you look at, and rename it",
+    "Mark the Task you look at as unread, or as read",
+    "Move the Task you look at to Later, or wake it",
+    "Wake the Task you look at from Later",
+    "Archive the Task you look at, or bring it back",
+    "The drawer: a quick Task over the workspace",
     "Go to what calls you",
     "Show or hide the sidebar",
     "Turn Quiet on or off",

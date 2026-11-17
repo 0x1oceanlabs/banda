@@ -296,9 +296,9 @@ test("a Thread's details card shows the branch and its changes, as T3 Code's, an
   const { page, dir } = window
   const thread = await firstThread(page)
   await expect(thread.composer).toBeVisible()
-  const pane = page.getByRole("region", { name: "New Thread" })
-  const toggle = pane.getByRole("button", { name: "Thread details" })
-  const card = page.getByRole("dialog", { name: "Thread details" })
+  const pane = page.getByRole("region", { name: "New Task" })
+  const toggle = pane.getByRole("button", { name: "Task details" })
+  const card = page.getByRole("dialog", { name: "Task details" })
 
   // A folder that is no repository has one row: Initialize Git.
   await toggle.click()
@@ -353,7 +353,7 @@ test("a Thread's details card shows the branch and its changes, as T3 Code's, an
   // top right, open until the Person hides it.
   await page.keyboard.press("Escape")
   await page.setViewportSize({ width: 1900, height: 900 })
-  const aside = pane.getByRole("complementary", { name: "Thread details" })
+  const aside = pane.getByRole("complementary", { name: "Task details" })
   await expect(aside.getByText("main", { exact: true })).toBeVisible()
   await expect(toggle).toHaveAttribute("aria-pressed", "true")
   await page.screenshot({ path: "test-results/git-details-wide.png" })
@@ -399,7 +399,7 @@ test("the git button commits every change with the message the Thread's Harness 
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
   await page.keyboard.press("Control+Shift+KeyB")
-  const card = page.getByRole("dialog", { name: "Thread details" })
+  const card = page.getByRole("dialog", { name: "Task details" })
   const button = card.getByRole("button", { name: "Commit & push" })
   await expect(button).toBeVisible()
   await page.screenshot({ path: "test-results/git-button-ready.png" })
@@ -478,7 +478,7 @@ test("a commit that ends with the card out of sight says so in a toast", async (
 
   await thread.composer.click()
   await page.keyboard.press("Control+Shift+KeyB")
-  const card = page.getByRole("dialog", { name: "Thread details" })
+  const card = page.getByRole("dialog", { name: "Task details" })
   await card.getByRole("button", { name: "Commit…" }).click()
   const dialog = page.getByRole("dialog", { name: "Commit to main" })
   await dialog
@@ -514,7 +514,7 @@ test("Stop while the Thread's Harness writes the message stops it, and nothing i
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
   await page.keyboard.press("Control+Shift+KeyB")
-  const card = page.getByRole("dialog", { name: "Thread details" })
+  const card = page.getByRole("dialog", { name: "Task details" })
   await card.getByRole("button", { name: "Commit", exact: true }).click()
   const writing = card.getByRole("status").filter({ hasText: "writing" })
   await expect(writing).toContainText("Fake AI is writing the message…")
@@ -557,7 +557,7 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
   await page.keyboard.press("Control+Shift+KeyB")
-  const card = page.getByRole("dialog", { name: "Thread details" })
+  const card = page.getByRole("dialog", { name: "Task details" })
 
   // The picker lists the branches here and the remote's in one list, a
   // remote's left out when one here has its name, as T3 Code's.
@@ -727,8 +727,8 @@ test("Alt+D shows the Diff beside the Thread and hides it, and Alt+Shift+G opens
 
   // A wide Thread's card hidden by the Person shows again for the key.
   await page.setViewportSize({ width: 1900, height: 900 })
-  const pane = page.getByRole("region", { name: "New Thread" })
-  const aside = pane.getByRole("complementary", { name: "Thread details" })
+  const pane = page.getByRole("region", { name: "New Task" })
+  const aside = pane.getByRole("complementary", { name: "Task details" })
   await expect(aside).toBeVisible()
   await thread.composer.click()
   await page.keyboard.press("Control+Shift+KeyB")
@@ -787,7 +787,7 @@ test("a branch diverged from its upstream neither syncs nor pulls, and says why,
 
   await composer.click()
   await page.keyboard.press("Control+Shift+KeyB")
-  const card = page.getByRole("dialog", { name: "Thread details" })
+  const card = page.getByRole("dialog", { name: "Task details" })
   await expect(card.getByText("↑1 ↓1")).toBeVisible()
   const diverged = "Branch has diverged from upstream. Rebase or merge first."
   const sync = card.getByRole("button", { name: "Sync branch" })

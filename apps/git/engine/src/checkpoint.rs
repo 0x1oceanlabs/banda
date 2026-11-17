@@ -53,7 +53,7 @@ pub enum When {
 pub fn reference(thread: &str, turn: &str, side: When) -> Result<String, Refusal> {
     let id = |id: &str| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
     if !id(thread) || !id(turn) {
-        return Err(Refusal::invalid("A Thread or a turn is named by its ID."));
+        return Err(Refusal::invalid("A Task or a turn is named by its ID."));
     }
     let side = match side {
         When::Before => "before",

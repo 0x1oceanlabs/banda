@@ -142,7 +142,7 @@ test("a folder there with changes of its own refuses the move, and nothing is pa
   const looked = await look(way)
   expect(looked).toEqual({
     kind: "refused",
-    why: "banda on devbox has changes that are not committed: commit or stash them there, then move the Thread.",
+    why: "banda on devbox has changes that are not committed: commit or stash them there, then move the Task.",
   })
   await expect(carry(way, looked)).rejects.toThrow("not committed")
   expect(methods().some((asked) => asked.includes("pack"))).toBe(false)
@@ -224,7 +224,7 @@ test("stopped before the other machine unpacks, nothing there changes", async ()
 test("a Thread that does not leave stays, and the other machine gives its copy back", async () => {
   const went = new Refused({
     code: "conflict",
-    message: "The Thread changed as it moved, and stays here: move it again.",
+    message: "The Task changed as it moved, and stays here: move it again.",
   })
   const { way, methods } = machines({ "agents.leave_thread": went })
   await expect(carry(way, goes, { message: "go on" })).rejects.toBe(went)
@@ -238,24 +238,24 @@ test("a Thread the other machine does not take says where its folder's work is, 
   const none = new Refused({
     code: "conflict",
     message:
-      "devbox has no Codex: add it there, or move the Thread to another Harness first.",
+      "devbox has no Codex: add it there, or move the Task to another Harness first.",
   })
   const { way, methods } = machines({ "agents.unpack_thread": none })
   await expect(carry(way, goes)).rejects.toThrow(
-    "devbox has no Codex: add it there, or move the Thread to another Harness first. The folder's work is on devbox already, on feat/x."
+    "devbox has no Codex: add it there, or move the Task to another Harness first. The folder's work is on devbox already, on feat/x."
   )
   expect(methods()).not.toContain("m1pro agents.leave_thread")
   expect(methods()).not.toContain("devbox agents.give_back")
 })
 
 test("a message that is not sent comes back with its words, after the Thread moved", async () => {
-  const away = new Refused({ code: "conflict", message: "The Thread is held" })
+  const away = new Refused({ code: "conflict", message: "The Task is held" })
   const { way, methods } = machines({ "agents.send": away })
   const failed = await carry(way, goes, { message: "go on" }).catch(
     (error: unknown) => error
   )
   expect(failed).toBeInstanceOf(Unsent)
   expect((failed as Unsent).words).toBe("go on")
-  expect((failed as Unsent).message).toBe("The Thread is held.")
+  expect((failed as Unsent).message).toBe("The Task is held.")
   expect(methods()).toContain("m1pro agents.leave_thread")
 })

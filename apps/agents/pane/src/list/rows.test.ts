@@ -123,7 +123,7 @@ test("what it was asked shows only when it says more than the title", () => {
 })
 
 test("a new Thread with no title yet is a New Thread", () => {
-  expect(listedOf(thread({ title: "" }), "").title).toBe("New Thread")
+  expect(listedOf(thread({ title: "" }), "").title).toBe("New Task")
 })
 
 test("a Thread whose turn finished says whether its Person saw it, for Mark as unread", () => {

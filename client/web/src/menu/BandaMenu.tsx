@@ -862,7 +862,7 @@ function Menu({
         {at === "root" && !inside && ask && (
           <KbdGroup>
             <Keys keyOf={ask} />
-            <span>New Thread</span>
+            <span>New Task</span>
           </KbdGroup>
         )}
         <div className="ml-auto flex items-center gap-4">
@@ -1235,7 +1235,7 @@ function placeholderOf(
   if (inside) return "Search…"
   return at === "actions"
     ? "Search actions…"
-    : "Search actions, Projects, Threads and files…"
+    : "Search actions, Projects, Tasks and files…"
 }
 
 const NO_ROWS: readonly MenuRow[] = []

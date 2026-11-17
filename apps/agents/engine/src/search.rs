@@ -505,7 +505,7 @@ mod tests {
         post(&sql, often, "And the sidebar once more.", 3);
         post(&sql, none, "Nothing to see here.", 4);
         let order: Vec<ThreadId> = found(&sql, "sidebar").into_iter().map(|(t, _)| t).collect();
-        assert_eq!(order, [often, once], "each Thread once, the most first");
+        assert_eq!(order, [often, once], "each Task once, the most first");
         let found = search(&sql, "sidebar", Some(1)).unwrap();
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].at, 2, "by its best message");
@@ -633,10 +633,10 @@ mod tests {
             answers: false,
         };
         store::put(&sql, at, &reply, None, lane).unwrap();
-        post(&sql, at, "the Thread's own otter", 2);
+        post(&sql, at, "the Task's own otter", 2);
         assert_eq!(
             found(&sql, "otter"),
-            [(at, "the Thread's own otter".to_owned())]
+            [(at, "the Task's own otter".to_owned())]
         );
         assert!(found_threads(&sql, "grows").is_empty());
         // Nor does the backfill add it.
@@ -666,7 +666,7 @@ mod tests {
         let rows: i64 = sql
             .query_row("SELECT count(*) FROM agents_search", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(rows, 1, "only the kept Thread's message");
+        assert_eq!(rows, 1, "only the kept Task's message");
     }
 
     #[test]
@@ -838,7 +838,7 @@ mod tests {
         assert_eq!(
             search(&sql, "apple", None).unwrap().len(),
             2,
-            "each Thread once"
+            "each Task once"
         );
         let old_one = found(&sql, "one");
         assert_eq!(old_one, [(old, "one apple".to_owned())]);
@@ -909,7 +909,7 @@ mod tests {
                 let started = Instant::now();
                 let found = search(&sql, words, None).unwrap();
                 println!(
-                    "  {words:?}: {} Threads in {:?}",
+                    "  {words:?}: {} Tasks in {:?}",
                     found.len(),
                     started.elapsed()
                 );

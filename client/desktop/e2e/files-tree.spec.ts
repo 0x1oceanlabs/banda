@@ -313,10 +313,10 @@ test("Add to chat with no Thread in the Project says so", async () => {
     .filter({ has: page.getByRole("navigation", { name: "Places" }) })
   const row = pane.getByRole("treeitem", { name: "README.md", exact: true })
   await expect(row).toBeVisible()
-  await page.getByRole("button", { name: "Close New Thread" }).click()
+  await page.getByRole("button", { name: "Close New Task" }).click()
   await row.click({ button: "right" })
   await page.getByRole("menuitem", { name: "Add to chat" }).click()
   await expect(
-    page.getByText("No Thread in this Project to add it to.")
+    page.getByText("No Task in this Project to add it to.")
   ).toBeVisible()
 })

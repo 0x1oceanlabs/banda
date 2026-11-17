@@ -214,7 +214,7 @@ impl Connection {
                 .additional_directories(roots.to_vec())
                 .mcp_servers(given.servers)
                 .meta(forked_at(given.meta.unwrap_or_default(), message));
-            let made = self.open(fork, "fork this Thread's conversation").await?;
+            let made = self.open(fork, "fork this Task's conversation").await?;
             let (session, options) = ((made.session_id, pass), made.config_options);
             return Ok(self.opened(thread, &mut sessions, session, options, folder, false));
         }

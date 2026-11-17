@@ -16,7 +16,7 @@ const showsOf = (pane: PaneState) =>
 /** A Thread as Threads lists it, its Agent's own. */
 const thread = (id: string, more: Partial<Listed> = {}): Listed => ({
   id,
-  title: `Thread ${id}`,
+  title: `Task ${id}`,
   mark: "working",
   changed: 0,
   agent: `agent ${id}`,
@@ -111,9 +111,9 @@ test("each Group's owner gives its state and name, as its Agent's Thread did bef
   expect(groupsIn(ownedIn(shows, columns))).toEqual(owned)
   expect(owned).toEqual(
     new Map([
-      ["g", { state: "asking", name: "Thread a" }],
-      ["h", { state: "done", name: "Thread b" }],
-      ["k", { state: "failed", name: "Thread x" }],
+      ["g", { state: "asking", name: "Task a" }],
+      ["h", { state: "done", name: "Task b" }],
+      ["k", { state: "failed", name: "Task x" }],
     ])
   )
   // A Pane shows an Item where an App lists what it shows, in its
@@ -160,7 +160,7 @@ test("a Group's part of what a Strip selects stays as its owner's Item changes o
   const shows = tilingShows(stores, showsOf)
   const columns = [column("1", "g", p, "a"), column("2", "h", p, "b")]
   const first = ownedIn(shows, columns)
-  expect(first).toEqual(["g", "working", "Thread a", "h", "done", "Thread b"])
+  expect(first).toEqual(["g", "working", "Task a", "h", "done", "Task b"])
 
   // What it was last asked, and when it changed: a new Item, the same
   // Groups.
@@ -188,7 +188,7 @@ test("a Group's part of what a Strip selects stays as its owner's Item changes o
     "Renamed",
     "h",
     "done",
-    "Thread b",
+    "Task b",
   ])
 })
 
@@ -209,14 +209,14 @@ test("a row of the overview selects its Panes alone, and the map its Groups alon
   const row = shownIn(shows, entries)
   const map = ownedIn(shows, columns)
   expect(row).toEqual([true, undefined, false, undefined, true, undefined])
-  expect(map).toEqual(["g", "working", "Thread a"])
+  expect(map).toEqual(["g", "working", "Task a"])
 
   // The Group's owner comes to rest, then is renamed: its plate and its
   // handle change, and nothing the row draws.
   takeLists(stores, {
     [p]: [thread("a", { mark: "idle" }), thread("b", { mark: "idle" })],
   })
-  expect(ownedIn(shows, columns)).toEqual(["g", undefined, "Thread a"])
+  expect(ownedIn(shows, columns)).toEqual(["g", undefined, "Task a"])
   expect(sameEach(shownIn(shows, entries), row)).toBe(true)
   takeLists(stores, {
     [p]: [

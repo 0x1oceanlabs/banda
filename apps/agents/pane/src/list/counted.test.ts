@@ -46,7 +46,7 @@ test("the shared cases are there", () => {
 // archive), where it stands and which counts take it (`status.ts`), as the
 // bar's tally reads them: what is put away no count takes.
 test.each(cases)(
-  "the bar counts a Thread as banda status does: $case",
+  "the bar counts a Task as banda status does: $case",
   ({ case: name, thread, counted }) => {
     const listed = listedOf(thread, thread.harness)
     const stand = standOf(listed, now)

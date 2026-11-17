@@ -545,12 +545,10 @@ test("Move with no Project, or one on another machine, opens Move Thread, and se
 
 test("a delete its host refuses keeps the Thread's Panes with a toast, and one whose host is away is not sent", async () => {
   const at = { project: "s1", item: "t1" }
-  const refusal = { code: "conflict", message: "This Thread is at work." }
+  const refusal = { code: "conflict", message: "This Task is at work." }
   const refused = fake(listed(), new Refused(refusal as never))
   action("agents.delete-thread").run(refused.window, at)
-  await vi.waitFor(() =>
-    expect(said.errors).toEqual(["This Thread is at work."])
-  )
+  await vi.waitFor(() => expect(said.errors).toEqual(["This Task is at work."]))
   expect(refused.ran).toEqual([])
 
   said.errors = []
@@ -572,7 +570,7 @@ test("another host's Thread is deleted on its own engine", () => {
 })
 
 test("a move its host refuses keeps the Thread and its Panes where they were, with a toast", async () => {
-  const atWork = "This Thread is at work: move it once its turn ends."
+  const atWork = "This Task is at work: move it once its turn ends."
   const refused = new Refused({ code: "conflict", message: atWork })
   const { window, ran } = fake(listed(), refused)
   action("agents.move-thread").run(window, {

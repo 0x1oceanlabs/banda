@@ -19,7 +19,7 @@ export type Broke =
 const TEXT = {
   page: {
     title: "Banda's window broke",
-    body: "What broke is kept in Settings → Problems. Your Threads and workspaces are kept by the engine.",
+    body: "What broke is kept in Settings → Problems. Your Tasks and workspaces are kept by the engine.",
     again: "Open again",
   },
   starts: {

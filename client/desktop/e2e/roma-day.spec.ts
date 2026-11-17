@@ -79,7 +79,7 @@ async function say(window: Window, box: Locator, text: string) {
 async function startAgent(window: Window, text: string) {
   await window.page.keyboard.press("Alt+Enter")
   const box = window.page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .getByRole("textbox", { name: "Message to Fake AI" })
   await expect(box).toBeFocused()
   return say(window, box, text)
@@ -576,7 +576,7 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await expect(row).not.toContainText(/\d:\d\d/)
 
   // Its row's Thread menu puts it off too, and in Later, wakes it.
-  const menu = page.getByRole("menu", { name: "Thread menu" })
+  const menu = page.getByRole("menu", { name: "Task menu" })
   await row.click({ button: "right" })
   await menu.getByRole("menuitem", { name: /^Later…/ }).click()
   await expect(field).toBeFocused()

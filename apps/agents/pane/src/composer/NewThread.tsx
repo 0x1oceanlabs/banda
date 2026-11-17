@@ -98,7 +98,7 @@ function choicesIn(group: Group): Choice[] {
   const none = {
     id: group.machine,
     name: NO_PROJECT,
-    about: "A new Thread with its own folder",
+    about: "A new Task with its own folder",
     mark: <ProjectSign project={undefined} />,
   }
   return [none, ...projects]

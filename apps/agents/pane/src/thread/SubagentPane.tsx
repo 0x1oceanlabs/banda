@@ -108,8 +108,8 @@ export function opensBeside(
  */
 export const openBeside: Action = {
   id: OPEN_BESIDE,
-  title: "Open a sub-agent beside its Thread",
-  section: "Threads",
+  title: "Open a sub-agent beside its Task",
+  section: "Tasks",
   unlisted: true,
   run: (window, args) => {
     const [project, thread, sub, agent] = [
@@ -491,9 +491,7 @@ function SubagentHead({
             <Fragment key={at}>
               <button
                 type="button"
-                title={
-                  crumb.to === "thread" ? "Go to its Thread" : "Go up to it"
-                }
+                title={crumb.to === "thread" ? "Go to its Task" : "Go up to it"}
                 onClick={() => onCrumb(crumb.to)}
                 className={cn(
                   "min-w-0 shrink cursor-pointer rounded-small text-meta text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",

@@ -226,7 +226,7 @@ test("with arc away, its cards stay where they are, dimmed, saying 'arc · away 
   await expect(logo).toHaveAccessibleName(/arc is away with Agents at work/)
   // Its question is still the Person's turn, among the Threads under
   // Your turn, and says so.
-  await expect(placeOf(panel, "Threads").getByRole("option")).toContainText([
+  await expect(placeOf(panel, "Tasks").getByRole("option")).toContainText([
     "please ask first",
   ])
   await expect(asks).toHaveAccessibleName(/^please ask first, Asks, /)

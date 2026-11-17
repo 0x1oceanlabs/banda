@@ -143,7 +143,7 @@ fn resumed(
     }
     let failed = store::turns_in(tx.sql(), thread, TurnState::Failed)?.pop();
     let failed =
-        failed.ok_or_else(|| Refusal::conflict("No turn of this Thread failed to go on with."))?;
+        failed.ok_or_else(|| Refusal::conflict("No turn of this Task failed to go on with."))?;
     Ok(failed.id)
 }
 
@@ -159,11 +159,11 @@ fn thread_of(
         // A pass of no Thread, as a Harness's process's, has none to put off.
         (None, Participant::Agent(agent)) => store::thread_of(tx.sql(), agent)?.ok_or_else(|| {
             Refusal::forbidden(
-                "An Agent puts off or wakes only its own Thread, and this pass names none.",
+                "An Agent puts off or wakes only its own Task, and this pass names none.",
             )
             .into()
         }),
-        (None, Participant::Person(_)) => Err(Refusal::invalid("Name the Thread.").into()),
+        (None, Participant::Person(_)) => Err(Refusal::invalid("Name the Task.").into()),
     }
 }
 
@@ -208,8 +208,7 @@ pub fn see_woke(
     author: Participant,
     SeeWokeAsk { thread, seen }: SeeWokeAsk,
 ) -> Result<(), Error> {
-    store::thread(tx.sql(), thread)?
-        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+    store::thread(tx.sql(), thread)?.ok_or_else(|| Refusal::not_found("There is no such Task."))?;
     let Some(later) = store::later(tx.sql(), thread)? else {
         return Ok(());
     };
@@ -264,16 +263,16 @@ pub(crate) fn woke(
 /// itself: put off again or woken, it would not go on (decision 8).
 fn may_touch(tx: &Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
     let (_, its) = store::title_and_agent(tx.sql(), thread)?
-        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        .ok_or_else(|| Refusal::not_found("There is no such Task."))?;
     let Some(agent) = author.agent() else {
         return Ok(());
     };
     if agent != its {
-        return Err(Refusal::forbidden("An Agent puts off or wakes only its own Thread.").into());
+        return Err(Refusal::forbidden("An Agent puts off or wakes only its own Task.").into());
     }
     if store::later(tx.sql(), thread)?.is_some_and(|later| persons_own(&later)) {
         return Err(Refusal::forbidden(
-            "Your Person put this Thread off to go on by itself, or Someday: only they change that Later.",
+            "Your Person put this Task off to go on by itself, or Someday: only they change that Later.",
         )
         .into());
     }

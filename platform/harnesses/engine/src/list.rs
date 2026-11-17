@@ -1155,7 +1155,7 @@ impl Harnesses {
             } else {
                 return match by {
                     Some(_) if !harness.enabled => Err(format!(
-                        "Account {next} is turned off; enable it to finish moving Threads."
+                        "Account {next} is turned off; enable it to finish moving Tasks."
                     )),
                     Some(by) => Ok(Some((next, by))),
                     None => Ok(None),
@@ -1351,7 +1351,7 @@ fn check(path: &Path, text: &str) -> Vec<Problem> {
         .filter_map(|entry| Some((entry.id, entry.start?.span())))
         .map(|(id, span)| {
             let moved = format!(
-                "What a new Thread starts with is agents.toml's now: move this to its [start.{id}]"
+                "What a new Task starts with is agents.toml's now: move this to its [start.{id}]"
             );
             Problem::at(path, text, Some(span), moved)
         })

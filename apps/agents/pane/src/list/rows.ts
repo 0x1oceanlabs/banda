@@ -120,7 +120,7 @@ export function listedOf(
       : undefined
   return {
     id: thread.id,
-    title: thread.title || "New Thread",
+    title: thread.title || "New Task",
     mark,
     changed: thread.updated_at,
     ...(latest?.state === "running" ? { began: latest.began } : {}),

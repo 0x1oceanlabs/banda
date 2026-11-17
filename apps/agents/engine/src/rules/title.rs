@@ -27,7 +27,7 @@ pub fn named(title: Option<&str>) -> Result<Option<String>, Refusal> {
     }
     if line.chars().count() > LONGEST {
         return Err(Refusal::invalid(format!(
-            "A Thread's title can be at most {LONGEST} characters."
+            "A Task's title can be at most {LONGEST} characters."
         )));
     }
     Ok(Some(line))

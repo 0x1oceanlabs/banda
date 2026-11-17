@@ -111,7 +111,7 @@ test("New Pane on arc's Project lists what opens on arc and dims the rest, not o
   )
   // What opens on arc is live; the rest stays in view, dimmed, with why.
   const button = (name: string) => launcher.getByRole("button", { name })
-  for (const name of ["Thread", "Terminal", "Files"])
+  for (const name of ["Task", "Terminal", "Files"])
     await expect(button(name), name).toBeEnabled()
   for (const name of ["Browser"])
     await expect(button(name), name).toBeDisabled()
@@ -129,7 +129,7 @@ test("New Pane on arc's Project lists what opens on arc and dims the rest, not o
   arc!.blackhole(true)
   const away = launcher.getByRole("status").filter({ hasText: "arc is away" })
   await expect(away).toBeVisible({ timeout: 60_000 })
-  await expect(button("Thread")).toBeDisabled()
+  await expect(button("Task")).toBeDisabled()
   await launcher.press("KeyH")
   await expect(launcher).toBeVisible()
   await shot(page, "new-pane-arc-away")
@@ -137,7 +137,7 @@ test("New Pane on arc's Project lists what opens on arc and dims the rest, not o
   // Back, a Thread picked there is a new Thread on arc.
   arc!.blackhole(false)
   await expect(away).toHaveCount(0, { timeout: 90_000 })
-  await button("Thread").click()
+  await button("Task").click()
   await expect(launcher).toHaveCount(0)
   await expect(
     page.getByRole("textbox", { name: "Message to Fake AI" }).last()
@@ -210,7 +210,7 @@ test("arc's Thread is archived on arc's engine from a key and from its Pane's me
   await expect(
     page
       .getByRole("region", { name: "Notifications" })
-      .getByText("There is no such Thread.")
+      .getByText("There is no such Task.")
   ).toHaveCount(0)
 })
 
@@ -254,7 +254,7 @@ test("arc's Thread restored as the window starts again with arc away from the fi
   await expect(
     page.getByText("This window does not reach that machine")
   ).toHaveCount(0)
-  await expect(page.getByText("There is no such Thread.")).toHaveCount(0)
+  await expect(page.getByText("There is no such Task.")).toHaveCount(0)
   await shot(page, "restored-away")
 
   // Back, the same Pane shows arc's Thread.
@@ -340,10 +340,10 @@ test("a new Thread on arc starts on arc's account, by arc's agents.toml, in a Pr
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
-    .getByRole("button", { name: "Thread" })
+    .getByRole("button", { name: "Task" })
     .click()
   const draft = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
   const message = (to: string) =>
     draft.getByRole("textbox", { name: `Message to ${to}` })
@@ -376,7 +376,7 @@ test("a new Thread on arc starts on arc's account, by arc's agents.toml, in a Pr
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
-    .getByRole("button", { name: "Thread" })
+    .getByRole("button", { name: "Task" })
     .click()
   await expect(message("Work")).toBeVisible()
   // The new draft names its account at once, before arc has answered that

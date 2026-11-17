@@ -539,7 +539,7 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     call(window, "agents.archive", { thread: threadNamed(window, title)!.id })
   await expect(rows).toHaveCount(0)
   const composer = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .getByRole("textbox", { name: "Message to Fake AI" })
   const rowOf = (text: string) =>
     sidebar.getByRole("option", { name: new RegExp(text) })

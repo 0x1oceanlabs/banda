@@ -336,7 +336,7 @@ CREATE INDEX agents_items_by_crew ON agents_items (crew) WHERE crew IS NOT NULL;
 "#,
     r#"
 -- Where the Person wrote a message from, as JSON (ADR 0122): their
--- window's machine, and whether it was the Thread's. NULL when no window
+-- window's machine, and whether it was the Task's. NULL when no window
 -- said, and for every item but a Person's message. And the one the
 -- Thread's session was last told of: NULL while it was told of none.
 ALTER TABLE agents_items ADD COLUMN written_from TEXT;
@@ -2940,12 +2940,12 @@ impl<'de> Deserialize<'de> for ThreadRows {
         use serde::de::Error as _;
         let carried = Vec::<CarriedTable>::deserialize(from)?;
         if carried.len() != THREAD_TABLES.len() {
-            return Err(D::Error::custom("not a Thread's tables"));
+            return Err(D::Error::custom("not a Task's tables"));
         }
         let mut tables = Vec::with_capacity(carried.len());
         for (carried, (table, _)) in carried.into_iter().zip(THREAD_TABLES) {
             if carried.table != table {
-                return Err(D::Error::custom("not a Thread's tables"));
+                return Err(D::Error::custom("not a Task's tables"));
             }
             let width = carried.columns.len();
             let mut rows = Vec::with_capacity(carried.rows.len());
@@ -3570,7 +3570,7 @@ mod tests {
         asked(QuestionState::Open, Some(Vec::new()));
         assert!(
             listed().asking[2].choices.is_empty(),
-            "one with a form is answered in its Thread"
+            "one with a form is answered in its Task"
         );
     }
 
@@ -3731,7 +3731,7 @@ mod tests {
             .into_iter()
             .map(|t| (t.thread.id, t.parent))
             .collect();
-        assert_eq!(parents[&child], Some(plan), "its Agent's Thread");
+        assert_eq!(parents[&child], Some(plan), "its Agent's Task");
         for none in [plan, own, fork, stray] {
             assert_eq!(parents[&none], None);
         }
@@ -4142,7 +4142,7 @@ mod tests {
         assert_eq!(
             kept.ids(items(&kept.sql, kept.thread).unwrap()),
             [message, anchor, own_reply, asked, own],
-            "the Thread keeps its sub-agent's Question, not its work"
+            "the Task keeps its sub-agent's Question, not its work"
         );
         assert_eq!(
             kept.ids(open_questions(&kept.sql, turn).unwrap()),
@@ -4160,7 +4160,7 @@ mod tests {
         let asking: Vec<_> = (asking(&kept.sql, kept.thread).unwrap().into_iter())
             .map(|a| a.item)
             .collect();
-        assert_eq!(asking, [asked, own], "the Thread asks for both");
+        assert_eq!(asking, [asked, own], "the Task asks for both");
         assert!(asks(&kept.sql, kept.thread).unwrap());
     }
 
@@ -4661,7 +4661,7 @@ mod tests {
                 .map(|t| t.thread.id)
                 .collect::<Vec<_>>(),
             [fork],
-            "the other Thread stays"
+            "the other Task stays"
         );
         assert_eq!(items(&sql, fork).unwrap().len(), 1);
         // The sweep takes the image no item shows, and leaves the fork's.

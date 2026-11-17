@@ -102,13 +102,13 @@ export function startsOnWords(
     ? `${name(starts.default)} is signed out`
     : `${name(starts.default)} is out${until === undefined ? "" : ` until ${clock(until)}`}`
   if (!starts.fallback)
-    return `${out}: new Threads start on it still, as no signed-in fallback has room.`
+    return `${out}: new Tasks start on it still, as no signed-in fallback has room.`
   const till = starts.out.signedOut
     ? ` till ${name(starts.default)} signs in again`
     : until === undefined
       ? ` till ${name(starts.default)} has room`
       : " until then"
-  return `${out}: new Threads start on ${name(starts.id)}${till}.`
+  return `${out}: new Tasks start on ${name(starts.id)}${till}.`
 }
 
 const NO_LIMITS: Limits[] = []

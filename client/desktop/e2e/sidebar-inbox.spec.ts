@@ -60,7 +60,7 @@ const idOf = (window: Window, title: string) => threadNamed(window, title)?.id
  * says a Thread is done before the window's list has it there: the list
  * may draw it Open first, before its turn begins, then Working. */
 async function landed(sidebar: Locator, titles: string[]) {
-  await expect(placeOf(sidebar, "Threads")).toHaveText([
+  await expect(placeOf(sidebar, "Tasks")).toHaveText([
     /^Your turn/,
     ...titles.map((title) => new RegExp(title)),
   ])
@@ -190,7 +190,7 @@ test("the Inbox: Your turn oldest first, Open newest first under a hairline, the
 
   // Your turn, the oldest first, under its head; Open, the newest first,
   // under a hairline.
-  const threads = placeOf(sidebar, "Threads")
+  const threads = placeOf(sidebar, "Tasks")
   await expect(threads.first()).toContainText(/Your turn\s*· 3/)
   await expect(threads.getByRole("separator")).toHaveCount(1)
   await expect(threads.locator("[data-row]")).toHaveText([
@@ -332,11 +332,11 @@ test("inbox zero says how many work and when the next wakes, once a week how man
   await shots(window, "working-empty")
   await tab("Later").click()
   await expect(panel).toContainText("Nothing for later")
-  await expect(panel).toContainText(/on a Thread puts it here\./)
+  await expect(panel).toContainText(/on a Task puts it here\./)
   await shots(window, "later-empty")
   await tab("Archive").click()
   await expect(panel).toContainText("Nothing archived yet")
-  await expect(panel).toContainText(/on a Thread closes it here\./)
+  await expect(panel).toContainText(/on a Task closes it here\./)
   await shots(window, "archive-empty")
 
   // Two at work, one asleep till a time and one till Someday: inbox zero
@@ -666,7 +666,7 @@ test("a card's menu: a right click opens it at the pointer, Shift+F10 and the Me
   const list = sidebar.getByRole("listbox")
   const tab = (name: string) =>
     sidebar.getByRole("tab", { name: new RegExp(`^${name}`) })
-  const menu = page.getByRole("menu", { name: "Thread menu" })
+  const menu = page.getByRole("menu", { name: "Task menu" })
   await expect(tab("Archive")).toHaveAccessibleName("Archive, 2")
   await landed(sidebar, ["Bench the window tests", "Review the sidebar spec"])
 
@@ -766,7 +766,7 @@ test("the card's menu on a done, a working and an archived card, and Delete's qu
   const panel = sidebar.getByRole("tabpanel")
   const tab = (name: string) =>
     sidebar.getByRole("tab", { name: new RegExp(`^${name}`) })
-  const menu = page.getByRole("menu", { name: "Thread menu" })
+  const menu = page.getByRole("menu", { name: "Task menu" })
   await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
   await leaveSidebar(page)
 
@@ -918,7 +918,7 @@ test("a Thread an Agent started sits under its parent with ↳, past three a par
   const asker = "Split Sidebar.tsx, ask first"
   await start(asker)
   await leaveSidebar(page)
-  const threads = placeOf(sidebar, "Threads")
+  const threads = placeOf(sidebar, "Tasks")
   const asks = threads.getByRole("option", { name: new RegExp(`^${asker},`) })
   await expect(asks).toContainText("Asks Run a check")
   await expect(asks.locator(":scope > span").nth(2)).toHaveText(

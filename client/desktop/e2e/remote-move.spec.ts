@@ -111,7 +111,7 @@ async function movesOf(page: Page) {
   await sidebarOf(page)
     .getByRole("option", { name: new RegExp(`^${TITLE}`) })
     .click({ button: "right" })
-  const menu = page.getByRole("menu", { name: "Thread menu" })
+  const menu = page.getByRole("menu", { name: "Task menu" })
   await menu.getByRole("menuitem", { name: "Move to Project" }).click()
   const moves = page.getByRole("menu").last()
   // Each with its sign before its name.
@@ -130,7 +130,7 @@ async function moveToArc(page: Page) {
     at: { x: box.x + box.width / 2, y: box.y + box.height / 2 },
   })
   await moves.getByRole("menuitem", { name: /banda$/ }).click()
-  const dialog = page.getByRole("dialog", { name: "Move Thread" })
+  const dialog = page.getByRole("dialog", { name: "Move Task" })
   await expect(dialog).toBeVisible()
   // It opens with arc's Project picked.
   await expect(
@@ -218,7 +218,7 @@ test("a folder on arc with changes of its own refuses the move, and the Thread s
 
   const dialog = await moveToArc(page)
   await expect(dialog).toContainText(
-    "banda on arc has changes that are not committed: commit or stash them there, then move the Thread."
+    "banda on arc has changes that are not committed: commit or stash them there, then move the Task."
   )
   await expect(dialog.getByRole("button", { name: /^Move/ })).toBeDisabled()
   await shot(page, "move-5-refused")
@@ -240,7 +240,7 @@ test("Move to Project… in the Pane's Thread menu opens Move Thread, and a Proj
     .getByRole("button", { name: TITLE, exact: true })
     .click()
   await page.getByRole("menuitem", { name: /Move to Project…/ }).click()
-  const dialog = page.getByRole("dialog", { name: "Move Thread" })
+  const dialog = page.getByRole("dialog", { name: "Move Task" })
   await expect(dialog).toBeVisible()
   // The first Project has the focus: Enter picks it, and Enter again
   // moves the Thread there.

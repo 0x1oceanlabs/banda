@@ -127,8 +127,8 @@ export function opensCrew(
  */
 export const openCrew: Action = {
   id: OPEN_CREW,
-  title: "Open a Crew beside its Thread",
-  section: "Threads",
+  title: "Open a Crew beside its Task",
+  section: "Tasks",
   unlisted: true,
   run: (window, args) => {
     const [project, thread, crew, agent, pick, quiet] = [
@@ -376,7 +376,7 @@ function CrewHead({
       {from && (
         <button
           type="button"
-          title="Go to its Thread"
+          title="Go to its Task"
           onClick={onFrom}
           disabled={!onFrom}
           className={cn(

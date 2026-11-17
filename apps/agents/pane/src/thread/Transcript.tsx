@@ -198,7 +198,7 @@ export function Transcript({
       <MessageScroller>
         <MessageScrollerViewport
           ref={viewport}
-          aria-label={ofLane ? `Sub-agent ${short}` : `Thread with ${name}`}
+          aria-label={ofLane ? `Sub-agent ${short}` : `Task with ${name}`}
         >
           <MessageScrollerContent
             data-chat

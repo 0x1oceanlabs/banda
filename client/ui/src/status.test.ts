@@ -68,7 +68,7 @@ test.each<[string, Partial<Listed>, Stand]>([
   ],
   ["archived", { archived: true }, "archived"],
   ["archived with a Done unseen", { mark: "done", archived: true }, "archived"],
-])("a Thread that %s stands in %s", (_, more, stand) => {
+])("a Task that %s stands in %s", (_, more, stand) => {
   expect(standOf(thing(more), 100)).toBe(stand)
 })
 
@@ -115,7 +115,7 @@ test.each<[string, Partial<Listed>, MarkState]>([
     { later: { at: 0, woke: { at: 5, by: "woken" } } },
     "idle",
   ],
-])("a Thread that %s looks %s", (_, more, look) => {
+])("a Task that %s looks %s", (_, more, look) => {
   expect(lookOf(thing(more), 100).look).toBe(look)
 })
 
@@ -159,7 +159,7 @@ test.each<[string, Partial<Listed>, MarkDoing]>([
     { limitUntil: 9 * MIN, stepped: 0, doing: { what: "read", since: 0 } },
     "limit",
   ],
-])("a working Thread that %s shows %s", (_, more, doing) => {
+])("a working Task that %s shows %s", (_, more, doing) => {
   expect(lookOf(thing({ mark: "working", ...more }), 3 * MIN)).toEqual({
     look: "working",
     doing,

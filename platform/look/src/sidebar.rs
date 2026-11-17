@@ -386,7 +386,7 @@ const RETIRED: &[Retired] = &[
     Retired {
         at: "projects.new-thread",
         table: false,
-        says: "projects.new-thread is no longer used: a Thread starts in the New Thread Pane",
+        says: "projects.new-thread is no longer used: a Task starts in the New Task Pane",
     },
 ];
 
@@ -695,7 +695,7 @@ mod tests {
                 (6, "projects.list is no longer used"),
                 (
                     8,
-                    "projects.new-thread is no longer used: a Thread starts in the New Thread Pane"
+                    "projects.new-thread is no longer used: a Task starts in the New Task Pane"
                 ),
                 (
                     9,

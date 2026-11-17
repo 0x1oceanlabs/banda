@@ -486,7 +486,7 @@ test("step 3c: a path in arc's reply opens arc's file", async () => {
   await expect(chip).toHaveText("who.txt:1")
   await chip.click({ button: "right" })
   await page
-    .getByRole("menu", { name: "Thread" })
+    .getByRole("menu", { name: "Task" })
     .getByRole("menuitem", { name: "Quick Look" })
     .click()
   const peek = page.locator("[data-peek]")

@@ -571,7 +571,7 @@ test("paths: a path in arc's reply is found by arc, opens arc's file at its line
   expect(await outside()).toEqual([])
 
   // Its menu: what reaches this computer is not offered.
-  const menu = page.getByRole("menu", { name: "Thread" })
+  const menu = page.getByRole("menu", { name: "Task" })
   await chip.click({ button: "right" })
   await expect(menu.getByRole("menuitem")).toHaveText([
     "Open in Banda",
@@ -624,7 +624,7 @@ test("links: a reply's public link opens in this device's browser, and arc's loc
   const site = thread.getByRole("link", { name: "the site" })
   await expect(site).toHaveAttribute("title", /\nOpens in /)
   // The browser module does not run on arc, so the menu opens it here.
-  const menu = page.getByRole("menu", { name: "Thread" })
+  const menu = page.getByRole("menu", { name: "Task" })
   await site.click({ button: "right" })
   await expect(menu.getByRole("menuitem")).toHaveText([
     /^Open in this .+'s browser$/,

@@ -36,7 +36,7 @@ const TIPS: usize = 200;
 pub fn person_only(call: &Call) -> Result<(), Refusal> {
     if call.participant().agent().is_some() {
         return Err(Refusal::forbidden(
-            "Only a Person moves a Thread to another machine.",
+            "Only a Person moves a Task to another machine.",
         ));
     }
     Ok(())
@@ -51,7 +51,7 @@ fn reference(thread: &str) -> Result<String, Refusal> {
             .all(|c| c.is_ascii_alphanumeric() || c == '-');
     match id {
         true => Ok(format!("{ROOT}/{thread}")),
-        false => Err(Refusal::invalid("A Thread is named by its ID.")),
+        false => Err(Refusal::invalid("A Task is named by its ID.")),
     }
 }
 
@@ -154,7 +154,7 @@ pub async fn pack(
     if checkpoint::find(&repo, &reference).await?.is_none() {
         return Err(Refusal::conflict(
             "This folder has too many files that are new or changed to go along: commit \
-             them, or move the Thread alone.",
+             them, or move the Task alone.",
         ));
     }
     if let Some(folder) = path.parent() {
@@ -219,7 +219,7 @@ pub async fn unpack(
         .map_err(|_| {
             Refusal::conflict(
                 "This folder lacks commits the work was made on: fetch the branch here, then \
-                 move the Thread.",
+                 move the Task.",
             )
         })?
         .text();
@@ -279,7 +279,7 @@ async fn went_another_way(repo: &Repo, branch: &str, head: &str) -> Result<(), R
         return Ok(());
     }
     Err(Refusal::conflict(format!(
-        "The branch {branch} went another way in this folder: move the Thread once they \
+        "The branch {branch} went another way in this folder: move the Task once they \
          agree."
     )))
 }

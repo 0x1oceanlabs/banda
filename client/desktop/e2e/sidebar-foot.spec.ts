@@ -303,7 +303,7 @@ test("with Quiet on for 30 minutes, a finished Thread makes no sound, no toast a
   await sendAndLeave(page, composer, "slow hello")
   const card = sidebar.getByRole("option", { name: /slow hello/ })
   await expect(card.getByRole("img", { name: "Done" })).toBeVisible()
-  await expect(placeOf(sidebar, "Threads")).toHaveText([
+  await expect(placeOf(sidebar, "Tasks")).toHaveText([
     /^Your turn/,
     /slow hello/,
   ])
@@ -315,7 +315,7 @@ test("with Quiet on for 30 minutes, a finished Thread makes no sound, no toast a
   await expect(toasts).toHaveCount(0)
 
   // One that ends with the window behind: no notice on the desktop.
-  const draft = page.getByRole("region", { name: "New Thread" })
+  const draft = page.getByRole("region", { name: "New Task" })
   const again = draft.getByRole("textbox", { name: /^Message to/ })
   await again.fill("slow again")
   await again.press("Enter")

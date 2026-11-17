@@ -71,7 +71,7 @@ const line = (lending: string) => [
 ]
 
 it.effect(
-  "each lend and its end is said in its Thread, and a new boot of the engine ends every lend",
+  "each lend and its end is said in its Task, and a new boot of the engine ends every lend",
   () =>
     Effect.gen(function* () {
       said.length = 0

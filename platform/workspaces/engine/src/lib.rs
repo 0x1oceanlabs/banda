@@ -314,7 +314,7 @@ const AGENT_KINDS: &[(&str, ArgsRule)] = &[
 ];
 
 /// What an Agent does instead of giving a Thread's Pane words to send.
-const SEND: &str = "To start a Thread or write to one, call `send`, as yourself.";
+const SEND: &str = "To start a Task or write to one, call `send`, as yourself.";
 
 /// Refuses a Thread's Pane an Agent opens on anything but one Thread, by
 /// its ID as `threads` lists it, so one Thread is one Pane. The rest of its

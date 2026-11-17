@@ -95,7 +95,7 @@ export function MakeProject({
           className="flex flex-col gap-4"
         >
           <DialogHeader>
-            <DialogTitle>Make a Project from this Thread</DialogTitle>
+            <DialogTitle>Make a Project from this Task</DialogTitle>
             <DialogDescription>
               The Thread, its files and history stay together.
             </DialogDescription>

@@ -26,7 +26,7 @@ pub fn may_delete(
     idle(works, asks, ("deleting", "delete"))?;
     if !holds(archived, changed, works, asks) {
         return Err(Refusal::conflict(
-            "This Thread is not in Archive: archive it before deleting it.",
+            "This Task is not in Archive: archive it before deleting it.",
         ));
     }
     Ok(())
@@ -38,12 +38,12 @@ pub fn may_delete(
 fn idle(works: bool, asks: bool, (doing, act): (&str, &str)) -> Result<(), Refusal> {
     if asks {
         return Err(Refusal::conflict(format!(
-            "This Thread asks its Person: answer it before {doing} it."
+            "This Task asks its Person: answer it before {doing} it."
         )));
     }
     if works {
         return Err(Refusal::conflict(format!(
-            "This Thread is at work: {act} it once its turn ends."
+            "This Task is at work: {act} it once its turn ends."
         )));
     }
     Ok(())
@@ -69,11 +69,11 @@ mod tests {
         let words = |refused: Result<(), Refusal>| refused.unwrap_err().message;
         assert_eq!(
             words(may_archive(true, false)),
-            "This Thread is at work: archive it once its turn ends."
+            "This Task is at work: archive it once its turn ends."
         );
         assert_eq!(
             words(may_archive(false, true)),
-            "This Thread asks its Person: answer it before archiving it."
+            "This Task asks its Person: answer it before archiving it."
         );
         assert!(
             words(may_archive(true, true)).contains("answer it"),
@@ -92,13 +92,13 @@ mod tests {
         let words = |refused: Result<(), Refusal>| refused.unwrap_err().message;
         assert_eq!(
             words(may_delete(archived, AT, true, false)),
-            "This Thread is at work: delete it once its turn ends."
+            "This Task is at work: delete it once its turn ends."
         );
         assert_eq!(
             words(may_delete(archived, AT, false, true)),
-            "This Thread asks its Person: answer it before deleting it."
+            "This Task asks its Person: answer it before deleting it."
         );
-        let elsewhere = "This Thread is not in Archive: archive it before deleting it.";
+        let elsewhere = "This Task is not in Archive: archive it before deleting it.";
         assert_eq!(words(may_delete(archived, AT + 1, false, false)), elsewhere);
         assert_eq!(words(may_delete(None, 0, false, false)), elsewhere);
     }

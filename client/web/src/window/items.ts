@@ -33,8 +33,8 @@ import { toggled } from "./archived"
  */
 export const archiving: ItemAction<Shell> = {
   id: "sidebar.archive",
-  section: "Threads",
-  title: "Archive the Thread you look at, or bring it back",
+  section: "Tasks",
+  title: "Archive the Task you look at, or bring it back",
   keys: [{ code: "KeyS", mod: true }],
   args: itemArgs(),
   group: "other",

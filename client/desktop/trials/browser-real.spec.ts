@@ -219,15 +219,15 @@ test(`real ${harness} exercises Banda's browser`, async () => {
   let handoffs = 0
   let screenshotSettings = false
   const send = async (text: string) => {
-    if (!projectId || !threadId) throw new Error("No Thread yet")
+    if (!projectId || !threadId) throw new Error("No Task yet")
     note(`Person message: ${text.slice(0, 120)}`)
     await cli("agents.send", { thread: threadId, text }, projectId)
   }
   try {
     // Open a normal Project and Thread in the real UI, with the sole real Harness.
     await page
-      .getByRole("region", { name: "New Thread" })
-      .getByRole("button", { name: "Close New Thread", exact: true })
+      .getByRole("region", { name: "New Task" })
+      .getByRole("button", { name: "Close New Task", exact: true })
       .click()
     const menu = await addProject(page)
     await menu.getByRole("option", { name: /New Project/ }).click()

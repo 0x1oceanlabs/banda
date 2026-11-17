@@ -1163,13 +1163,13 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     let (error, said) = mcp.call(6, "read", json!({ "thread": nowhere }));
     assert!(error);
     assert!(
-        said.contains("There is no such Thread. Nothing was done."),
+        said.contains("There is no such Task. Nothing was done."),
         "{said}"
     );
     let (error, said) = mcp.call(7, "read", json!({ "thread": "nope" }));
     assert!(error && said.contains("do not fit"), "{said}");
     let (error, said) = mcp.call(8, "send", json!({ "thread": thread, "text": "hi" }));
-    assert!(error && said.contains("your own Thread"), "{said}");
+    assert!(error && said.contains("your own Task"), "{said}");
     let new_thread = json!({ "harness": "fake", "text": "hi" });
     let (error, said) = mcp.call(11, "send", new_thread.clone());
     assert!(!error, "{said}");
@@ -1595,7 +1595,7 @@ fn an_agents_banda_acts_under_its_pass() {
     );
     assert_eq!(
         view["thread"]["harness"], "fake",
-        "the cross-scope reaction moves idle Threads before answering"
+        "the cross-scope reaction moves idle Tasks before answering"
     );
 
     // Its own pass's status: the engine that gave it, and its fence, and
@@ -1780,7 +1780,7 @@ fn an_agent_puts_off_its_own_thread_from_its_shell_and_the_person_any() {
         let listed = places.ok("agents.threads", Some(project), json!({}));
         let threads = listed["threads"].as_array().unwrap();
         let found = threads.iter().find(|t| t["id"] == json!(thread));
-        found.expect("the Thread is listed")["later"].clone()
+        found.expect("the Task is listed")["later"].clone()
     };
 
     // Its own Thread by default, in its Project, as itself.

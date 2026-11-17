@@ -150,7 +150,7 @@ it.effect(
 )
 
 it.effect(
-  "the menu bar's icon shows each status; Open Banda opens the window, a row opens it and then its Thread there, and Quit Banda asks the app to quit",
+  "the menu bar's icon shows each status; Open Banda opens the window, a row opens it and then its Task there, and Quit Banda asks the app to quit",
   () => {
     const { did, held, says, layer } = on("darwin")
     return Effect.gen(function* () {

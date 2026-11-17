@@ -282,7 +282,7 @@ test("the Inbox: Your turn and Open as the Person's Threads, the divider between
   const held = { p1: [at("ask", "turn"), at("read", "open"), ...RUNS] }
   expect(regions(tuesday(held, { tab: "inbox" }))).toEqual([
     [
-      "Threads",
+      "Tasks",
       undefined,
       ["head turn:head", "rows turn", "divider divider", "rows open"],
     ],
@@ -397,7 +397,7 @@ test("a card says the part it is drawn in, and its region's name", () => {
     kind: "card",
     block: "turn",
     stand: "turn",
-    place: "Threads",
+    place: "Tasks",
   } satisfies Partial<Item>)
 })
 

@@ -407,10 +407,7 @@ impl World {
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        panic!(
-            "the Thread never got there: {:#?}",
-            self.thread(thread).await
-        );
+        panic!("the Task never got there: {:#?}", self.thread(thread).await);
     }
 }
 
@@ -702,7 +699,7 @@ async fn an_account_counts_its_threads_now_its_last_turn_and_its_turns_since() {
 
     let later = accounts(began + 60_000).await;
     assert_eq!(later[0].2, json!(0), "no turn began since");
-    assert_eq!(later[0].1, json!(1), "its Threads stay");
+    assert_eq!(later[0].1, json!(1), "its Tasks stay");
 }
 
 #[tokio::test]
@@ -1074,7 +1071,7 @@ async fn threads_of_one_agent_run_side_by_side() {
     assert_eq!(
         state(&view, &slow["turn"]),
         Some(TurnState::Running),
-        "the other Thread did not wait for the slow one"
+        "the other Task did not wait for the slow one"
     );
 }
 
@@ -1084,7 +1081,7 @@ async fn threads_on_one_harness_share_its_process() {
     let world = World::new(root.path()).await;
     let (_, (first, process)) = ask_session(&world, None).await;
     let (_, (second, same)) = ask_session(&world, None).await;
-    assert_ne!(first, second, "each Thread has its own session");
+    assert_ne!(first, second, "each Task has its own session");
     assert_eq!(process, same, "in one process");
 }
 
@@ -1155,7 +1152,7 @@ fn a_thread_continues_its_session_after_a_restart() {
         async |world, (thread, (session, process))| {
             let (_, (again, other)) = ask_session(world, Some(&thread)).await;
             assert_ne!(process, other, "a new process");
-            assert_eq!(session, again, "continues the Thread's session");
+            assert_eq!(session, again, "continues the Task's session");
             let view = world.thread(&thread).await;
             assert!(
                 texts(&view).iter().all(|t| !t.starts_with("notice:")),
@@ -1165,7 +1162,7 @@ fn a_thread_continues_its_session_after_a_restart() {
             assert_eq!(
                 slash_commands(&view),
                 ["review", "compact"],
-                "a resumed session, which has not said its slash commands, keeps the Thread's"
+                "a resumed session, which has not said its slash commands, keeps the Task's"
             );
         },
     );
@@ -1184,9 +1181,9 @@ fn a_harness_that_lost_the_session_starts_afresh_and_says_so() {
             let view = world.thread(&thread).await;
             assert!(
                 texts(&view).iter().any(|t| t
-                    == "notice: Fake could not pick up this Thread's earlier conversation, \
+                    == "notice: Fake could not pick up this Task's earlier conversation, \
                         so it starts afresh and does not remember what was said before."),
-                "and the Thread says so: {:?}",
+                "and the Task says so: {:?}",
                 texts(&view)
             );
         },
@@ -1202,7 +1199,7 @@ async fn an_idle_harness_is_let_go_and_its_threads_resume() {
     tokio::time::sleep(Duration::from_millis(600)).await;
     let (_, (again, other)) = ask_session(&world, Some(&thread)).await;
     assert_ne!(process, other, "the idle process was let go");
-    assert_eq!(session, again, "and the Thread resumed its session");
+    assert_eq!(session, again, "and the Task resumed its session");
 }
 
 /// The `banda` an Agent runs in its shell acts under a pass walled to its
@@ -1244,8 +1241,8 @@ async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
     let opened = told();
     let process = walled(&opened["process"]);
     let session = walled(&opened["session"]);
-    assert_ne!(session, process, "a Thread's session has its own");
-    assert_eq!(thread_of(&session), thread, "which names its Thread");
+    assert_ne!(session, process, "a Task's session has its own");
+    assert_eq!(thread_of(&session), thread, "which names its Task");
     assert_eq!(thread_of(&process), Value::Null, "and the process's none");
 
     // A session aside, as for a title, is no Thread's: its shell has the
@@ -1257,7 +1254,7 @@ async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
 
     tokio::time::sleep(Duration::from_millis(1500)).await;
     let (_, (resumed_as, _)) = ask_session(&world, Some(&thread)).await;
-    assert_eq!(resumed_as, opened_as, "the Thread resumed its session");
+    assert_eq!(resumed_as, opened_as, "the Task resumed its session");
     let resumed = told();
     assert_eq!(
         walled(&resumed["process"]),
@@ -1266,7 +1263,7 @@ async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
     );
     let again = walled(&resumed["session"]);
     assert_ne!(again, session, "a session opened again gets a new one");
-    assert_eq!(thread_of(&again), thread, "for the same Thread");
+    assert_eq!(thread_of(&again), thread, "for the same Task");
 }
 
 /// Sends `text` in a new Thread and waits for its turn to fail.
@@ -1428,7 +1425,7 @@ async fn the_agent_reads_which_machine_its_person_writes_from_once_it_changes() 
     let (_, read) = said("/compact", Some(&mac)).await;
     assert_eq!(read, "message: You said: /compact");
     let (shown, read) = said("what did you read", Some(&mac)).await;
-    assert!(shown, "the Thread shows it as written");
+    assert!(shown, "the Task shows it as written");
     assert!(
         read.contains(
             " read: Your Person writes this from their machine \"MacBook Pro\", not from this one"
@@ -1458,7 +1455,7 @@ async fn a_tab_lent_to_the_thread_shows_at_once_and_goes_before_the_next_prompt(
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (thread, _) = world.finish(None, "hello").await;
-    let lent = "You lent this Thread a tab · “Fix login redirect #598”";
+    let lent = "You lent this Task a tab · “Fix login redirect #598”";
     let told = json!({ "thread": thread, "notice": lent });
     world
         .call(world.person(), "browser.say", told)
@@ -1841,7 +1838,7 @@ async fn every_harness_process_starts_in_its_projects_environment() {
     let (thread, _) = world.finish(None, "hello").await;
     let started = asks.of("banda-fake-agent");
     let [thread_s] = &started[..] else {
-        panic!("one process for the Thread: {started:?}");
+        panic!("one process for the Task: {started:?}");
     };
     assert_eq!(thread_s.how, How::Spawn);
     let project = world.project.to_string();
@@ -2125,7 +2122,7 @@ async fn a_threads_settings_become_its_harnesss_options() {
     assert_eq!(
         (view.settings.mode, view.settings.plan),
         (Mode::AcceptEdits, false),
-        "the Thread follows the Harness out of its plan"
+        "the Task follows the Harness out of its plan"
     );
 }
 
@@ -2195,14 +2192,14 @@ async fn a_new_thread_starts_with_full_access_and_what_its_harness_offers() {
     );
 
     let after = world.defaults().await;
-    assert_eq!(after["settings"]["mode"], "full_access", "a Thread's own");
+    assert_eq!(after["settings"]["mode"], "full_access", "a Task's own");
     let offered = after["offer"]["options"].as_array().unwrap();
     assert_eq!(offered[0]["id"], "model", "what the Harness offered");
     for option in offered {
         assert_eq!(
             after["settings"]["options"][option["id"].as_str().unwrap()],
             option["value"],
-            "what the composer shows is what a new Thread gets"
+            "what the composer shows is what a new Task gets"
         );
     }
     let elsewhere = world
@@ -2682,7 +2679,7 @@ async fn agents_subagent_answers_not_found_for_an_unknown_lane() {
         .unwrap();
     assert!(
         read.get("subagents").is_none() && read.get("edits").is_none(),
-        "a Thread with none reads as before: {read}"
+        "a Task with none reads as before: {read}"
     );
     let unknown = world
         .call(
@@ -2756,7 +2753,7 @@ async fn a_threads_lanes_are_read_with_it_and_fork_and_rewind_wait_for_them() {
     );
     assert!(
         (view.items.iter()).all(|one| one.id != edit && one.id != inner),
-        "a lane's work stays out of the Thread"
+        "a lane's work stays out of the Task"
     );
     assert!(view.items.iter().any(|one| one.id == anchor));
     assert!(
@@ -2771,7 +2768,7 @@ async fn a_threads_lanes_are_read_with_it_and_fork_and_rewind_wait_for_them() {
     assert_eq!(refused.code, Code::Conflict);
     assert_eq!(
         refused.message,
-        "The Thread can be forked once its sub-agents end."
+        "The Task can be forked once its sub-agents end."
     );
     let refused = (world.call(world.person(), "agents.rewind", json!({ "turn": turn })))
         .await
@@ -2779,7 +2776,7 @@ async fn a_threads_lanes_are_read_with_it_and_fork_and_rewind_wait_for_them() {
     assert_eq!(refused.code, Code::Conflict);
     assert_eq!(
         refused.message,
-        "The Thread can go back once its sub-agents end."
+        "The Task can go back once its sub-agents end."
     );
 
     // The lane's edit counts in the turn it started in.
@@ -2931,7 +2928,7 @@ async fn a_tool_call_shows_its_diff_and_what_its_command_printed() {
         unreachable!()
     };
     let output = output.as_ref().expect("what it printed");
-    assert_eq!(output.text.len(), 4 << 20, "the Thread keeps the start");
+    assert_eq!(output.text.len(), 4 << 20, "the Task keeps the start");
     assert!(output.cut && output.text.starts_with("     0 "));
     assert_eq!(output.exit.as_ref().and_then(|e| e.code), Some(0));
 }
@@ -5024,7 +5021,7 @@ async fn claude_code_s_sub_agents_work_as_the_agent_s_own_and_write_no_reply_of_
     let recorded = &CLAUDE_SUB_AGENTS;
     let (_world, views) = World::replay_sub_agents(root.path(), recorded).await;
     let [full, supervised] = &views[..] else {
-        panic!("one view per Thread: {}", views.len())
+        panic!("one view per Task: {}", views.len())
     };
     let sent = recorded.threads[0].sends;
     assert_eq!(
@@ -5141,7 +5138,7 @@ async fn claudes_crews_work_after_their_turn_ask_as_themselves_and_end() {
     let root = tempfile::tempdir().unwrap();
     let (world, views) = World::replay_sub_agents(root.path(), &CLAUDE_CREW).await;
     let [supervised, full] = &views[..] else {
-        panic!("one view per Thread: {}", views.len())
+        panic!("one view per Task: {}", views.len())
     };
     let crew = the_crew(supervised);
     let kinds: Vec<_> = (texts(supervised).iter())
@@ -5373,7 +5370,7 @@ async fn claudes_nested_sub_agent_is_a_lane_of_its_lane() {
             anchor(outer),
             "message: bravo".into(),
         ],
-        "the Thread shows the one it started"
+        "the Task shows the one it started"
     );
     assert_eq!(outer.title, "Read b.txt first line via nested agent");
     assert_eq!(inner.title, "Read first line of b.txt");
@@ -6504,7 +6501,7 @@ async fn a_thread_forks_at_a_turns_end_and_its_session_knows_only_that_far() {
     assert_eq!(
         view.forked_from.map(|from| json!(from)).as_ref(),
         Some(&thread),
-        "it names the Thread it was forked from"
+        "it names the Task it was forked from"
     );
     assert_eq!(first.forked_from, None);
     assert_eq!(
@@ -6814,7 +6811,7 @@ async fn a_short_run_of_its_own_writes_on_the_threads_model_and_the_thread_never
 
     assert_eq!(texts(&world.thread(&thread).await), before);
     let (_, (session, _)) = ask_session(&world, Some(&thread)).await;
-    assert!(!own.contains(&session), "{own} is the Thread's {session}");
+    assert!(!own.contains(&session), "{own} is the Task's {session}");
     // The Thread's own session keeps its effort.
     let (_, view) = world.finish(Some(&thread), "which effort").await;
     assert!(
@@ -6844,7 +6841,7 @@ async fn a_new_threads_harness_writes_before_the_thread_starts() {
         .await
         .unwrap();
     assert_eq!(written, "Mode plan, model fast, brief false");
-    assert!(world.threads().await.threads.is_empty(), "no Thread starts");
+    assert!(world.threads().await.threads.is_empty(), "no Task starts");
     let refused = world
         .writing(json!({ "harness": "nobody", "prompt": "hello" }))
         .await
@@ -7149,7 +7146,7 @@ fn tool_images_are_kept_as_files_in_order_and_survive_restart() {
                 let text = serde_json::to_string(&view).unwrap();
                 assert!(
                     !text.contains(read["data"].as_str().unwrap()),
-                    "binary payloads stay out of Thread snapshots"
+                    "binary payloads stay out of Task snapshots"
                 );
             }
             (thread, images[0].id)
@@ -7237,7 +7234,7 @@ impl World {
     async fn later_of(&self, thread: &Value) -> Option<banda_agents::model::Later> {
         let list = self.threads().await.threads;
         let listed = list.into_iter().find(|t| json!(t.thread.id) == *thread);
-        listed.expect("the Thread is listed").later
+        listed.expect("the Task is listed").later
     }
 
     /// What woke `thread` before its time, as the list says.
@@ -7278,7 +7275,7 @@ impl World {
         let found = threads
             .into_iter()
             .find(|listed| json!(listed.thread.id) == *thread);
-        found.expect("the Thread is listed")
+        found.expect("the Task is listed")
     }
 
     async fn suggest_title(&self, thread: &Value) -> Result<String, banda_kernel::Refusal> {
@@ -7336,10 +7333,7 @@ async fn a_later_puts_a_thread_away_until_its_time_and_the_list_says_so() {
         .await;
     assert!(past.is_err(), "a time gone is refused");
     let idle = world.later(person, &thread, None).await;
-    assert!(
-        idle.is_err(),
-        "only a Thread at work sleeps until it is done"
-    );
+    assert!(idle.is_err(), "only a Task at work sleeps until it is done");
 
     // Woken by hand, it stays awake, and waking it again does nothing.
     let wake = json!({ "thread": thread });
@@ -7369,7 +7363,7 @@ async fn a_thread_that_asks_may_be_put_off_and_a_new_question_wakes_one_early() 
     let later = world.later_of(asks).await.unwrap();
     assert_eq!((later.until.is_some(), later.woke), (true, None));
     let archived = world.archive(world.person(), asks, true).await;
-    assert!(archived.is_err(), "a Thread that asks is never archived");
+    assert!(archived.is_err(), "a Task that asks is never archived");
     // Its Agent does not hide its own question; its Person's answer wakes
     // it.
     let view = world.until(asks, asking).await;
@@ -7541,7 +7535,7 @@ async fn its_person_sees_a_thread_that_woke_by_itself_once_then_dismisses_it() {
     let refused = world
         .call(agent_of(&writing), "agents.see_woke", see("seen"))
         .await;
-    assert!(refused.is_err(), "only a Person marks a Thread");
+    assert!(refused.is_err(), "only a Person marks a Task");
     world
         .call(person, "agents.see_woke", see("seen"))
         .await
@@ -7576,7 +7570,7 @@ async fn an_agent_puts_off_only_its_own_thread() {
     let (other, _) = world.finish(None, "hi there").await;
     let agent = agent_of(&view);
     let theirs = world.later(agent, &other, Some(in_an_hour())).await;
-    assert!(theirs.is_err(), "another Thread is its Person's to put off");
+    assert!(theirs.is_err(), "another Task is its Person's to put off");
     world.later(agent, &mine, Some(in_an_hour())).await.unwrap();
     assert_eq!(world.later_of(&mine).await.unwrap().by, agent);
 }
@@ -7663,7 +7657,7 @@ async fn a_threads_small_model_suggests_a_title_and_renames_nothing() {
         assert_eq!(world.suggest_title(&thread).await.unwrap(), said);
         let view = world.thread(&thread).await;
         assert_eq!(view.thread.title, "hello", "it renames nothing");
-        assert_eq!(texts(&view), before, "the Thread shows nothing of it");
+        assert_eq!(texts(&view), before, "the Task shows nothing of it");
         assert!(world.renamed(&thread).await.is_empty());
         // The Thread's own session keeps its model.
         let (_, view) = world.finish(Some(&thread), "which settings").await;
@@ -7993,7 +7987,7 @@ async fn a_thread_moves_to_another_account_and_keeps_its_session() {
 
     let params = json!({ "thread": thread, "harness": "claude-b" });
     let by_agent = world.call(world.agent(), "agents.switch", params).await;
-    assert!(by_agent.is_err(), "only a Person moves a Thread");
+    assert!(by_agent.is_err(), "only a Person moves a Task");
     assert!(switch("gone").await.is_err(), "an entry the list has not");
 }
 
@@ -8322,7 +8316,7 @@ async fn an_agent_puts_off_its_own_thread_for_a_while() {
     assert_eq!(later.by, agent);
     let put_off = |who, params| world.call(who, "agents.later", params);
     let refused = put_off(world.person(), json!({ "after": "30m" })).await;
-    assert!(refused.is_err(), "a Person names the Thread");
+    assert!(refused.is_err(), "a Person names the Task");
     let refused = put_off(agent, json!({ "after": "soon" })).await;
     assert!(refused.is_err(), "no while it reads");
     let both = json!({ "after": "2h", "until": until });
@@ -9191,7 +9185,7 @@ async fn a_turn_a_limit_stopped_goes_on_with_another_account_at_once() {
     let by_agent = world
         .call(world.agent(), "agents.go_on", go_on.clone())
         .await;
-    assert!(by_agent.is_err(), "only a Person moves a Thread");
+    assert!(by_agent.is_err(), "only a Person moves a Task");
     (world
         .call(world.person(), "agents.go_on", go_on.clone())
         .await)
@@ -9614,7 +9608,7 @@ async fn a_sub_agents_question_docks_in_its_thread_and_its_answer_reaches_the_ch
         |row| row.get(0),
     ))
     .unwrap();
-    assert_eq!(row, None, "an entry of the Thread's, not of its lane");
+    assert_eq!(row, None, "an entry of the Task's, not of its lane");
     let listed = world.listed(thread).await;
     let asking: Vec<_> = listed.asking.iter().map(|one| one.item).collect();
     assert_eq!(asking, [question]);
@@ -9694,7 +9688,7 @@ async fn a_lanes_question_outlives_its_turn_and_closes_when_the_lane_ends() {
         Some(TurnState::Done)
     );
     let asking: Vec<_> = listed.asking.iter().map(|one| one.item).collect();
-    assert_eq!(asking, [question], "the Thread asks");
+    assert_eq!(asking, [question], "the Task asks");
 
     // The process both share ends: the sub-agent with it, and its Question.
     world.finish(None, "crash").await;
@@ -9897,7 +9891,7 @@ async fn a_sub_agents_own_sub_agent_is_a_lane_under_it() {
     let anchors: Vec<_> = (texts(&view).into_iter())
         .filter(|line| line.starts_with("sub-agent: "))
         .collect();
-    assert_eq!(anchors, [anchor(outer)], "the Thread shows the outer only");
+    assert_eq!(anchors, [anchor(outer)], "the Task shows the outer only");
     assert_eq!(
         (inner.role.as_deref(), inner.state),
         (Some("Explore"), SubagentState::Done)
@@ -10662,7 +10656,7 @@ async fn a_thread_moved_to_another_account_stops_its_lanes_when_its_next_turn_st
     assert_eq!(lane.state, SubagentState::Lost);
     assert_eq!(
         lane.why.as_deref(),
-        Some("Stopped when the Thread moved to Other.")
+        Some("Stopped when the Task moved to Other.")
     );
     let frames = sent_frames(&recordings);
     let root_session = frames
@@ -10705,7 +10699,7 @@ async fn a_thread_moved_while_its_sub_agent_asks_stops_it_and_closes_its_questio
         (lane.state, lane.why.as_deref()),
         (
             SubagentState::Lost,
-            Some("Stopped when the Thread moved to Other.")
+            Some("Stopped when the Task moved to Other.")
         )
     );
     // The fake Agent reads its words in the history handed over, and
@@ -10770,7 +10764,7 @@ async fn go_on_moves_a_thread_whose_sub_agents_work() {
     assert_eq!(lane.state, SubagentState::Lost);
     assert_eq!(
         lane.why.as_deref(),
-        Some("Stopped when the Thread moved to Other.")
+        Some("Stopped when the Task moved to Other.")
     );
 }
 
@@ -10799,7 +10793,7 @@ async fn a_sub_agent_that_cannot_be_stopped_alone_gets_no_cancel_as_its_thread_m
         (lane.state, lane.why.as_deref()),
         (
             SubagentState::Lost,
-            Some("Stopped when the Thread moved to Other.")
+            Some("Stopped when the Task moved to Other.")
         )
     );
     let frames = sent_frames(&recordings);
@@ -10861,14 +10855,14 @@ async fn while_sub_agents_work_fork_and_rewind_wait() {
         .await;
     assert_eq!(
         refused.unwrap_err().message,
-        "The Thread can be forked once its sub-agents end."
+        "The Task can be forked once its sub-agents end."
     );
     let refused = world
         .call(world.person(), "agents.rewind", fork.clone())
         .await;
     assert_eq!(
         refused.unwrap_err().message,
-        "The Thread can go back once its sub-agents end."
+        "The Task can go back once its sub-agents end."
     );
 
     world.answer(asked(&view).unwrap().0, "allow-once").await;
@@ -11038,7 +11032,7 @@ async fn a_sub_agents_visual_lands_in_its_thread_after_the_turn_ended() {
         |row| row.get(0),
     ))
     .unwrap();
-    assert_eq!(row, None, "the Thread's own entry");
+    assert_eq!(row, None, "the Task's own entry");
     assert_eq!(world.changed(thread).await, changed);
 }
 
@@ -11315,7 +11309,7 @@ async fn a_person_moves_a_thread_to_another_project_whole_and_its_session_goes_o
     );
     // It is in the other whole, its marks too, and says it came.
     let there = home.listed(&thread).await;
-    assert_eq!(there.thread, listed.thread, "the same Thread, at its place");
+    assert_eq!(there.thread, listed.thread, "the same Task, at its place");
     assert_eq!((there.seen, there.latest), (listed.seen, listed.latest));
     let arrived = home.facts("thread.arrived").await;
     assert_eq!(
@@ -11974,7 +11968,7 @@ async fn a_thread_whose_sub_agent_works_after_its_turn_stays_and_nothing_of_it_i
     assert_eq!(refused.code, Code::Conflict, "{refused:?}");
     assert_eq!(
         refused.message,
-        "A sub-agent of this Thread is at work: move it once its sub-agents end."
+        "A sub-agent of this Task is at work: move it once its sub-agents end."
     );
     assert!(work.lists(thread).await && !home.lists(thread).await);
     assert!(home.facts("thread.arrived").await.is_empty());
@@ -12014,7 +12008,7 @@ async fn a_thread_whose_sub_agent_asks_after_its_turn_stays_until_it_is_answered
     assert_eq!(refused.code, Code::Conflict, "{refused:?}");
     assert_eq!(
         refused.message,
-        "This Thread asks its Person: answer it before moving it."
+        "This Task asks its Person: answer it before moving it."
     );
     assert!(work.lists(thread).await && !home.lists(thread).await);
     assert_eq!(home.rows_of(root.path(), thread), 0, "nothing of it there");
@@ -12096,7 +12090,7 @@ async fn a_window_carries_a_thread_to_another_project_whole_and_its_session_goes
         [&json!({ "thread": thread, "to": home.project })]
     );
     let there = home.listed(&thread).await;
-    assert_eq!(there.thread, listed.thread, "the same Thread, at its place");
+    assert_eq!(there.thread, listed.thread, "the same Task, at its place");
     let view = home.thread(&thread).await;
     assert_eq!(view.turns, before.turns);
     assert_eq!(view.items[..before.items.len()], before.items[..]);
@@ -12380,7 +12374,7 @@ async fn a_machine_with_no_such_harness_takes_no_thread_and_it_stays_where_it_wa
     assert_eq!(refused.code, Code::Conflict, "{refused:?}");
     assert_eq!(
         refused.message,
-        "devbox has no claude-a: add it there, or move the Thread to another Harness first."
+        "devbox has no claude-a: add it there, or move the Task to another Harness first."
     );
     assert!(m1pro.lists(&thread).await && !devbox.lists(&thread).await);
 }

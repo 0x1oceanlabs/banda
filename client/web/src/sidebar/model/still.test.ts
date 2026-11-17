@@ -16,7 +16,7 @@ const row = (id: string, stand: Stand, title = id): Row => ({
 const card = (one: Row, stand: Stand = one.stand): Item => ({
   kind: "card",
   key: itemKey(one),
-  region: "region:Threads",
+  region: "region:Tasks",
   block: stand,
   stand,
   entry: { row: one, at: 0 },
@@ -24,7 +24,7 @@ const card = (one: Row, stand: Stand = one.stand): Item => ({
 const piece = (block: Piece): Item => ({
   kind: "piece",
   key: block.key,
-  region: "region:Threads",
+  region: "region:Tasks",
   piece: block,
 })
 const head = (count: number) =>

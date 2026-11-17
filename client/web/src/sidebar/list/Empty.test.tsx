@@ -33,11 +33,11 @@ test("an empty tab says what goes there, and the key that puts it there when one
   expect(emptySays("working")).toEqual({ big: "No Agent works now" })
   expect(emptySays("later", "Alt+Z")).toEqual({
     big: "Nothing for later",
-    small: "Alt+Z on a Thread puts it here.",
+    small: "Alt+Z on a Task puts it here.",
   })
   expect(emptySays("archive", "Alt+S")).toEqual({
     big: "Nothing archived yet",
-    small: "Alt+S on a Thread closes it here.",
+    small: "Alt+S on a Task closes it here.",
   })
   // With no key in force, it names none.
   expect(emptySays("later")).toEqual({ big: "Nothing for later" })

@@ -10,7 +10,7 @@ test("the limits widget follows the machine, lists its accounts, changes its loo
   window = await startWindow()
   const { page, dir } = window
   await firstThread(page)
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   const widget = page.getByRole("button", { name: /^Usage limits:/ })
   await expect(widget).toHaveCount(0)
   const cli = join(dir, "codex")

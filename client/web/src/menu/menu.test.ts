@@ -52,9 +52,9 @@ const action = (
 ): Action<Shell> => ({ id, title, section, run: () => {} })
 // The two an App says are usual, as the agents' and the browser's do.
 const actions = [
-  { ...action("thread.new", "New Thread", "Threads"), usual: true as const },
+  { ...action("thread.new", "New Task", "Tasks"), usual: true as const },
   { ...action("browser.new", "New browser", "Panes"), usual: true as const },
-  action("sidebar.toggle", "Show or hide the sidebar", "Threads"),
+  action("sidebar.toggle", "Show or hide the sidebar", "Tasks"),
 ]
 
 const sources: Sources = {
@@ -213,12 +213,12 @@ describe("the Banda menu", () => {
   test("empty, it shows the Recent Threads, what waits first, and Actions", () => {
     expect(labels("")).toEqual([
       [
-        "Recent Threads",
+        "Recent Tasks",
         ["slow hello", "hello from claude", "Fix the login form"],
       ],
       [
         "Actions",
-        ["New Thread", "New browser", "Show or hide the sidebar", "Theme"],
+        ["New Task", "New browser", "Show or hide the sidebar", "Theme"],
       ],
     ])
   })
@@ -236,7 +236,7 @@ describe("the Banda menu", () => {
       "Actions",
       [
         "New note",
-        "New Thread",
+        "New Task",
         "New browser",
         "New Pane",
         "Show or hide the sidebar",
@@ -247,7 +247,7 @@ describe("the Banda menu", () => {
     const off = { actions: actions.filter((one) => one.id !== "browser.new") }
     expect(labels("", "root", undefined, off).at(-1)).toEqual([
       "Actions",
-      ["New Thread", "Show or hide the sidebar", "Theme"],
+      ["New Task", "Show or hide the sidebar", "Theme"],
     ])
   })
 
@@ -257,7 +257,7 @@ describe("the Banda menu", () => {
     expect(labels("", "root", undefined, more).at(-1)).toEqual([
       "Actions",
       [
-        "New Thread",
+        "New Task",
         "New browser",
         "Show or hide the sidebar",
         "Every action and its key",
@@ -272,7 +272,7 @@ describe("the Banda menu", () => {
 
   test("typed into, it finds Threads, Projects and Actions, then what the sources find with no heading", () => {
     expect(labels("hello")).toEqual([
-      ["Threads", ["hello from claude", "slow hello"]],
+      ["Tasks", ["hello from claude", "slow hello"]],
       ["", ["ask: hello", "web: hello"]],
     ])
     expect(labels("ban")).toEqual([
@@ -280,7 +280,7 @@ describe("the Banda menu", () => {
       ["", ["ask: ban", "web: ban"]],
     ])
     expect(labels("new")).toEqual([
-      ["Actions", ["New Thread", "New browser"]],
+      ["Actions", ["New Task", "New browser"]],
       ["", ["ask: new", "web: new"]],
     ])
   })
@@ -299,7 +299,7 @@ describe("the Banda menu", () => {
     ]
     expect(labels("new", "root", undefined, { found })).toEqual([
       ["Files", ["new.ts", "a"]],
-      ["Actions", ["New Thread", "New browser"]],
+      ["Actions", ["New Task", "New browser"]],
       ["", ["ask: new"]],
     ])
     const file = menuFor("new", "root", undefined, { found })[0].rows[0]
@@ -329,11 +329,11 @@ describe("the Banda menu", () => {
       ({ "action:browser.new": 4, "action:sidebar.toggle": 1 })[id] ?? 0
     expect(labels("new", "root", undefined, { weight })[0]).toEqual([
       "Actions",
-      ["New browser", "New Thread"],
+      ["New browser", "New Task"],
     ])
     expect(labels("", "root", undefined, { weight }).at(-1)).toEqual([
       "Actions",
-      ["New browser", "Show or hide the sidebar", "New Thread", "Theme"],
+      ["New browser", "Show or hide the sidebar", "New Task", "Theme"],
     ])
   })
 
@@ -341,7 +341,7 @@ describe("the Banda menu", () => {
     const all = [
       ...actions,
       action("pane.new", "New Pane", "Panes"),
-      action("calls.answer", "Answer the call", "Threads"),
+      action("calls.answer", "Answer the call", "Tasks"),
       action("overview.toggle", "Overview", "Workspaces"),
       action("menu.keys", "Every action and its key"),
       action("settings.open", "Settings"),
@@ -356,7 +356,7 @@ describe("the Banda menu", () => {
         "Sidebar view",
         "Add Project",
         "Settings",
-        "New Thread",
+        "New Task",
         "New browser",
         "Show or hide the sidebar",
         "Every action and its key",
@@ -366,12 +366,12 @@ describe("the Banda menu", () => {
   })
 
   test("a Thread is found by what it was asked too", () => {
-    expect(labels("button")[0]).toEqual(["Threads", ["Fix the login form"]])
+    expect(labels("button")[0]).toEqual(["Tasks", ["Fix the login form"]])
   })
 
   test("opened at its Actions, it is the key sheet: every action by section, and no more", () => {
     expect(labels("", "actions")).toEqual([
-      ["Threads", ["New Thread", "Show or hide the sidebar", "Sidebar view"]],
+      ["Tasks", ["New Task", "Show or hide the sidebar", "Sidebar view"]],
       ["Panes", ["New browser"]],
       ["Banda", ["Add Project", "Theme"]],
     ])
@@ -444,11 +444,11 @@ describe("its branches and acts", () => {
   test("a Project holds a new Thread there, then its Threads", () => {
     expect(labels("", "root", project)).toEqual([
       ["", ["ask here"]],
-      ["Threads", ["slow hello", "hello from claude", "Fix the login form"]],
+      ["Tasks", ["slow hello", "hello from claude", "Fix the login form"]],
     ])
     expect(labels("form", "root", project)).toEqual([
       ["", ["ask: form"]],
-      ["Threads", ["Fix the login form"]],
+      ["Tasks", ["Fix the login form"]],
     ])
   })
 
@@ -457,7 +457,7 @@ describe("its branches and acts", () => {
       actsOf(project, sources).map((act) => [act.title, nameOf(act.row)])
     ).toEqual([
       ["Open", "banda"],
-      ["New Thread here", "ask: in s1"],
+      ["New Task here", "ask: in s1"],
     ])
   })
 
@@ -542,7 +542,7 @@ describe("its branches and acts", () => {
       "Archive thread",
     ])
     if (t2.kind !== "thread" || t3.kind !== "thread")
-      throw new Error("not a Thread")
+      throw new Error("not a Task")
     const archived = {
       ...t3,
       listed: { ...t3.listed, archived: true as const },
