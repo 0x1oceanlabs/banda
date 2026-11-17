@@ -16,6 +16,7 @@ import {
   type ActAsk,
   type Cap,
   type Device,
+  type EngineAt,
   follow,
   type HostEntry,
   type HostState,
@@ -39,6 +40,13 @@ const NO_SETTINGS = "Only Banda's app writes the settings."
 /** What a host's part answers without the desktop. */
 const elsewhere = () => Promise.reject(new Error(ELSEWHERE))
 
+/** `at` as the page connects to it: at a door, with the desktop signing
+ * the page's `hello`, as it holds this device's key. */
+const signedBy = (host: Pick<Host, "sign">, at: EngineAt): Address =>
+  "door" in at
+    ? { ...at, door: { ...at.door, sign: (message) => host.sign(message) } }
+    : at
+
 export const device = {
   /**
    * Where this machine's engine listens now, as the page connects to it
@@ -52,10 +60,7 @@ export const device = {
   engine: async (): Promise<Address> => {
     const host = desktop()
     if (!host) return browser.engine()
-    const at = await host.engine()
-    if (!("door" in at)) return at
-    const sign = (message: string) => host.sign(message)
-    return { ...at, door: { ...at.door, sign } }
+    return signedBy(host, await host.engine())
   },
   /** The other machines of `hosts.toml`, as the desktop reaches them over
    * ssh (ADR 0081, decision 4). A browser has those the machine at its
@@ -91,8 +96,12 @@ export const device = {
     },
     /** Where host `name`'s engine listens: asked of the desktop each time,
      * and kept nowhere in the page. */
-    engine: (name: string): Promise<Address> =>
-      desktop()?.hostEngine(name) ?? browser.hosts.engine(name),
+    engine: (name: string): Promise<Address> => {
+      const host = desktop()
+      return host
+        ? host.hostEngine(name).then((at) => signedBy(host, at))
+        : browser.hosts.engine(name)
+    },
     /** Starts host `name`'s engine again there, as the Person asks; no
      * name is this machine's own. Settled once the desktop was told. */
     start: (name: string): Promise<void> =>

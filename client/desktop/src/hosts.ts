@@ -18,9 +18,18 @@
  * - the forward carries a port of this machine's loopback to the port
  *   that engine listens on, on that machine's loopback.
  *
- * The page gets the forward's address and the engine's secret once that
+ * A machine whose engine has a door is reached there (ADR 0124, decisions
+ * 6 and 7): a third ssh pairs this device once a go, by its login (`banda
+ * devices add`, the same device each time), the forward goes to the
+ * door's port, and the page gets the forward's address with the device
+ * it is there and the host key that door must prove; main signs the
+ * page's hello to that door with this device's key (`signed`). The page
+ * then holds no secret of that machine's owner. An engine with no door
+ * yet, a main with no key and a machine that would not pair are reached
+ * as before: the page gets the forward's address and the engine's secret.
+ * Either way only once that
  * ssh itself listens on the port, never another program that took it
- * first, and loses them the moment either ssh ends. The secret goes
+ * first, and it loses them the moment either ssh ends. The secret goes
  * nowhere else: no program's arguments or environment, no log, no file.
  * Neither the road (road.ts) nor main's own engine client nor the
  * problems ever reach these engines, so what one of them asks of a window
@@ -54,17 +63,13 @@ import {
   statSync,
   watch,
 } from "node:fs"
-import { homedir } from "node:os"
+import { homedir, hostname } from "node:os"
 import { basename, dirname, join } from "node:path"
-import {
-  type Address,
-  type MachineIcon,
-  type Named,
-  PROTOCOL,
-} from "@banda/contract"
-import { Refused, writeWholeIf } from "@banda/desktop-kit"
-import type { HostEntry, HostState, HostTest } from "@banda/core"
+import { type MachineIcon, type Named, PROTOCOL } from "@banda/contract"
+import { Refused, writeWhole, writeWholeIf } from "@banda/desktop-kit"
+import type { EngineAt, HostEntry, HostState, HostTest } from "@banda/core"
 import { parse } from "smol-toml"
+import { type DeviceKey, helloTo, ORIGIN } from "./key"
 import {
   Cause,
   Clock,
@@ -648,6 +653,29 @@ export const remoteCommand = (banda: string | undefined, own: Own = channel) =>
     `exec ${RUNTIME} BANDA_OVER_SSH=1 ${b} start --with-parent`,
   ])
 
+/** What pairs this device there (`throughSh`), by its ssh login, which
+ * gives what the login already gives (ADR 0124, decision 6): `banda
+ * devices add`, with this device's `key` and `name`, from the origin of
+ * Banda's page. The same device each time. `name` goes in double quotes
+ * inside `sh -c '…'`, so it keeps only what needs no escape there. */
+export const pairCommand = (
+  banda: string | undefined,
+  key: string,
+  name: string,
+  own: Own = channel
+) =>
+  throughSh(banda, own, (b) => [
+    `exec ${RUNTIME} ${b} devices add --key ${key} --name "${nameThere(name)}" --kind desktop --origin ${ORIGIN}`,
+  ])
+
+/** `name` as a command there carries it: letters, digits, spaces and
+ * `.`, `_`, `-`; "This device" when nothing is left. */
+const nameThere = (name: string) =>
+  name
+    .replace(/[^\p{L}\p{N} ._-]/gu, "")
+    .trim()
+    .slice(0, 64) || "This device"
+
 /** What Test runs there (`throughSh`): what the machine is, its banda's
  * version, and `banda status`, which starts nothing. */
 export const probeCommand = (banda: string | undefined, own: Own = channel) =>
@@ -857,7 +885,14 @@ const Running = Schema.fromJsonString(
     secret: Schema.String,
     build: Schema.optional(Schema.String),
     version: Schema.optional(Schema.String),
+    // Its door, and the host key it proves there, where it has one.
+    door: Schema.optional(Schema.Number),
+    host_key: Schema.optional(Schema.String),
   })
+)
+/** What `banda devices add` prints there once this device is paired. */
+const Added = Schema.fromJsonString(
+  Schema.Struct({ ok: Schema.Struct({ id: Schema.String }) })
 )
 /** What `banda` prints as it refuses (engine/src/main.rs). */
 const Refusal = Schema.fromJsonString(
@@ -1030,7 +1065,7 @@ type Kept = {
   readonly ssh: string
   readonly banda?: string
   readonly link: Link
-  readonly address?: Address
+  readonly address?: EngineAt
   readonly go: number
   readonly next?: Deferred.Deferred<void>
 }
@@ -1062,17 +1097,20 @@ export class Hosts extends Context.Service<
      * while the host connects, and while its engine is stopped there, and
      * tries a refused one again at once; it fails for one refused, or not
      * in `hosts.toml`, or taken out of it meanwhile. */
-    readonly address: (name: string) => Effect.Effect<Address, Refused>
+    readonly address: (name: string) => Effect.Effect<EngineAt, Refused>
     /** Where host `name`'s engine listens now, through the forward; none
      * while it is not live, and for one not in `hosts.toml`. For a gesture,
      * which goes now or says why not (ADR 0106, law 4), where `address`
      * would wait for the link. */
-    readonly addressNow: (name: string) => Effect.Effect<Address | undefined>
+    readonly addressNow: (name: string) => Effect.Effect<EngineAt | undefined>
     /** As `address`, for a read of a file's bytes: it waits while the link
      * is down, and starts no go of its own, so it fails at once for one
      * refused. Whatever a page asks for, it is no one asking to try that
      * machine again. */
-    readonly addressWhenBack: (name: string) => Effect.Effect<Address, Refused>
+    readonly addressWhenBack: (name: string) => Effect.Effect<EngineAt, Refused>
+    /** This device's signature of the page's `hello` to the door of a
+     * host that is live at its door now; none for anything else. */
+    readonly signed: (message: string) => Effect.Effect<string | undefined>
     /** Starts host `name` again at once when its engine is stopped there
      * or it is refused; it fails for one not in `hosts.toml`. */
     readonly start: (name: string) => Effect.Effect<void, Refused>
@@ -1133,12 +1171,19 @@ export class Hosts extends Context.Service<
       times = TIMES,
       sshConfig = join(homedir(), ".ssh", "config"),
       install,
+      key,
+      proved,
     }: {
       env?: Record<string, string>
       times?: Times
       sshConfig?: string
       /** This build's `install.sh`, which Install runs there. */
       install?: string
+      /** This device's key, by which it pairs at the other machines'
+       * doors and signs its hello to each. */
+      key?: DeviceKey
+      /** The file of the host keys the machines proved (`provedBy`). */
+      proved?: string
     } = {}
   ) =>
     Layer.effect(Hosts)(
@@ -1169,7 +1214,18 @@ export class Hosts extends Context.Service<
             }
           })
         )
-        const run: Run = { spawner, env, times, own, install: script }
+        const run: Run = {
+          spawner,
+          env,
+          times,
+          own,
+          install: script,
+          key: key?.public,
+          proved,
+          reached: Effect.map(SubscriptionRef.get(all), (list) =>
+            list.map((one) => one.ssh)
+          ),
+        }
         // The Installs running, by address, each with its Cancel.
         const installing = new Map<string, Deferred.Deferred<void>>()
         /** The hosts reached now, by name: each one's entry, and the fiber
@@ -1378,6 +1434,18 @@ export class Hosts extends Context.Service<
           addressNow: (name: string) =>
             Effect.map(keptOf(name), (one) => one?.address),
           addressWhenBack: (name: string) => listening(name, -1),
+          signed: (message: string) =>
+            Effect.map(SubscriptionRef.get(all), (list) =>
+              key &&
+              list.some(
+                ({ address }) =>
+                  address !== undefined &&
+                  "door" in address &&
+                  helloTo(message, address.door.hostKey)
+              )
+                ? key.sign(message)
+                : undefined
+            ),
           start: (name: string) =>
             Effect.asVoid(wake(name, ["stopped", "refused"])),
           add: (machine) => change((text) => addOf(text, machine)),
@@ -1499,7 +1567,7 @@ const changesOf = (file: string) =>
  * `next` ends the wait before, as `link` (connecting, or stopped for the
  * wait before the first go). */
 type Tell = {
-  readonly set: (link: Link, address?: Address) => Effect.Effect<void>
+  readonly set: (link: Link, address?: EngineAt) => Effect.Effect<void>
   readonly begin: (
     next: Deferred.Deferred<void>,
     link?: Link
@@ -1513,6 +1581,14 @@ type Run = {
   readonly own: Effect.Effect<{ build: string | null; version: string | null }>
   /** This build's `install.sh`, read once; none where it carries none. */
   readonly install: Effect.Effect<string | undefined>
+  /** This device's key, by which it pairs at another machine's door;
+   * with none, each is reached by its owner's secret, as before. */
+  readonly key: string | undefined
+  /** The file of the host keys the machines proved; with none, each is
+   * kept for this run of main. */
+  readonly proved: string | undefined
+  /** The addresses of the machines of `hosts.toml` now. */
+  readonly reached: Effect.Effect<readonly string[]>
 }
 
 /** Keeps `host` reached for good: a go, and after one that ended, another
@@ -1579,7 +1655,7 @@ const keep = (
  * and its first line, the forward, and the live host until one ssh ends. */
 const once = (
   host: Entry,
-  set: (link: Link, address?: Address) => Effect.Effect<void>,
+  set: (link: Link, address?: EngineAt) => Effect.Effect<void>,
   said: ReturnType<typeof heard>,
   told: Set<string>,
   run: Run
@@ -1660,7 +1736,8 @@ const once = (
     if (Option.isNone(line)) return endOf(host, yield* exited(follower))
     const running = Schema.decodeUnknownOption(Running)(line.value)
     if (Option.isNone(running)) return yield* refusalIn(host, line.value)
-    const { protocol, port, secret, build, version } = running.value
+    const { protocol, port, secret, build, version, door, host_key } =
+      running.value
     kept.secret = secret
     if (protocol !== PROTOCOL)
       return {
@@ -1675,12 +1752,28 @@ const once = (
     )
       return away(UNEXPECTED)
     yield* set({ state: "connecting" })
+    // At its door, as the device this ssh login pairs here (ADR 0124,
+    // decisions 6 and 7), so the page holds no secret of that machine's
+    // owner; an engine with no door, a main with no key and a pairing
+    // that fails are reached as before.
+    const paired =
+      run.key !== undefined &&
+      door !== undefined &&
+      Number.isInteger(door) &&
+      door >= 1 &&
+      door <= 65_535 &&
+      host_key !== undefined &&
+      HOST_KEY.test(host_key) &&
+      (yield* provedBy(host, host_key, run))
+        ? yield* pairedAt(host, run.key, run)
+        : undefined
+    const to = paired === undefined ? port : (door as number)
 
     for (let tries = 1; ; tries++) {
       const ended: Ended | "again" = yield* Effect.scoped(
         Effect.gen(function* () {
           const from = yield* freePort
-          const forward = yield* ssh(forwardArgs(host, from, port))
+          const forward = yield* ssh(forwardArgs(host, from, to))
           let listening = false
           /** Whether ssh said it could not listen on the port. */
           let taken = false
@@ -1727,9 +1820,12 @@ const once = (
               `banda: ${host.name} runs Banda ${now.version} (build ${now.build}), this window ${ours.version} (build ${ours.build})`
             )
           }
+          const url = `ws://127.0.0.1:${from}/ws`
           yield* set(
             { state: "live", ...now, own: ours },
-            { url: `ws://127.0.0.1:${from}/ws`, secret }
+            paired === undefined
+              ? { url, secret }
+              : { url, door: { device: paired, hostKey: host_key as string } }
           )
           yield* Console.error(
             `banda: ${host.name} is live, through loopback port ${from}`
@@ -1760,6 +1856,77 @@ const once = (
       Console.error(`banda: ${host.name}: ${error.message}`).pipe(
         Effect.as(away("ssh did not start"))
       )
+    )
+  )
+
+/** A host key, as an engine says it: an Ed25519 key in base64url. */
+const HOST_KEY = /^[\w-]{43}$/
+
+/** The host keys machines said over ssh, by key, each with the address
+ * of the machine that said it, for a run of main with no file. */
+const provedHere: Record<string, string> = {}
+
+/**
+ * Whether `host` may be held to `hostKey`, which its engine said over
+ * ssh: no other machine of `hosts.toml` said it first. A machine is
+ * believed about its own key, as ssh reached it; but this device has one
+ * key at every door, so a machine that named another's host key could
+ * carry the page's hello on to that door, and be let in there as this
+ * device. Each key is kept with the address that said it, in a file, as
+ * ssh keeps `known_hosts`, so a machine cannot take another's between
+ * runs; one taken out of `hosts.toml` frees its key. A machine refused
+ * here is reached as before, by its own secret, and the log says so.
+ */
+const provedBy = (host: Entry, hostKey: string, run: Run) =>
+  Effect.gen(function* () {
+    const read = (): Record<string, string> => {
+      if (run.proved === undefined) return provedHere
+      try {
+        const kept: unknown = JSON.parse(readFileSync(run.proved, "utf8"))
+        return typeof kept === "object" && kept !== null
+          ? Object.fromEntries(
+              Object.entries(kept).filter(
+                (one): one is [string, string] => typeof one[1] === "string"
+              )
+            )
+          : {}
+      } catch {
+        return {}
+      }
+    }
+    const kept = read()
+    const by = kept[hostKey]
+    if (by === host.ssh) return true
+    if (by !== undefined && (yield* run.reached).includes(by)) {
+      yield* Console.error(
+        `banda: ${host.name} says the host key that ${by} proved; it is not held to it, and is reached as before`
+      )
+      return false
+    }
+    kept[hostKey] = host.ssh
+    if (run.proved !== undefined)
+      writeWhole(run.proved, `${JSON.stringify(kept, null, 2)}\n`, 0o600)
+    return true
+  }).pipe(Effect.orElseSucceed(() => false))
+
+/** Pairs this device, by `key`, on `host` over its ssh login: its device
+ * there, or none, said in the log, when that machine would not. */
+const pairedAt = (host: Entry, key: string, run: Run) =>
+  outputOf(
+    run,
+    "ssh",
+    commandArgs(host, pairCommand(host.banda, key, hostname()))
+  ).pipe(
+    Effect.flatMap(([said]) => Schema.decodeUnknownEffect(Added)(said.trim())),
+    Effect.map((added): string | undefined => added.ok.id),
+    Effect.timeoutOrElse({
+      duration: run.times.answer,
+      orElse: () => Effect.fail(new Error("it did not answer in time")),
+    }),
+    Effect.catch(() =>
+      Console.error(
+        `banda: ${host.name} did not pair this device; it is reached as before`
+      ).pipe(Effect.as(undefined))
     )
   )
 

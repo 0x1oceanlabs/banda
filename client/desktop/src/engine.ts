@@ -52,7 +52,7 @@ import {
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { command, keepRunning, known, lines } from "./child"
-import type { DeviceKey } from "./key"
+import { type DeviceKey, helloTo } from "./key"
 import { Program } from "./program"
 
 /** The first line `start --with-parent` prints; `window` is where the
@@ -68,9 +68,6 @@ const Running = Schema.fromJsonString(
     host_key: Schema.optional(Schema.String),
   })
 )
-
-/** The origin of Banda's page, which a window pairs from. */
-const ORIGIN = "app://banda"
 
 /** How long pairing may take before the page is given today's road. */
 const PAIRS_WITHIN = "10 seconds"
@@ -106,19 +103,6 @@ async function paired(
     here: true,
   })
   return device.id
-}
-
-/** Whether `message` is the `hello` a page of Banda's signs for the door
- * that proves `hostKey` (`helloMessage` in the contract): nothing else is
- * signed with this device's key. */
-export function helloTo(message: string, hostKey: string): boolean {
-  const lines = message.split("\n")
-  return (
-    lines.length === 5 &&
-    lines[0] === "banda-door/hello/1" &&
-    lines[2] === hostKey &&
-    lines[3] === ORIGIN
-  )
 }
 
 /** The code `start --with-parent` ends with once the engine stopped as

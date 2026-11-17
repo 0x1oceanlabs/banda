@@ -13,8 +13,12 @@ import { copyTo, Engine, namedBy, Refused, relay } from "@banda/desktop-kit"
 import { Effect } from "effect"
 import { Hosts } from "./hosts"
 
+/** Where an engine listens: its bytes are asked of its address alone,
+ * with the token their URL carries. */
+type At = Pick<Address, "url">
+
 /** Where a machine's engine listens, or why it is not to be had. */
-type Where = Effect.Effect<Address, Refused, Engine | Hosts>
+type Where = Effect.Effect<At, Refused, Engine | Hosts>
 
 /** Where the engine that gave a token listens: this machine's, or another
  * machine's through its forward, which waits while that machine is away,
@@ -39,7 +43,7 @@ export const relayedAs = (request: Request, url: string) =>
  * never away, and its engine between runs is waited for: seconds. */
 const engineNow = (
   machine: string | null
-): Effect.Effect<Address | undefined, never, Engine | Hosts> =>
+): Effect.Effect<At | undefined, never, Engine | Hosts> =>
   machine === null
     ? Engine.use((engine) => engine.address)
     : Hosts.use((hosts) => hosts.addressNow(machine))
