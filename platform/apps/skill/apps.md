@@ -238,8 +238,10 @@ for another of the same line:
 | `"type": "integer"` or `"number"` | `number`; or `slider`, which needs the param's `minimum` and `maximum` |
 | `"type": "boolean"` | `checkbox`; or `switch` |
 
-An action of a Table's row or a List's item is `{ "label", "command" }`
-with:
+An action of a Table's row or a List's item is `{ "label", "command" }`.
+A Table's row shows up to three as buttons; of more, the first two are
+buttons and the rest go under a menu, so write the most used first. One
+with `"tone": "bad"` comes last in the menu. An action takes:
 
 - `params`: what it sends as written.
 - `take`: what it sends from its row, each param by the row's key:

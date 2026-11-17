@@ -186,6 +186,19 @@ export const methods = {
           params: { stage: "won" },
           tone: "good",
         },
+        // Past three, the rest go under the row's menu.
+        {
+          label: "Lost",
+          command: "update",
+          take: { id: "id" },
+          params: { stage: "lost" },
+        },
+        {
+          label: "Paid",
+          command: "update",
+          take: { id: "id" },
+          params: { paid: true },
+        },
         {
           label: "Delete",
           command: "remove",

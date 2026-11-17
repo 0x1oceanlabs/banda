@@ -16,7 +16,7 @@ import {
 import { cn } from "@banda/ui/lib/utils"
 import { ArrowDownIcon, ArrowUpIcon, CheckIcon } from "lucide-react"
 import { useContext, useMemo, useState } from "react"
-import { ActButton } from "./Act"
+import { ActButton, ActMenu } from "./Act"
 import type { Send } from "./Fields"
 import { Opening } from "./nav"
 import { FRAME, Nothing } from "./frame"
@@ -67,6 +67,14 @@ function CellView({ cell, column }: { cell: Cell; column: TreeColumn }) {
   return words
 }
 
+/** How many of a row's actions are buttons when a menu holds the rest. */
+const SHOWN = 2
+
+/**
+ * What can be done with a row: up to three as buttons, and of more, the
+ * first two as buttons with the rest under a menu, so a row's actions
+ * never push its columns out.
+ */
 function RowActions({
   actions,
   row,
@@ -76,21 +84,25 @@ function RowActions({
   row: Row
   send: Send
 }) {
+  const doings = actions.map((action) => {
+    const { sent, given } = taken(action, row)
+    return { doing: { ...action, params: sent }, given }
+  })
+  const shown = doings.length > SHOWN + 1 ? doings.slice(0, SHOWN) : doings
+  const rest = doings.slice(shown.length)
   return (
     <div className="flex justify-end gap-1">
-      {actions.map((action, place) => {
-        const { sent, given } = taken(action, row)
-        return (
-          <ActButton
-            key={place}
-            doing={{ ...action, params: sent }}
-            given={given}
-            send={send}
-            variant="ghost"
-            size="xs"
-          />
-        )
-      })}
+      {shown.map(({ doing, given }, place) => (
+        <ActButton
+          key={place}
+          doing={doing}
+          given={given}
+          send={send}
+          variant="ghost"
+          size="xs"
+        />
+      ))}
+      {rest.length > 0 && <ActMenu doings={rest} send={send} />}
     </div>
   )
 }
