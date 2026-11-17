@@ -1,7 +1,8 @@
 {
   "panes": [
     {
-      "kind": "harnesses.usage"
+      "kind": "harnesses.usage",
+      "elsewhere": true
     }
   ],
   "actions": [

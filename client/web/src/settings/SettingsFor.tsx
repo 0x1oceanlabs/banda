@@ -6,6 +6,7 @@
  * one picked is not live, its pill says so under the switch.
  */
 import { LaptopIcon } from "lucide-react"
+import { useId } from "react"
 import type { Shown } from "@banda/core"
 import { MachineIcon } from "@banda/ui/components/machine-icon"
 import { THIS_COMPUTER } from "@banda/ui/lib/outside"
@@ -15,10 +16,14 @@ import { cn } from "@banda/ui/lib/utils"
 const THIS = THIS_COMPUTER.charAt(0).toUpperCase() + THIS_COMPUTER.slice(1)
 
 export function SettingsFor({
+  of = "Settings",
   hosts,
   on,
   onPick,
 }: {
+  /** What it switches, as its label says it: "Usage for" (ADR 0120,
+   * decision 5). */
+  of?: string
   /** The other machines, as the Window shows them. */
   hosts: readonly Shown[]
   /** The one picked, by its key; none for this one. */
@@ -33,12 +38,13 @@ export function SettingsFor({
       icon: <MachineIcon icon={host.named.icon} />,
     })),
   ]
+  const id = useId()
   return (
     <div className="flex items-center gap-2.5 border-b px-4 py-2 text-ui text-muted-foreground">
-      <span id="settings-for">Settings for</span>
+      <span id={id}>{of} for</span>
       <div
         role="radiogroup"
-        aria-labelledby="settings-for"
+        aria-labelledby={id}
         className="flex rounded-control border p-0.5"
       >
         {choices.map((choice) => (

@@ -89,6 +89,9 @@ PR.
   are committed with counters, and records older than 92 days are pruned.
   Repeated records and entries sharing a folder count once. The store
   retains counters and session identifiers, never conversation text.
+  The Usage Pane counts one machine, the one whose engine it is given:
+  the window's switch "Usage for" picks it, and the Pane says
+  `elsewhere` (ADR 0120, decision 5).
   `harnesses.usage_changed` tells a window to ask again. This method is
   not an Agent tool: it describes all local sessions, including those
   outside Banda. Price data ships with the engine; collection makes no

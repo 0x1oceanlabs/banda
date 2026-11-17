@@ -9,15 +9,23 @@ import {
 } from "react"
 import type { ProjectId } from "@banda/contract"
 import type { Owner } from "@banda/core"
-import { HostsContext, useStore } from "@banda/core/react"
+import {
+  HostsContext,
+  type KeptHosts,
+  useHosts,
+  useStore,
+} from "@banda/core/react"
+import { TileHeader } from "@banda/ui/components/pane-header"
 import { onDraw } from "@banda/ui/lib/frames"
 import { holderOf, onPage, type PaneState, paneOf } from "@banda/ui/pane"
-import { labelOf, sheetsOf } from "../registry"
+import { kindOf, labelOf, sheetsOf } from "../registry"
 import { settingsPane } from "../settings/pane"
+import { SettingsFor } from "../settings/SettingsFor"
 import type { Change } from "../tiling/arrange"
 import { type Entry, entries, type Workspaces } from "../tiling/model"
 import { closing } from "../tiling/opening"
 import type { Shell } from "./actions"
+import { MachinePill } from "./named"
 import { FLOATING, FloatingPane } from "./Peek"
 import { useTop } from "./top"
 
@@ -129,11 +137,11 @@ export function useSheet(where: () => ProjectId) {
  * shows on the tiles behind it at once. It has the keys while it shows:
  * `Esc` while it is on top, `Alt+W`, a press on the tiles, a pick, or the
  * focus going to a Pane or the overview takes it away, and the keys go
- * back where they were; there is one at a time. Its Pane is on this
- * machine's engine, whatever machine's Project the Person is in. Usage is
- * this machine's; Settings are the window's, as each of their sections
- * acts for the machine whose parts it shows (ADR 0106, decision 1, step
- * 5b).
+ * back where they were; there is one at a time. Settings are the
+ * window's, on this machine's engine, as each of their sections acts for
+ * the machine whose parts it shows (ADR 0106, decision 1, step 5b). A
+ * Pane whose kind says `elsewhere`, as Usage, is one machine's, on that
+ * machine's engine: the switch under its header says whose (`useFor`).
  */
 export function Sheet({
   state,
@@ -146,8 +154,16 @@ export function Sheet({
 }) {
   const panel = useRef<HTMLElement>(null)
   const { sheet, asked, close, update } = state
-  const machine = useOwnMachine()
-  const owner = sheet?.pane.kind === settingsPane.kind ? "window" : machine
+  const hosts = useContext(HostsContext)
+  const of = useFor(hosts, sheet, update)
+  const own = useOwnMachine()
+  const owner: Owner =
+    sheet?.pane.kind === settingsPane.kind
+      ? "window"
+      : of.there?.machine
+        ? { machine: of.there.machine }
+        : own
+  const header = useMemo(() => ({ under: of.under }), [of.under])
   const showing = sheet !== null
   // On its layer of the Top layer's one stack, which takes it away on an
   // Esc nothing kept, and gives the keys back where they were as it goes
@@ -214,31 +230,96 @@ export function Sheet({
         data-focused="true"
         className={`${FLOATING} pointer-events-auto absolute top-(--gap-outer) right-(--gap-outer) bottom-(--gap-outer) flex w-[min(40rem,calc(100%-2*var(--gap-outer)-var(--sidebar-inset,0px)))] animate-in flex-col overflow-hidden duration-200 ease-out fade-in-0 outline-none slide-in-from-right-8 motion-reduce:animate-none`}
       >
-        <FloatingPane
-          engine={shell.engine}
-          owner={owner}
-          project={project}
-          pane={pane}
-          // Where the Flow says, as any Pane the Person opens.
-          open={(project, pane) => shell.open(pane, project)}
-          update={update}
-          close={close}
-          label={() => undefined}
-          run={shell.run}
-          focused
-        />
+        <TileHeader value={header}>
+          <FloatingPane
+            engine={of.there ? hosts.engine(of.there.name) : shell.engine}
+            owner={owner}
+            elsewhere={of.there !== undefined}
+            project={project}
+            pane={pane}
+            // Where the Flow says, as any Pane the Person opens.
+            open={(project, pane) => shell.open(pane, project)}
+            update={update}
+            close={close}
+            label={() => undefined}
+            run={shell.run}
+            focused
+          />
+        </TileHeader>
       </section>
     </div>
   )
 }
 
-/** This machine, by its Host scope's ID once its engine said it; the
- * window's until then. */
-function useOwnMachine(): Owner {
+/** This machine's Host scope's ID, once its engine said it. */
+function useOwnId(): ProjectId | undefined {
   const hosts = useContext(HostsContext)
-  const machine = useStore(
+  return useStore(
     hosts.machines,
     useCallback((all) => all.find((one) => one.host === undefined)?.machine, [])
   )
+}
+
+/** This machine, by its Host scope's ID; the window's until then. */
+function useOwnMachine(): Owner {
+  const machine = useOwnId()
   return useMemo(() => (machine ? { machine } : "window"), [machine])
+}
+
+/**
+ * Whose the Sheet's Pane is, where its kind says `elsewhere` (ADR 0120,
+ * decision 5): the machine its args name, `machine`, by its Host scope's
+ * ID; while they name none, the machine of the Project the Person opened
+ * it in. `there` is that machine where it is another; `under` the switch
+ * between this machine and the others whose ID the Window knows, the
+ * same as Settings', and that machine's pill while the Window does not
+ * reach it. A pick is kept in the Pane's args.
+ */
+function useFor(
+  hosts: KeptHosts,
+  sheet: Sheeted | null,
+  update: (pane: PaneState) => void
+) {
+  const others = useHosts()
+  const own = useOwnId()
+  const kind = sheet && kindOf(sheet.pane.kind)
+  return useMemo(() => {
+    if (!sheet || !kind?.elsewhere) return {}
+    const { project, pane } = sheet
+    const known = others.filter((host) => host.machine !== undefined)
+    const named = pane.args.machine
+    const there =
+      named === undefined
+        ? known.find((host) => host.name === hosts.hostOf(project))
+        : known.find((host) => host.machine === named)
+    if (known.length === 0 || own === undefined) return { there }
+    const under = (
+      <>
+        <SettingsFor
+          of={kind.name ?? labelOf(pane).title}
+          hosts={known}
+          on={there?.name}
+          onPick={(name) =>
+            update({
+              ...pane,
+              args: {
+                ...pane.args,
+                machine:
+                  known.find((host) => host.name === name)?.machine ?? own,
+              },
+            })
+          }
+        />
+        {there && there.state.state !== "live" && (
+          <div className="flex justify-center pt-2">
+            <MachinePill
+              shown={there}
+              onStart={() => hosts.start(there.name)}
+            />
+          </div>
+        )}
+      </>
+    )
+    return { there, under }
+  }, [sheet, kind, others, own, hosts, update])
 }
