@@ -19,6 +19,11 @@
  * nothing (`off`: `updates = "off"`, a package manager's Banda), the app
  * takes nothing either.
  *
+ * One machine does this on every system; how a version is taken and
+ * installed is its `Installer`'s (installer.ts). With no window shown it
+ * restarts into a version ready by itself, where its installer can start
+ * it so: a Mac's today.
+ *
  * The app restarts at once when the Person says: the engine and its
  * Agents go on, as when the window closes (ADR 0086, decision 3), and
  * the engine moves onto its new copy once nothing runs (ADR 0119,
@@ -31,14 +36,8 @@
  * out. A look the Person asks for says what it found, and "Update now"
  * restarts into the new version once it is down (ADR 0045).
  */
-import {
-  accessSync,
-  constants,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs"
-import { basename, dirname, join } from "node:path"
+import { readFileSync, rmSync, writeFileSync } from "node:fs"
+import { basename, join } from "node:path"
 import type { Note, Update } from "@banda/core"
 import type { Engine as Client } from "@banda/contract"
 import {
@@ -48,27 +47,23 @@ import {
 } from "@banda/contract/updates"
 import { app } from "electron"
 import { autoUpdater, type UpdateInfo } from "electron-updater"
-import { startAfter } from "./after"
-import { type Brew, brewOf } from "./brew"
+import { brewOf } from "./brew"
+import { brewInstaller, electronInstaller, type Installer } from "./installer"
 import { isAbove, sourceOf, versionInName, type Which } from "./releases"
 
-/** How long after a Mac's or Windows' files are found missing it reads
- * again. */
+/** How long after this system's files, or brew's tap, are found missing
+ * it reads again. */
 const RETRY = 60_000
 /** How old the last look may be for a quit to install what it offered:
  * an hour, as the engine looks hourly, and a minute for it to come back. */
 const FRESH = 3_600_000 + RETRY
-/** How many looks a minute apart wait for a Mac's or Windows' files,
- * which come within ten minutes or so of the release: a pack that failed
- * sends none. */
+/** How many looks a minute apart wait for this system's files, or brew's
+ * tap, which come within ten minutes or so of the release: a pack that
+ * failed sends none. */
 const RETRIES = 15
-/** How often a Mac's Banda with a version ready looks whether a window
- * shows: two looks with none, and it restarts into it. */
+/** How often a Banda with a version ready looks whether a window shows:
+ * two looks with none, and it restarts into it. */
 const ALONE = 30_000
-
-/** How long the page has to draw "Restarting" before main is held by
- * the install: an AppImage's is done in this process. */
-const SAID = 150
 
 /** The app this window is, as main knows it. */
 export type App = {
@@ -84,7 +79,7 @@ export type App = {
   listApp: (image: string) => void
   /** The AppImage the launcher's entry starts, if it names one. */
   listedImage: () => string | undefined
-  /** Whether no window of it shows, on macOS, as it lives in the menu
+  /** Whether no window of it shows, as on macOS it lives in the menu
    * bar: it may restart into a new version unseen. */
   alone: () => boolean
   /** Whether it quits now, as the Person or macOS asked. */
@@ -119,8 +114,19 @@ export type Updates = {
   readonly seen: () => void
 }
 
-/** Banda's update for `mine`; `tell` hears each change, and `leaving` is
- * called as Banda quits to install it. */
+/**
+ * Banda's update for `mine`; `tell` hears each change, and `leaving` is
+ * called as Banda quits to install it. One machine on every system: what
+ * differs between them is its `Installer` (installer.ts).
+ *
+ * A look offers a version; the installer takes it, and it is `ready`.
+ * Restart installs it and starts it, saying each step (`doing`), after a
+ * look first when the last one is over an hour old, as the version may
+ * have been withdrawn since (ADR 0092, decision 10). With no window
+ * shown, it restarts so by itself, unseen, and never under the Person's
+ * hands (ADR 0121). A Banda nothing here can install only says that a
+ * version is `out`, with the command that installs it.
+ */
 export function updates(
   mine: App,
   engine: Engine,
@@ -128,7 +134,7 @@ export function updates(
   leaving: () => void = () => {}
 ): Updates {
   const image = process.env.APPIMAGE
-  const brew = process.platform === "darwin" && app.isPackaged
+  const mac = process.platform === "darwin" && app.isPackaged
   const windows = process.platform === "win32" && app.isPackaged
   // On Linux only an AppImage: Banda from the AUR has no APPIMAGE, and
   // its `package-type` (scripts/aur.mjs) would turn electron-updater to
@@ -137,14 +143,19 @@ export function updates(
   const looks =
     which !== undefined &&
     process.env.BANDA_UPDATES !== "off" &&
-    Boolean(image || brew || windows)
+    Boolean(image || mac || windows)
   const known: Known = {
     name: mine.name,
     have: app.getVersion(),
     always: looks && which === "dev",
   }
   const { have } = known
-  let now: Update = { ...known, state: "none" }
+  // The Banda this one restarted from left what it was (ADR 0072,
+  // decision 4).
+  const left = looks ? leftBehind(have) : undefined
+  let now: Update = left
+    ? { ...known, state: "updated", ...left }
+    : { ...known, state: "none" }
   if (!looks || !which) {
     const nothing = () => {}
     return {
@@ -167,31 +178,32 @@ export function updates(
       newest: () => said?.newest,
     })
   )
-  // Banda downloads what a look offers itself, or brew takes it: a look
-  // while a version is ready offers it again, and downloading it again
-  // would start it over.
+  // The installer takes what a look offers: a look while a version is
+  // ready offers it again, and downloading it again would start it over.
   autoUpdater.autoDownload = false
   autoUpdater.fullChangelog = true
   autoUpdater.logger = { info() {}, debug() {}, warn: console.warn, error() {} }
   const looking = engineLooks(engine)
-  // The Banda this one restarted from left what it was (ADR 0072,
-  // decision 4).
-  const left = leftBehind(have)
-  if (!image && !windows) {
-    const brewed = brewUpdates(mine, known, looking, tell, {
-      brew: brewOf(mine.folder, process.execPath),
-      leaving,
-      left,
-    })
-    return {
-      ...brewed,
-      heard(state) {
-        said = state
-        brewed.heard(state)
-      },
-    }
-  }
-  if (left) now = { ...known, state: "updated", ...left }
+  /** How this system installs; none for a Mac's Banda brew did not
+   * install, which only says the command. */
+  const brew =
+    image || windows ? undefined : brewOf(mine.folder, process.execPath)
+  const installer: Installer | undefined =
+    image || windows
+      ? electronInstaller({
+          image: image || undefined,
+          listApp: mine.listApp,
+          quits: mine.quits,
+        })
+      : brew && brewInstaller(brew)
+  /** Whether electron-updater downloads, and installs at the quit. */
+  const downloads = installer?.downloads ?? false
+  // What a Mac's Banda brew did not install says: `brew upgrade` alone
+  // reads the tap as it was at the last `brew update`, which may be a day
+  // old, so one line that works as it is copied.
+  const command = `brew update && brew upgrade --cask ${mine.folder}`
+  const system = windows ? "Windows" : mac ? "macOS" : "Linux"
+
   const set = (next: DistributiveOmit<Update, keyof Known>) => {
     now = { ...known, ...next }
     tell(now)
@@ -207,21 +219,41 @@ export function updates(
   // as it quits, nor deletes its file.
   let restarting = false
   let looked: number | undefined
-  /** The read a minute later that waits for this system's files, and
-   * how many have waited for them. */
   let retry: ReturnType<typeof setTimeout> | undefined
-  let tries = 0
+  /** The reads a minute apart that wait for this system's files, and for
+   * what the installer takes of `version` (brew's tap): each waits at
+   * most RETRIES times. */
+  const files = { tries: 0 }
+  const tap = { version: "", tries: 0 }
+  /** The version the installer takes now, while it does. */
+  let taking: string | undefined
   /** The version the last look offered, `have` when none, and when it
    * came back: a quit or a restart installs only that one (ADR 0092,
    * decision 12). */
   let offered: Offered | undefined
-  const rest = (missed?: string) => {
-    asked = restarts = confirms = false
-    set({ state: "none", looked, missed })
-  }
+  /** A version that could not install: it waits for the Person, not
+   * restarting unseen again. */
+  let refused: string | undefined
+  let watch: ReturnType<typeof setInterval> | undefined
+
   const fail = (reason: string) => {
     asked = restarts = confirms = false
     set({ state: "failed", reason })
+  }
+  /** Nothing new, as the last look found. */
+  const rest = () => {
+    asked = restarts = confirms = false
+    set({ state: "none", looked })
+  }
+  /** Says `info`'s version is out, with the command that installs it. */
+  const out = (info: UpdateInfo) => {
+    asked = restarts = confirms = false
+    set({
+      state: "out",
+      version: info.version,
+      notes: notesOf(info, have),
+      command,
+    })
   }
   /** The version ready waits for the Person again: what it did since
    * they said Update came to nothing. */
@@ -229,188 +261,277 @@ export function updates(
     if (now.state === "ready" && now.doing && !restarting)
       set({ state: "ready", version: now.version, notes: now.notes })
   }
+  /** A version that could not be taken: one ready stays, and waits for
+   * the Person again; else the command, which still installs it by hand. */
+  const drop = (info: UpdateInfo) => {
+    if (now.state !== "ready") return out(info)
+    asked = restarts = false
+    waits()
+  }
+  /** Reads the release again in a minute, as this system's files and the
+   * tap's cask come a few minutes after it, while `wait` has tries left;
+   * whether it will. */
+  const again = (wait: { tries: number }) => {
+    if (retry === undefined && wait.tries < RETRIES) {
+      wait.tries += 1
+      retry = setTimeout(read, RETRY)
+    }
+    return retry !== undefined
+  }
+  /** Why a look found nothing to take yet, and whether it reads again. */
+  const publishing = (soon: boolean) =>
+    `The ${system} release is still publishing${soon ? "; checking again in a minute" : ""}`
 
   // The quit installs only what `installsAtQuit` says, set as Banda quits:
   // electron-updater reads this at the quit, and after a download only
   // listens for the quit while it is on.
-  autoUpdater.autoInstallOnAppQuit = true
-  app.on("will-quit", () => {
-    const listed = mine.listedImage()
-    autoUpdater.autoInstallOnAppQuit = installsAtQuit({
-      ready: now.state === "ready" ? now.version : undefined,
-      offered,
-      listed: listed && versionInName(basename(listed), mine.folder),
-      at: Date.now(),
+  autoUpdater.autoInstallOnAppQuit = downloads
+  if (downloads)
+    app.on("will-quit", () => {
+      const listed = mine.listedImage()
+      autoUpdater.autoInstallOnAppQuit = installsAtQuit({
+        ready: now.state === "ready" ? now.version : undefined,
+        offered,
+        listed: listed && versionInName(basename(listed), mine.folder),
+        at: Date.now(),
+      })
     })
-  })
-  // A newer version replaces one that is ready: electron-updater keeps one
-  // download, and the newer one's takes its place.
+
+  // A newer version replaces one that is ready: the installer keeps one,
+  // and the newer one's takes its place.
   autoUpdater.on("update-available", (info: UpdateInfo) => {
     if (restarting) return
-    tries = 0
+    files.tries = 0
     offered = { version: info.version, at: Date.now() }
+    if (!installer) return out(info)
     if (now.state === "ready" && now.version === info.version) {
+      asked = false
       if (confirms) restart()
       else waits()
       return
     }
-    // An AppImage Banda cannot replace downloads nothing.
-    const unwritable = image && cannotWrite(image)
-    if (unwritable) {
-      fail(`${unwritable}, so ${info.version} cannot install`)
-      return
-    }
+    const cannot = installer.cannot(info)
+    if (cannot) return fail(cannot)
+    // The Restart that looked first goes on to the newer version.
     if (now.state === "ready" && confirms) restarts = true
     confirms = false
-    set({
-      state: "downloading",
-      version: info.version,
-      share: 0,
-      notes: notesOf(info, have),
-      restarts,
+    // One at a time: the next look offers what came meanwhile.
+    if (taking === undefined) take(installer, info)
+  })
+  /** `by` takes `info`'s version: ready once it is down. */
+  const take = (by: Installer, info: UpdateInfo) => {
+    taking = info.version
+    const notes = notesOf(info, have)
+    if (by.downloads)
+      set({
+        state: "downloading",
+        version: info.version,
+        share: 0,
+        notes,
+        restarts,
+      })
+    by.take(info, {
+      progress(progress) {
+        if (now.state === "downloading") set({ ...now, ...progress })
+      },
+      done(down) {
+        taking = undefined
+        if (!down) {
+          // What it takes comes after the release's files: a version
+          // waits for it once, and then each look tries once.
+          if (tap.version !== info.version)
+            Object.assign(tap, { version: info.version, tries: 0 })
+          if (again(tap)) missed(publishing(true))
+          else drop(info)
+          return
+        }
+        asked = false
+        set({ state: "ready", version: info.version, notes })
+        // "Update now" restarts once it is down (ADR 0045).
+        if (restarts) restart()
+        else if (by.unseen) watchAlone()
+      },
+      failed(error) {
+        taking = undefined
+        console.warn(`${by.name} could not take Banda's update:`, error.message)
+        drop(info)
+      },
     })
-    // The same error comes as an "error" event.
-    autoUpdater.downloadUpdate().catch(() => {})
-  })
-  autoUpdater.on(
-    "download-progress",
-    (progress: { percent: number; transferred?: number; total?: number }) => {
-      if (now.state === "downloading")
-        set({
-          ...now,
-          share: Math.min(1, progress.percent / 100),
-          down: progress.transferred,
-          size: progress.total,
-        })
-    }
-  )
-  autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
-    asked = false
-    set({ state: "ready", version: info.version, notes: notesOf(info, have) })
-    // "Update now" restarts once it is down (ADR 0045).
-    if (restarts) restart()
-  })
-  // Installed, the new AppImage took its own name when the old one's holds
-  // a version, as Banda's do: the launcher's entry names it now, as the new
-  // one would at its start (ADR 0041, decision 3).
-  let installed = image
-  autoUpdater.on("appimage-filename-updated", (path: string) => {
-    installed = path
-    mine.listApp(path)
-  })
-  // Nothing above `have`: a version ready, or that could not install, was
-  // withdrawn, and goes (ADR 0092, decision 10).
+  }
+  // Nothing above `have`: a version ready, out, or that could not install
+  // was withdrawn, and goes (ADR 0092, decision 10).
   autoUpdater.on("update-not-available", (info: UpdateInfo) => {
     if (restarting) return
-    tries = 0
     looked = Date.now()
     offered = { version: info.version, at: looked }
+    files.tries = 0
     if (now.state === "ready")
       console.warn(`Banda ${now.version} is no longer out: it will not install`)
-    if (["ready", "failed", "looking", "none"].includes(now.state)) rest()
+    if (now.state !== "updated") rest()
+    else asked = false
   })
+  /** A look that came to nothing, or the download (`download`), and
+   * `why`. One that fails for want of a network says nothing unless the
+   * Person asked, and the next look tries again. */
+  const missed = (why: string, download = false) => {
+    if (confirms && now.state === "ready") {
+      // No look says the version ready is still out, so no restart into
+      // it: the Restart says why nothing happened.
+      confirms = false
+      fail(`Could not check that ${now.version} is still out: ${why}`)
+      return
+    }
+    // A Restart waits only for a look that runs again soon, or for the
+    // version that comes down.
+    if (retry === undefined && taking === undefined) {
+      restarts = false
+      waits()
+    }
+    const down = download && now.state === "downloading"
+    if (asked) {
+      asked = false
+      looked = Date.now()
+      if (down || now.state === "looking" || now.state === "none")
+        set({ state: "none", looked, missed: why })
+    } else if (down) set({ state: "none", looked })
+  }
   autoUpdater.on("error", (error: Error & { code?: string }) => {
     console.warn("Banda could not update itself:", error.message)
-    // A release out before its files for this system, as Windows' come
-    // after Linux's: read again in a minute, RETRIES times at most.
-    if (
-      error.code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND" &&
-      retry === undefined &&
-      tries < RETRIES
-    ) {
-      tries += 1
-      retry = setTimeout(() => {
-        retry = undefined
-        read()
-      }, RETRY)
-    }
-    if (needsPerson(error)) fail(error.message)
-    else if (confirms && now.state === "ready") {
-      // No look says the version ready is still out, so no restart into
-      // it: the Restart the Person clicked says why nothing happened.
-      confirms = false
-      fail(
-        `Could not check that ${now.version} is still out: ${firstLine(error.message)}`
-      )
-    } else if (asked) {
-      looked = Date.now()
-      rest(firstLine(error.message))
-    } else if (now.state === "downloading") rest()
+    // electron-updater's download says its failure here too: the one
+    // that ran, if any, is over.
+    const download = downloads && taking !== undefined
+    if (download) taking = undefined
+    // A file Banda may not write, a full disk: its own download's.
+    if (downloads && needsPerson(error)) return fail(error.message)
+    // A release out before its files for this system, as Windows' and the
+    // Mac's come after Linux's: read again soon, even when this was a
+    // background look, until ADR 0092's step 5 publishes a release with
+    // all its files.
+    missed(
+      error.code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND"
+        ? publishing(again(files))
+        : firstLine(error.message),
+      download
+    )
   })
 
+  /** Nothing looks while a version comes down, or Banda restarts. */
+  const busy = () => restarting || now.state === "downloading"
   /** Reads the release the engine said is newest. */
-  const read = () => {
-    if (restarting || now.state === "downloading") return
+  function read() {
+    clearTimeout(retry)
+    retry = undefined
+    if (busy()) return
     // The same error comes as an "error" event.
     autoUpdater.checkForUpdates().catch(() => {})
+  }
+  /** Whether `state` was of a look not yet read. */
+  const heard = (state: UpdateState): boolean => {
+    said = state
+    if (!looking.anew(state)) return false
+    // The engine takes nothing here, and the app neither.
+    if (state.off) missed(state.off)
+    else read()
+    return true
   }
   /** Asks the engine to look now, as the Person did, or as a restart
    * after an hour with no look does; its answer is read as it comes. */
   const look = (byPerson: boolean) => {
-    if (restarting || now.state === "downloading") return
+    if (busy()) return
     // Banda's widget says nothing with nothing new: its look stays quiet,
-    // as ADR 0041 has it; and one ready stays shown while Banda looks.
-    if (byPerson && known.always && now.state !== "ready") {
+    // as ADR 0041 has it; and one ready or out stays shown while it looks.
+    if (byPerson && known.always) {
       asked = true
-      set({ state: "looking" })
+      if (now.state !== "out" && now.state !== "ready")
+        set({ state: "looking" })
     }
-    looking.now(
-      (state) => {
-        // No look to read: the Restart that waited for one is over.
-        if (!heard(state) && confirms) {
-          confirms = false
-          waits()
-        }
-      },
-      (missed) => {
-        if (confirms && now.state === "ready") {
-          confirms = false
-          fail(`Could not check that ${now.version} is still out: ${missed}`)
-        } else if (asked) {
-          looked = Date.now()
-          rest(missed)
-        }
+    looking.now((state) => {
+      if (heard(state)) return
+      // No look to read: the Restart that waited for one is over, and
+      // the Person's look found what the last one did.
+      if (confirms) {
+        confirms = false
+        waits()
       }
-    )
+      if (asked) {
+        asked = false
+        if (now.state === "looking") set({ state: "none", looked })
+      }
+    }, missed)
   }
-  /** Whether it reads the release `state` names: only once for a look. */
-  const heard = (state: UpdateState): boolean => {
-    said = state
-    if (!looking.anew(state)) return false
-    if (state.off) {
-      // The engine takes nothing here, and the app neither.
-      if (asked) rest(state.off)
-      return false
-    }
-    read()
-    return true
+  /** With the version ready, restarts into it unseen once no window has
+   * shown for two looks in a row, half a minute apart. */
+  function watchAlone() {
+    if (watch !== undefined) return
+    let alone = 0
+    watch = setInterval(() => {
+      if (now.state !== "ready" || restarting) {
+        clearInterval(watch)
+        watch = undefined
+        return
+      }
+      alone = mine.alone() && !mine.quits() ? alone + 1 : 0
+      if (alone >= 2) restart(true)
+    }, ALONE)
   }
-  const restart = () => {
-    if (now.state !== "ready" || restarting) return
+  /** Restarts into the version ready: `unseen`, by itself, with no
+   * window shown, or as the Person asked. */
+  function restart(unseen = false) {
+    if (now.state !== "ready" || restarting || !installer) return
     const ready = now
+    const fresh = isOffered(offered, ready.version, Date.now())
+    // Unseen, only into a version the last look offered and nothing
+    // refused, with none coming down: it never looks first, nor says a
+    // failure the Person did not ask about.
+    if (unseen && (!fresh || refused === ready.version || taking)) return
+    // The window stays and says so; unseen, it says nothing, as nobody
+    // asked.
+    if (!unseen) set({ ...ready, doing: "installing" })
+    // A newer version comes down meanwhile: the restart waits for it.
+    if (taking !== undefined) {
+      restarts = true
+      return
+    }
     // After a sleep or looks that failed, a look first: the version may
     // have been withdrawn since (ADR 0092, decision 10).
-    if (!isOffered(offered, ready.version, Date.now())) {
+    if (!fresh) {
       confirms = true
-      set({ ...ready, doing: "installing" })
       look(false)
       return
     }
-    confirms = false
+    confirms = restarts = false
     restarting = true
-    leaving()
-    leave({ from: have, to: ready.version, notes: ready.notes })
-    set({ ...ready, doing: "restarting" })
-    setTimeout(() => {
-      // Quit meanwhile, as the Person asked: that quit installs it.
-      if (mine.quits()) return
-      // An AppImage is installed by the time it returns, and the new one
-      // starts once this one is gone. Windows' installer shows its own
-      // window while it works, as Banda has none then, and starts Banda
-      // itself.
-      autoUpdater.quitAndInstall(!windows, !installed)
-      if (installed) startAfterImage(installed)
-    }, SAID)
+    installer.install(ready.version).then(
+      (installed) => {
+        if (!installed) {
+          // Another version is out since: the engine looks, and the
+          // installer takes the version it finds.
+          restarting = false
+          if (!unseen) restarts = true
+          look(false)
+          return
+        }
+        leave({ from: have, to: ready.version, notes: ready.notes })
+        if (!unseen) set({ ...ready, doing: "restarting" })
+        // Quit as the Person or the system asked meanwhile: the next
+        // start is the new version, and says so.
+        if (mine.quits()) return
+        leaving()
+        // As it is now: a window shown since opens again shown.
+        installer.relaunch(mine.alone())
+      },
+      (error: Error) => {
+        restarting = false
+        refused = ready.version
+        console.warn(
+          `${installer.name} could not install Banda's update:`,
+          error.message
+        )
+        fail(
+          `${installer.name} could not install ${ready.version}: ${firstLine(error.message)}`
+        )
+      }
+    )
   }
   return {
     current: () => now,
@@ -418,16 +539,20 @@ export function updates(
     check: () => look(true),
     now() {
       restarts = true
+      refused = undefined
       if (now.state === "ready") restart()
       else if (now.state === "downloading") set({ ...now, restarts })
-      else look(true)
+      else if (taking === undefined) look(true)
     },
     later() {
       restarts = confirms = false
       if (now.state === "downloading") set({ ...now, restarts })
       waits()
     },
-    restart,
+    restart() {
+      refused = undefined
+      restart()
+    },
     seen() {
       if (now.state === "updated") set({ state: "none", looked })
     },
@@ -579,372 +704,16 @@ export function arrivedAt(
   }
 }
 
-/**
- * macOS's (ADR 0121): electron-updater only reads the release the engine
- * says is newest, and brew takes it. Once the tap's cask has that
- * version, its zip comes into brew's cache while Banda runs, and the
- * version is `ready`: Restart installs it with `brew upgrade` and opens
- * Banda again, the engine and its Agents going on. With no window shown,
- * as Banda lives in the menu bar, it restarts so by itself, unseen, and
- * opens again with no window; never under the Person's hands. A Banda
- * brew did not install, or a brew that fails, says the version is `out`,
- * with the command that installs it. "Update now" is a look the Person
- * asked for, and a restart once its version is down.
- */
-export function brewUpdates(
-  mine: Pick<App, "folder" | "alone" | "quits">,
-  known: Known,
-  looking: ReturnType<typeof engineLooks>,
-  tell: (now: Update) => void,
-  hands: {
-    /** The cask that installed this Banda, if brew did. */
-    brew: Brew | undefined
-    /** Called as Banda quits to install it. */
-    leaving: () => void
-    /** What the Banda this one restarted from left. */
-    left?: Omit<Left, "to">
-  }
-): Updates {
-  const { brew, leaving, left } = hands
-  let now: Update = left
-    ? { ...known, state: "updated", ...left }
-    : { ...known, state: "none" }
-  const set = (next: DistributiveOmit<Update, keyof Known>) => {
-    now = { ...known, ...next }
-    tell(now)
-  }
-  // `brew upgrade` alone reads the tap as it was at the last `brew update`,
-  // which may be a day old: one line that works as it is copied.
-  const command = `brew update && brew upgrade --cask ${mine.folder}`
-  let asked = false
-  let looked: number | undefined
-  let retry: ReturnType<typeof setTimeout> | undefined
-  /** The reads a minute apart that wait for the Mac's files, and for the
-   * tap's cask of `version`: each waits at most RETRIES times. */
-  const files = { tries: 0 }
-  const tap = { version: "", tries: 0 }
-  // The Person asked for a restart once its version is down.
-  let restarts = false
-  // A restart waits for the look that runs to offer the version ready
-  // again, as the last one is over an hour old.
-  let confirms = false
-  // brew installs the version ready, and Banda quits.
-  let restarting = false
-  /** The version brew takes now, while it does. */
-  let taking: string | undefined
-  /** The version the last look offered, and when. */
-  let offered: Offered | undefined
-  /** A version brew could not install: it waits for the Person, not
-   * restarting unseen again. */
-  let refused: string | undefined
-  let watch: ReturnType<typeof setInterval> | undefined
-  autoUpdater.autoInstallOnAppQuit = false
-
-  /** Says `info`'s version is out, with the command that installs it. */
-  const out = (info: UpdateInfo) => {
-    asked = restarts = confirms = false
-    set({
-      state: "out",
-      version: info.version,
-      notes: notesOf(info, known.have),
-      command,
-    })
-  }
-  const fail = (reason: string) => {
-    asked = restarts = confirms = false
-    set({ state: "failed", reason })
-  }
-  /** Reads the release again in a minute, as its Mac's files and the
-   * tap's cask come a few minutes after it, while `wait` has tries left;
-   * whether it will. */
-  const again = (wait: { tries: number }) => {
-    if (retry === undefined && wait.tries < RETRIES) {
-      wait.tries += 1
-      retry = setTimeout(read, RETRY)
-    }
-    return retry !== undefined
-  }
-  /** Why a look found nothing to take yet, and whether it reads again. */
-  const publishing = (soon: boolean) =>
-    `The macOS release is still publishing${soon ? "; checking again in a minute" : ""}`
-
-  autoUpdater.on("update-available", (info: UpdateInfo) => {
-    if (restarting) return
-    files.tries = 0
-    offered = { version: info.version, at: Date.now() }
-    if (!brew) {
-      out(info)
-      return
-    }
-    if (now.state === "ready" && now.version === info.version) {
-      asked = false
-      if (confirms) restart()
-      else waits()
-      return
-    }
-    // The Restart that looked first goes on to the newer version.
-    if (now.state === "ready" && confirms) restarts = true
-    confirms = false
-    // One brew at a time: the next look offers what came meanwhile.
-    if (taking === undefined) take(info)
-  })
-  /** The version ready waits for the Person again: what it did since
-   * they said Update came to nothing. */
-  const waits = () => {
-    if (now.state === "ready" && now.doing && !restarting)
-      set({ state: "ready", version: now.version, notes: now.notes })
-  }
-  /** A version brew could not take: one ready stays, and waits for the
-   * Person again; else the command, which still installs it by hand. */
-  const drop = (info: UpdateInfo) => {
-    if (now.state !== "ready") out(info)
-    else {
-      asked = restarts = false
-      waits()
-    }
-  }
-  /** brew takes `info`'s version: ready once its zip is down. */
-  const take = (info: UpdateInfo) => {
-    if (!brew) return
-    taking = info.version
-    const notes = notesOf(info, known.have)
-    brew
-      .newest()
-      .then((cask) => {
-        if (cask !== info.version) return false
-        return brew.fetch().then(() => true)
-      })
-      .then(
-        (down) => {
-          taking = undefined
-          if (!down) {
-            // The tap's cask comes after the release's files: a version
-            // waits for it once, and then each look tries brew once.
-            if (tap.version !== info.version)
-              Object.assign(tap, { version: info.version, tries: 0 })
-            if (again(tap)) missed(publishing(true))
-            else drop(info)
-            return
-          }
-          asked = false
-          set({ state: "ready", version: info.version, notes })
-          if (restarts) restart()
-          else watchAlone()
-        },
-        (error: Error) => {
-          taking = undefined
-          console.warn("brew could not take Banda's update:", error.message)
-          drop(info)
-        }
-      )
-  }
-  // Nothing above `have`: a version ready or out was withdrawn, and goes
-  // (ADR 0092, decision 10).
-  autoUpdater.on("update-not-available", (info: UpdateInfo) => {
-    if (restarting) return
-    looked = Date.now()
-    offered = { version: info.version, at: looked }
-    asked = false
-    files.tries = 0
-    if (now.state === "ready")
-      console.warn(`Banda ${now.version} is no longer out: it will not install`)
-    if (now.state !== "updated") {
-      confirms = restarts = false
-      set({ state: "none", looked })
-    }
-  })
-  const missed = (why: string) => {
-    if (confirms && now.state === "ready") {
-      // No look says the version ready is still out, so no restart into
-      // it: the Restart says why nothing happened.
-      confirms = false
-      fail(`Could not check that ${now.version} is still out: ${why}`)
-      return
-    }
-    // A Restart waits only for a look that runs again soon.
-    if (retry === undefined) {
-      restarts = false
-      waits()
-    }
-    if (!asked) return
-    asked = false
-    looked = Date.now()
-    if (now.state === "looking" || now.state === "none")
-      set({ state: "none", looked, missed: why })
-  }
-  autoUpdater.on("error", (error: Error & { code?: string }) => {
-    console.warn("Banda could not look for its update:", error.message)
-    // Linux publishes first; the Mac's files arrive a few minutes later.
-    // Read again soon, even when this was a background look, until ADR
-    // 0092's step 5 publishes a release with all its files.
-    missed(
-      error.code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND"
-        ? publishing(again(files))
-        : firstLine(error.message)
-    )
-  })
-  /** Reads the release the engine said is newest. */
-  function read() {
-    clearTimeout(retry)
-    retry = undefined
-    if (restarting) return
-    // The same error comes as an "error" event.
-    autoUpdater.checkForUpdates().catch(() => {})
-  }
-  /** Whether `state` was of a look not yet read. */
-  const heard = (state: UpdateState): boolean => {
-    if (!looking.anew(state)) return false
-    if (state.off) missed(state.off)
-    else read()
-    return true
-  }
-  /** Asks the engine to look now, as the Person did, or as a restart
-   * after an hour with no look does. */
-  const look = (byPerson: boolean) => {
-    if (restarting) return
-    if (byPerson && known.always) {
-      asked = true
-      if (now.state !== "out" && now.state !== "ready")
-        set({ state: "looking" })
-    }
-    looking.now((state) => {
-      // No look to read: the Restart that waited for one is over.
-      if (!heard(state) && confirms) {
-        confirms = false
-        waits()
-      }
-    }, missed)
-  }
-  /** With the version ready, restarts into it unseen once no window has
-   * shown for two looks in a row, half a minute apart. */
-  function watchAlone() {
-    if (watch !== undefined) return
-    let alone = 0
-    watch = setInterval(() => {
-      if (now.state !== "ready" || restarting) {
-        clearInterval(watch)
-        watch = undefined
-        return
-      }
-      alone = mine.alone() && !mine.quits() ? alone + 1 : 0
-      if (alone >= 2) restart(true)
-    }, ALONE)
-  }
-  /** Restarts into the version ready: `unseen`, by itself, with no
-   * window shown, or as the Person asked. */
-  function restart(unseen = false) {
-    if (now.state !== "ready" || restarting || !brew) return
-    const ready = now
-    const fresh = isOffered(offered, ready.version, Date.now())
-    // Unseen, only into a version the last look offered and brew did not
-    // refuse, with none coming down: it never looks first, nor says a
-    // failure the Person did not ask about.
-    if (unseen && (!fresh || refused === ready.version || taking)) return
-    // The window stays and says so; unseen, it says nothing, as nobody
-    // asked.
-    if (!unseen) set({ ...ready, doing: "installing" })
-    // A newer version comes down meanwhile: the restart waits for it.
-    if (taking !== undefined) {
-      restarts = true
-      return
-    }
-    // After a sleep or looks that failed, a look first: the version may
-    // have been withdrawn since (ADR 0092, decision 10).
-    if (!fresh) {
-      confirms = true
-      look(false)
-      return
-    }
-    confirms = restarts = false
-    restarting = true
-    brew.upgrade(ready.version).then(
-      (upgraded) => {
-        if (!upgraded) {
-          // The tap moved since: the engine looks, and brew takes the
-          // version it finds.
-          restarting = false
-          if (!unseen) restarts = true
-          look(false)
-          return
-        }
-        const left = { from: known.have, to: ready.version, notes: ready.notes }
-        leave(left)
-        if (!unseen) set({ ...ready, doing: "restarting" })
-        // Quit as the Person or macOS asked meanwhile: the next start is
-        // the new version, and says so.
-        if (mine.quits()) return
-        leaving()
-        // As it is now: a window shown since opens again shown.
-        brew.reopen(mine.alone())
-        app.quit()
-      },
-      (error: Error) => {
-        restarting = false
-        refused = ready.version
-        console.warn("brew could not install Banda's update:", error.message)
-        fail(
-          `brew could not install ${ready.version}: ${firstLine(error.message)}`
-        )
-      }
-    )
-  }
-  return {
-    current: () => now,
-    heard: (state) => void heard(state),
-    check: () => look(true),
-    now() {
-      restarts = true
-      refused = undefined
-      if (now.state === "ready") restart()
-      else if (taking === undefined) look(true)
-    },
-    // Nothing downloads for the quit.
-    later() {},
-    restart() {
-      refused = undefined
-      restart()
-    },
-    seen() {
-      if (now.state === "updated") set({ state: "none", looked })
-    },
-  }
-}
-
 /** An error's first line: electron-updater's HTTP errors carry their
  * headers after it. */
 export function firstLine(message: string): string {
   return message.split("\n", 1)[0]!.trim()
 }
 
-/**
- * Starts the AppImage at `image`, with this Banda's arguments, once this
- * Banda is gone, so the new one gets the window and its lock. Not
- * `app.relaunch`: its helper runs from this AppImage, unmounted as Banda
- * exits. An AppImage keeps the APPIMAGE and APPDIR it is given, so the
- * new one gets none, and sets its own.
- */
-function startAfterImage(image: string) {
-  const env = { ...process.env }
-  for (const name of ["APPIMAGE", "APPDIR", "ARGV0", "OWD"]) delete env[name]
-  startAfter([image, ...process.argv.slice(1)], env)
-}
-
 /** Omit, over each member of a union. */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   ? Omit<T, K>
   : never
-
-/** Why Banda cannot replace the AppImage at `image`, if it cannot. */
-function cannotWrite(image: string): string | undefined {
-  for (const path of [dirname(image), image]) {
-    try {
-      accessSync(path, constants.W_OK)
-    } catch {
-      return `Banda cannot write ${path}`
-    }
-  }
-  return undefined
-}
 
 /** A failure that a later look cannot mend: a file Banda may not write,
  * a full disk. A network that is down, a release without its update file,

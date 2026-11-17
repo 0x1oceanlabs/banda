@@ -90,7 +90,13 @@ PR.
   window's child does and Windows' (`updates.state`'s `with_app`), the
   app's restart is what stops the Agents: Update asks first while they
   work, and "Update when they finish" restarts once they are done.
-  "Check now" is the engine's `updates.check`. Where the engine
+  "Check now" is the engine's `updates.check`. One machine does all of
+  this on every system (`app.ts`); what differs is how a version is taken
+  and installed, its `Installer` (`installer.ts`): electron-updater's for
+  an AppImage and Windows, brew's for a Mac. With no window shown, a
+  Banda with a version ready restarts into it by itself, unseen, where
+  its installer can start it so (`unseen`): a Mac's today, and the others
+  once Banda has a tray there (#1870). Where the engine
   takes nothing (`off`), the app takes nothing. The restart stops no
   engine: the engine and its Agents go on, as when the window closes,
   and a window's packed copy put in place beside the running engine
