@@ -189,10 +189,29 @@ async fn an_app_is_installed_from_a_folder_listed_installed_again_and_removed() 
     write_app(&folder, "0.2.0");
     std::fs::remove_file(folder.join("migrations/001.sql")).unwrap();
     std::fs::remove_dir(folder.join("migrations")).unwrap();
-    let again = host.call(host.person(), "apps.install", install).await;
+    let again = host
+        .call(host.person(), "apps.install", install.clone())
+        .await;
     assert_eq!(again.unwrap()["version"], "0.2.0");
     assert!(!copy().join("migrations").exists());
     assert_eq!(host.installed().await[0]["version"], "0.2.0");
+    // The copy it had before went with it: one folder is left, the one
+    // the record names.
+    let copies = || {
+        let place = std::fs::read_dir(host.installed.join("clients")).unwrap();
+        let folders = place.flatten().filter(|entry| entry.path().is_dir());
+        folders.map(|entry| entry.path()).collect::<Vec<_>>()
+    };
+    assert_eq!(copies(), [copy()]);
+
+    // Installed twice at one moment, each is done before the other
+    // begins: one copy is left, the one the record names.
+    let both = tokio::join!(
+        host.call(host.person(), "apps.install", install.clone()),
+        host.call(host.person(), "apps.install", install.clone()),
+    );
+    assert!(both.0.is_ok() && both.1.is_ok(), "{both:?}");
+    assert_eq!(copies(), [copy()]);
 
     // Removed, it is listed no more; removing it twice is refused.
     let remove = json!({ "id": "clients" });

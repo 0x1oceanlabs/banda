@@ -79,6 +79,10 @@ struct Serving {
     turns: Mutex<HashMap<String, Turns>>,
     /// Banda's loop for a worker, a file written once.
     runner: OnceLock<PathBuf>,
+    /// Held while an App is installed or removed, so one is done before
+    /// the next begins: two at once could leave the engine serving an App
+    /// whose copy the other took away.
+    changing: tokio::sync::Mutex<()>,
 }
 
 /// The folder to install an App from.
@@ -357,6 +361,7 @@ impl Apps {
             project: call.wall().map(|wall| wall.project),
             at: now_ms(),
         };
+        let _one_at_a_time = self.serving.changing.lock().await;
         // Staged: read, checked and copied to a folder of its own.
         let (apps, staging) = (self.clone(), from.clone());
         let staged = tokio::task::spawn_blocking(move || {
@@ -376,6 +381,10 @@ impl Apps {
             Err(refusal) => Err(refusal),
         };
         let off = taken.inspect_err(|_| self.installed.discard(&copy))?;
+        // The copy it ran from before goes now, when the engine let go
+        // of it.
+        let (installed, id) = (self.installed.clone(), app.id.clone());
+        let _ = tokio::task::spawn_blocking(move || installed.tidy(&id)).await;
         let answer = Installing {
             app: self.listed(&app, from),
             off,
@@ -392,6 +401,7 @@ impl Apps {
     }
 
     async fn remove(&self, call: Call, params: Remove) -> Result<(), Refusal> {
+        let _one_at_a_time = self.serving.changing.lock().await;
         // Its record first: from here it is not installed, whatever
         // follows.
         let (installed, id) = (self.installed.clone(), params.id.clone());
@@ -412,7 +422,7 @@ impl Apps {
         }
         // Its copies last, when its worker has let go of them.
         let (installed, id) = (self.installed.clone(), params.id.clone());
-        let _ = tokio::task::spawn_blocking(move || installed.clear(&id)).await;
+        let _ = tokio::task::spawn_blocking(move || installed.tidy(&id)).await;
         let author = call.participant();
         call.command(move |tx| {
             let removed = serde_json::json!({ "id": params.id });

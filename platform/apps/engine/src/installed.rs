@@ -15,15 +15,14 @@
 //! the engine takes the App from there, and only then does
 //! `installed.json` name it ([`Installed::commit`]). One the engine
 //! refused is taken away ([`Installed::discard`]), and the App goes on from
-//! the copy it had. The copies no install names go as the engine next
-//! starts ([`Installed::sweep`]): one may still be read by a worker that
-//! ends as its last call does.
+//! the copy it had. The copy an install put another in the place of goes
+//! once the new one is kept ([`Installed::tidy`]), or as the engine next
+//! starts ([`Installed::sweep`]) when a worker still holds it.
 //!
 //! `installed.json` is what says an App is installed. Removing one goes
 //! the other way round: the file goes first ([`Installed::remove`]), the
-//! engine lets go of the App, and its copies go last
-//! ([`Installed::clear`]), or as the engine next starts when a worker
-//! still holds one.
+//! engine lets go of the App, and its copies go last, by the same rule:
+//! what no record names goes.
 
 use crate::folder::Folder;
 use crate::folder::is_id;
@@ -208,26 +207,43 @@ impl Installed {
         }
     }
 
-    /// Takes away the copies no install names, left by an install put in
-    /// another's place or cut short, and what a removed App left: as the
-    /// engine starts, when no worker reads one.
-    pub fn sweep(&self) {
-        for Install { app, copy, .. } in self.list() {
-            let place = self.root.join(&app.id);
-            let others = std::fs::read_dir(&place).into_iter().flatten().flatten();
-            for other in others.map(|entry| entry.path()) {
-                if other.is_dir() && other != copy {
-                    let _ = host::remove_all(&other);
-                }
+    /// Takes away what no record of `id` names: the copies beside the one
+    /// that is installed, left by an install put in another's place or
+    /// cut short, and every copy of one that is installed no more. Called
+    /// once the engine let go of them; a copy a worker still holds a
+    /// moment, which Windows refuses to remove meanwhile, stays until the
+    /// engine starts. A record that does not read keeps its copies.
+    pub fn tidy(&self, id: &str) {
+        let place = self.root.join(id);
+        let gone = |path: &Path| {
+            if let Err(error) = host::remove_all(path) {
+                tracing::warn!(id, %error, "an App's copy stays until the engine starts");
+            }
+        };
+        if !self.record(id).is_file() {
+            return gone(&place);
+        }
+        let Some(Install { copy, .. }) = self.read(id) else {
+            return;
+        };
+        let others = std::fs::read_dir(&place).into_iter().flatten().flatten();
+        for other in others.map(|entry| entry.path()) {
+            if other.is_dir() && other != copy {
+                gone(&other);
             }
         }
-        for id in self.ids().filter(|id| !self.record(id).is_file()) {
-            self.clear(&id);
+    }
+
+    /// [`Installed::tidy`] of every App with a folder here, as the engine
+    /// starts, when no worker reads a copy.
+    pub fn sweep(&self) {
+        for id in self.ids().collect::<Vec<_>>() {
+            self.tidy(&id);
         }
     }
 
     /// Says the App `id` is installed no more: its record goes, and its
-    /// copies stay for `clear`. Its data stays in each Project (ADR 0085,
+    /// copies stay for [`Installed::tidy`]. Its data stays in each Project (ADR 0085,
     /// decision 6).
     pub fn remove(&self, id: &str) -> Result<(), Refusal> {
         let record = self.record(id);
@@ -238,16 +254,6 @@ impl Installed {
         }
         host::tried(|| std::fs::remove_file(&record))
             .map_err(|e| broke("an installed App was not removed", e))
-    }
-
-    /// Takes away the copies of `id`, removed, once the engine let go of
-    /// it. Its worker may hold its copy a moment longer, which Windows
-    /// refuses to remove meanwhile: what stays is swept as the engine
-    /// starts.
-    pub fn clear(&self, id: &str) {
-        if let Err(error) = host::remove_all(&self.root.join(id)) {
-            tracing::warn!(id, %error, "a removed App's copies stay until the engine starts");
-        }
     }
 }
 

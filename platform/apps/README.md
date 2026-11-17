@@ -26,8 +26,9 @@ this machine (ADR 0126).
   folder of its own for each install (`apps/<id>/<when>/`); the engine
   takes the App from there; and only then does `apps/<id>/installed.json`
   name that copy, with who installed it. Refused, the copy goes and the
-  App installed before runs on as it was. The copies no install names go
-  as the engine next starts. An id the engine runs or the kernel keeps is
+  App installed before runs on as it was. The copy it ran from before goes
+  once the new one is kept, and one install or removal is done before
+  the next begins. An id the engine runs or the kernel keeps is
   refused, and so is a tool's name another tool has. It writes the fact
   `installed` in the machine's log.
 - **Who may.** It needs the right to write, and a pass reaches it: an
