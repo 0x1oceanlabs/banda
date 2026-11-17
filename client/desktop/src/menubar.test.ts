@@ -113,27 +113,27 @@ describe("the menu bar icon (ADR 0086, decision 4)", () => {
   })
 
   it("is a template where it is one colour, in colour only where it asks", () => {
-    expect(iconOf("rest", false)).toEqual({
+    expect(iconOf("rest", false, "darwin")).toEqual({
       file: "restTemplate.png",
       template: true,
     })
-    expect(iconOf("working", true)).toEqual({
+    expect(iconOf("working", true, "darwin")).toEqual({
       file: "workingTemplate.png",
       template: true,
     })
-    expect(iconOf("asleep", false).template).toBe(true)
-    expect(iconOf("done", false).template).toBe(true)
-    expect(iconOf("asking", false)).toEqual({
+    expect(iconOf("asleep", false, "darwin").template).toBe(true)
+    expect(iconOf("done", false, "darwin").template).toBe(true)
+    expect(iconOf("asking", false, "darwin")).toEqual({
       file: "asking-light.png",
       template: false,
     })
-    expect(iconOf("asking", true)).toEqual({
+    expect(iconOf("asking", true, "darwin")).toEqual({
       file: "asking-dark.png",
       template: false,
     })
-    expect(rowIconOf("working").template).toBe(true)
+    expect(rowIconOf("working", "darwin")?.template).toBe(true)
     for (const state of ["asking", "failed", "done"] as const)
-      expect(rowIconOf(state)).toEqual({
+      expect(rowIconOf(state, "darwin")).toEqual({
         file: `row-${state}.png`,
         template: false,
       })
@@ -143,9 +143,12 @@ describe("the menu bar icon (ADR 0086, decision 4)", () => {
     const signs: Sign[] = ["rest", "working", "asking", "done", "asleep"]
     const states: CountedAs[] = ["working", "asking", "failed", "done", "woke"]
     const files = [
-      ...signs.flatMap((sign) => [iconOf(sign, false), iconOf(sign, true)]),
-      ...states.map(rowIconOf),
-    ].map((icon) => icon.file)
+      ...signs.flatMap((sign) => [
+        iconOf(sign, false, "darwin"),
+        iconOf(sign, true, "darwin"),
+      ]),
+      ...states.map((state) => rowIconOf(state, "darwin")),
+    ].map((icon) => icon?.file ?? "")
     const drawn = join(import.meta.dirname, "../icons/menu-bar")
     for (const file of new Set(files))
       for (const one of [file, file.replace(/\.png$/, "@2x.png")])
@@ -182,7 +185,7 @@ describe("the menu bar icon (ADR 0086, decision 4)", () => {
 
 describe("its menu", () => {
   const labels = (status: EngineStatus | null) =>
-    menuOf(status, "Banda Dev", "0.4.0-dev.457").map((item) =>
+    menuOf(status, "Banda Dev", "0.4.0-dev.457", "darwin").map((item) =>
       item.kind === "separator"
         ? "—"
         : item.kind === "thread"
@@ -225,7 +228,7 @@ describe("its menu", () => {
   })
 
   it("each row names the Thread it opens, in its Project", () => {
-    const row = menuOf(twoWorkingOneWaiting, "Banda Dev", "x").find(
+    const row = menuOf(twoWorkingOneWaiting, "Banda Dev", "x", "darwin").find(
       (item) => item.kind === "thread"
     )
     expect(row).toMatchObject({
@@ -239,7 +242,7 @@ describe("its menu", () => {
   it("lists one that woke from Later with those that wait, and counts it", () => {
     const woke = running(thread("Renew the certs", "banda", "woke"))
     expect(lookOf(woke)).toMatchObject({ count: "1" })
-    expect(menuOf(woke, "Banda", "0.4.0")[1]).toMatchObject({
+    expect(menuOf(woke, "Banda", "0.4.0", "darwin")[1]).toMatchObject({
       kind: "thread",
       sublabel: "banda · Woke",
     })
@@ -250,7 +253,8 @@ describe("its menu", () => {
     const [, row] = menuOf(
       running(thread(long, "banda", "working")),
       "Banda",
-      "0.4.0"
+      "0.4.0",
+      "darwin"
     )
     expect(row).toMatchObject({ kind: "thread", title: long })
     expect(row?.kind === "thread" && row.label).toBe(`${"A".repeat(43)}…`)
@@ -336,10 +340,138 @@ describe("what it reads", () => {
   })
 })
 
-describe("on Linux and Windows, as before", () => {
-  it("Banda has no menu bar icon: macOS alone has one in this step", () => {
-    expect(hasMenuBar("darwin")).toBe(true)
-    expect(hasMenuBar("linux")).toBe(false)
-    expect(hasMenuBar("win32")).toBe(false)
+describe("on Linux and Windows (ADR 0136, proposed in #1871)", () => {
+  const signs: Sign[] = ["rest", "working", "asking", "done", "asleep"]
+  const labels = (status: EngineStatus | null, platform: NodeJS.Platform) =>
+    menuOf(status, "Banda Dev", "0.4.0-dev.457", platform).map((item) =>
+      item.kind === "separator" ? "—" : `${item.kind}: ${item.label}`
+    )
+  const twoWaitTwoWork = running(
+    thread("Pricing page copy", "bandaso-site", "asking"),
+    thread("Sidebar for arc", "banda", "done"),
+    thread("Fix tile resize", "banda", "working"),
+    thread("Release notes dev.459", "banda", "working")
+  )
+
+  it("Banda's icon is in the tray, as it is in macOS's menu bar, and nowhere else", () => {
+    for (const platform of ["darwin", "linux", "win32"] as const)
+      expect(hasMenuBar(platform, false), platform).toBe(true)
+    expect(hasMenuBar("freebsd", false)).toBe(false)
+  })
+
+  it("a Linux window with no screen has none: GTK, which Electron falls back to with no tray host, ends the app there", () => {
+    expect(hasMenuBar("linux", true)).toBe(false)
+    // Only Linux has such a window.
+    expect(hasMenuBar("darwin", true)).toBe(true)
+    expect(hasMenuBar("win32", true)).toBe(true)
+  })
+
+  it("each sign is a picture in the bar's ink, a PNG on Linux and an .ico on Windows, never a template", () => {
+    for (const sign of signs) {
+      expect(iconOf(sign, false, "linux")).toEqual({
+        file: `tray/${sign}-light.png`,
+        template: false,
+      })
+      expect(iconOf(sign, true, "linux")).toEqual({
+        file: `tray/${sign}-dark.png`,
+        template: false,
+      })
+      expect(iconOf(sign, false, "win32")).toEqual({
+        file: `tray/${sign}-light.ico`,
+        template: false,
+      })
+      expect(iconOf(sign, true, "win32")).toEqual({
+        file: `tray/${sign}-dark.ico`,
+        template: false,
+      })
+    }
+  })
+
+  it("has every icon it names there drawn (icons/menu-bar/draw.mjs)", () => {
+    const states: CountedAs[] = ["working", "asking", "failed", "done", "woke"]
+    const drawn = join(import.meta.dirname, "../icons/menu-bar")
+    for (const platform of ["linux", "win32"] as const) {
+      const files = [
+        ...signs.flatMap((sign) => [
+          iconOf(sign, false, platform),
+          iconOf(sign, true, platform),
+        ]),
+        ...states.map((state) => rowIconOf(state, platform)),
+      ].flatMap((icon) => (icon ? [icon.file] : []))
+      for (const file of files)
+        expect(existsSync(join(drawn, file)), file).toBe(true)
+    }
+  })
+
+  it("a row that works has no mark, as nothing there colours one as the menu is; the rest keep theirs", () => {
+    for (const platform of ["linux", "win32"] as const) {
+      expect(rowIconOf("working", platform)).toBeNull()
+      for (const state of ["asking", "failed", "done", "woke"] as const)
+        expect(rowIconOf(state, platform)).toEqual({
+          file: `row-${state}.png`,
+          template: false,
+        })
+    }
+  })
+
+  it("the number is in the words the tooltip says, the same as on macOS", () => {
+    expect(lookOf(twoWaitTwoWork).said).toBe("2 your turn")
+    expect(lookOf(oneWorking).said).toBe("1 at work")
+    expect(lookOf(quiet).said).toBe("Nothing runs")
+    expect(lookOf(null).said).toBe("Offline")
+  })
+
+  it("a heading is a line that cannot be picked, with its count, and a row is one line, its title and its state, with no Project", () => {
+    for (const platform of ["linux", "win32"] as const) {
+      expect(labels(twoWaitTwoWork, platform)).toEqual([
+        "line: Your turn · 2",
+        "thread: Pricing page copy · Asks you",
+        "thread: Sidebar for arc · Done",
+        "line: Working · 2",
+        "thread: Fix tile resize · Working",
+        "thread: Release notes dev.459 · Working",
+        "—",
+        "open: Open Banda",
+        "—",
+        "line: Banda Dev dev.458",
+        "quit: Quit Banda",
+      ])
+      for (const item of menuOf(twoWaitTwoWork, "Banda", "x", platform))
+        expect(item).not.toHaveProperty("sublabel")
+    }
+    expect(labels(failed, "linux").slice(0, 4)).toEqual([
+      "line: Your turn · 1",
+      "thread: Run the tests · Failed",
+      "line: Working · 1",
+      "thread: Fix tile resize · Working",
+    ])
+  })
+
+  it("a row still names the Thread it opens, and cuts only its title", () => {
+    const long = "A".repeat(80)
+    const [, row] = menuOf(
+      running(thread(long, "banda", "working")),
+      "Banda",
+      "0.4.0",
+      "win32"
+    )
+    expect(row).toMatchObject({
+      kind: "thread",
+      label: `${"A".repeat(43)}… · Working`,
+      project: "p-banda",
+      thread: `t-${long}`,
+      title: long,
+    })
+  })
+
+  it("says nothing runs, and that the engine does not answer, as on macOS", () => {
+    expect(labels(quiet, "linux").slice(0, 2)).toEqual([
+      "line: Nothing runs",
+      "—",
+    ])
+    expect(labels(null, "win32").slice(0, 2)).toEqual([
+      "line: Banda's engine does not answer",
+      "—",
+    ])
   })
 })

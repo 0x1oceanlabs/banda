@@ -1,12 +1,13 @@
 /**
- * Who works and who waits on this machine, as the menu bar shows it (ADR
- * 0086, decision 4): `banda status --follow --with-parent` as the
+ * Who works and who waits on this machine, as the menu bar and the tray
+ * show it (ADR 0086, decision 4): `banda status --follow --with-parent` as the
  * window's child, run on the window's `banda` (program.ts), one line on
  * each change, kept here as the last `EngineStatus`. It starts no engine:
  * with none it says so, and waits for one. It is started again when it
  * dies, as the window's other children are (child.ts), and says nothing
- * meanwhile. Only where Banda lives in the menu bar (`hasMenuBar`):
- * elsewhere it never runs, and there is no status.
+ * meanwhile. Only where Banda lives in the menu bar (`hasMenuBar`), which
+ * is macOS, Linux and Windows: elsewhere it never runs, and there is no
+ * status.
  */
 import type { EngineStatus } from "@banda/contract"
 import {

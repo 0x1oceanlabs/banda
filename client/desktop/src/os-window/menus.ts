@@ -6,10 +6,12 @@
  *   window, as the menu bar's Open Banda does. Linux and Windows have
  *   none.
  * - **The menu bar's icon and its menu** (ADR 0086, decision 4), where
- *   Banda lives in the menu bar (`hasMenuBar`), drawn from `banda status
- *   --follow` alone (status.ts; menubar.ts says what they are, tray.ts
- *   draws them): a row opens its Thread in the window, Open Banda the
- *   window, and Quit Banda is ⌘Q's.
+ *   Banda lives in the menu bar (`hasMenuBar`): macOS's, the tray on
+ *   Linux and Windows' notification area (ADR 0136, proposed in #1871).
+ *   Drawn from `banda status --follow` alone (status.ts; menubar.ts says
+ *   what they are, tray.ts draws them): a row opens its Thread in the
+ *   window, Open Banda the window, as a click on the icon does off macOS,
+ *   and Quit Banda is ⌘Q's.
  * - **The door** (door.ts, ADR 0017): `banda menu [route]` opens the
  *   Banda menu in the window, or the settings at a route of their own;
  *   the page tells them apart. The bridge's `menu` is answered here, by
@@ -29,18 +31,20 @@ import { channel } from "../channel"
 import { type Commands, openDoor } from "../door"
 import { hasMenuBar } from "../menubar"
 import { Status } from "../status"
-import { menuBar, type MenuBarDoes } from "../tray"
+import { headless, menuBar, type MenuBarDoes } from "../tray"
 import { Windows } from "./windows"
 
 /** The system's menus and the door, as this part uses them: Electron's
  * and Node's in main (`thisMenus`), fakes in a test. */
 export type Menus = {
   readonly platform: NodeJS.Platform
+  /** Whether the window draws on no screen, where Linux has no tray. */
+  readonly headless: boolean
   /** Sets the app's menu: macOS's, whose Window → Banda does `banda`, or
    * none. */
   readonly appMenu: (banda: (() => void) | null) => void
-  /** Shows Banda's icon in the menu bar, with no status yet; returns how
-   * to show one, and how to take the icon away. */
+  /** Shows Banda's icon in the menu bar or the tray, with no status yet;
+   * returns how to show one, and how to take the icon away. */
   readonly menuBar: (does: MenuBarDoes) => ReturnType<typeof menuBar>
   /** Listens at `path` and answers by `commands`; returns how to shut it
    * (door.ts). */
@@ -52,6 +56,7 @@ export type Menus = {
 /** The menus of the app Electron runs, and the door. */
 export const thisMenus = (): Menus => ({
   platform: process.platform,
+  headless: headless(),
   appMenu: (banda) =>
     Menu.setApplicationMenu(
       banda &&
@@ -72,7 +77,8 @@ export const thisMenus = (): Menus => ({
           },
         ])
     ),
-  menuBar: (does) => menuBar(channel.name, app.getVersion(), does),
+  menuBar: (does) =>
+    menuBar(channel.name, app.getVersion(), does, process.platform),
   door: openDoor,
   quit: () => app.quit(),
 })
@@ -100,7 +106,7 @@ export const menusLayer = (menus: Menus) =>
         menus.platform === "darwin" ? () => void windows.inFront() : null
       )
 
-      if (hasMenuBar(menus.platform)) {
+      if (hasMenuBar(menus.platform, menus.headless)) {
         const bar = yield* Effect.acquireRelease(
           Effect.sync(() =>
             menus.menuBar({

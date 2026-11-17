@@ -182,7 +182,7 @@ The detail of each part is beside its code:
 
 | Part | Its page |
 | --- | --- |
-| Electron's main process: how the window finds the engine, the menu bar on macOS, what a packed Banda runs, `window.banda` | [`client/desktop/README.md`](../client/desktop/README.md) |
+| Electron's main process: how the window finds the engine, the menu bar on macOS and the tray on Linux and Windows, what a packed Banda runs, `window.banda` | [`client/desktop/README.md`](../client/desktop/README.md) |
 | The page: a Pane, the Window, the workspaces, the actions, the sidebar, the bar's Mark, calls and sounds | [`client/web/README.md`](../client/web/README.md) |
 | How Banda updates itself, and `scripts/install.sh` | [`platform/updates/README.md`](../platform/updates/README.md) |
 | The browser's pages | [`apps/browser/README.md`](../apps/browser/README.md) |
