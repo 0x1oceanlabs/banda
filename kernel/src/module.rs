@@ -87,6 +87,17 @@ pub trait Module: Send + Sync + 'static {
         &[]
     }
 
+    /// The ids it had before, the oldest first, as its `app.toml` declares
+    /// them (`was`). Nothing written under one is lost (ADR 0085, decision
+    /// 12): its methods answer by an old id too, and its events written
+    /// under one read as under its name. What the kernel keeps for it at
+    /// rest stays under the oldest ([`kept`](crate::tables::kept)), so a
+    /// build from before the change still finds it. Lowercase letters,
+    /// none another module's name.
+    fn was(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// Where its data lives: each Project's, or this machine's.
     fn scope(&self) -> Scope {
         Scope::Project

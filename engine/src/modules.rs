@@ -55,6 +55,12 @@ struct Manifest {
     /// hold the two alike.
     #[serde(default)]
     legacy_prefixes: Vec<String>,
+    /// The ids it had before, the oldest first (ADR 0085, decision 12):
+    /// its methods answer by one too, and what a log holds under one
+    /// reads as its own. Its engine part tells the kernel them
+    /// (`Module::was`), and the tests hold the two alike.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    was: Vec<String>,
     /// What it needs of Banda (ADR 0082, decision 2); none for the
     /// window's own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -170,6 +176,7 @@ pub fn installed(apps: &std::path::Path) -> Vec<Offer> {
             from_banda: false,
             settings: Vec::new(),
             legacy_prefixes: Vec::new(),
+            was: Vec::new(),
             needs: Some(Needs {}),
             unstable: BTreeMap::new(),
         },
@@ -448,23 +455,25 @@ mod tests {
     }
 
     /// The kernel lets a module's SQL reach the legacy prefixes its engine
-    /// part tells it, so its manifest says the same (ADR 0085, decision
-    /// 12); a module with no engine part has no tables. Each engine part
+    /// part tells it, and reads its log and answers its methods by the
+    /// ids it tells it, so its manifest says the same (ADR 0085, decision
+    /// 12); a module with no engine part has neither. Each engine part
     /// as the list of Apps builds it.
     #[test]
-    fn a_module_s_legacy_prefixes_are_the_ones_its_engine_part_reaches() {
+    fn a_module_s_legacy_prefixes_and_ids_before_are_the_ones_its_engine_part_tells() {
         let parts = crate::apps::on_a_test_host(crate::apps::scanned::parts);
         for offer in offers() {
             let Manifest {
                 id,
                 legacy_prefixes,
+                was,
                 ..
             } = &offer.manifest;
-            let reached: Vec<&str> = (parts.iter())
-                .find(|(_, part)| part.name() == id)
-                .map(|(_, part)| part.legacy_prefixes().to_vec())
-                .unwrap_or_default();
-            assert_eq!(legacy_prefixes, &reached, "{id}'s {MANIFEST}");
+            let part = parts.iter().find(|(_, part)| part.name() == id);
+            let reached = part.map_or(&[][..], |(_, part)| part.legacy_prefixes());
+            assert_eq!(legacy_prefixes, reached, "{id}'s {MANIFEST}");
+            let told = part.map_or(&[][..], |(_, part)| part.was());
+            assert_eq!(was, told, "{id}'s {MANIFEST}");
         }
     }
 

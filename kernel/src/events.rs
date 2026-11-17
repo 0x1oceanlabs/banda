@@ -53,6 +53,59 @@ impl EventFilter {
     }
 }
 
+/// The ids a log's modules had before, each with its name now (ADR 0085,
+/// decision 12): what a log holds under an old id is read under the name,
+/// for good, and a filter that names either hears both.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Renamed(Vec<(&'static str, &'static str)>);
+
+impl Renamed {
+    /// Of modules, each as its name and the ids it had before.
+    pub(crate) fn of(
+        modules: impl Iterator<Item = (&'static str, &'static [&'static str])>,
+    ) -> Renamed {
+        Renamed(
+            modules
+                .flat_map(|(now, was)| was.iter().map(move |&was| (was, now)))
+                .collect(),
+        )
+    }
+
+    /// The name now of the module a log or a filter names `module`.
+    fn now<'a>(&self, module: &'a str) -> &'a str {
+        (self.0.iter().find(|(was, _)| *was == module)).map_or(module, |(_, now)| now)
+    }
+
+    /// `event` as it is read: under its module's name now.
+    fn read(&self, mut event: Event) -> Event {
+        if let Some((_, now)) = self.0.iter().find(|(was, _)| *was == event.module) {
+            event.module = (*now).to_owned();
+        }
+        event
+    }
+
+    /// `filter` as events match it: by its module's name now, which every
+    /// event read or committed carries.
+    pub(crate) fn asked(&self, mut filter: EventFilter) -> EventFilter {
+        if let Some(module) = &mut filter.module {
+            *module = self.now(module).to_owned();
+        }
+        filter
+    }
+
+    /// Every id a log may hold the events of `module` under, as a JSON
+    /// list: its name now and those it had before.
+    fn held(&self, module: &str) -> String {
+        let now = self.now(module);
+        let before = self
+            .0
+            .iter()
+            .filter(|(_, n)| *n == now)
+            .map(|(was, _)| *was);
+        serde_json::json!(std::iter::once(now).chain(before).collect::<Vec<_>>()).to_string()
+    }
+}
+
 const COLUMNS: &str =
     "seq, id, module, kind, version, subject, author_kind, author_id, at, payload";
 
@@ -115,10 +168,11 @@ pub(crate) fn after(
     after: i64,
     filter: &EventFilter,
     limit: usize,
+    renamed: &Renamed,
 ) -> rusqlite::Result<Vec<Event>> {
     let mut statement = sql.prepare_cached(&format!(
         "SELECT {COLUMNS} FROM kernel_events
-         WHERE seq > ?1 AND (?2 IS NULL OR module = ?2) AND (?3 IS NULL OR subject = ?3)
+         WHERE seq > ?1 AND (?2 IS NULL OR module IN (SELECT value FROM json_each(?2))) AND (?3 IS NULL OR subject = ?3)
            AND (?5 IS NULL OR kind IN (SELECT value FROM json_each(?5)))
          ORDER BY seq LIMIT ?4"
     ))?;
@@ -129,14 +183,15 @@ pub(crate) fn after(
     let rows = statement.query_map(
         params![
             after,
-            filter.module,
+            filter.module.as_deref().map(|module| renamed.held(module)),
             filter.subject,
             i64::try_from(limit).unwrap_or(i64::MAX),
             kinds
         ],
         from_row,
     )?;
-    rows.collect()
+    rows.map(|event| event.map(|event| renamed.read(event)))
+        .collect()
 }
 
 /// The log's position as it stood at `at`, in ms since the epoch: its
@@ -154,10 +209,11 @@ pub(crate) fn before(
     sql: &Connection,
     before: i64,
     filter: &EventFilter,
+    renamed: &Renamed,
 ) -> rusqlite::Result<Option<Event>> {
     let mut statement = sql.prepare_cached(&format!(
         "SELECT {COLUMNS} FROM kernel_events
-         WHERE seq < ?1 AND (?2 IS NULL OR module = ?2) AND (?3 IS NULL OR subject = ?3)
+         WHERE seq < ?1 AND (?2 IS NULL OR module IN (SELECT value FROM json_each(?2))) AND (?3 IS NULL OR subject = ?3)
            AND (?4 IS NULL OR kind IN (SELECT value FROM json_each(?4)))
          ORDER BY seq DESC LIMIT 1"
     ))?;
@@ -165,8 +221,10 @@ pub(crate) fn before(
         .kinds
         .as_ref()
         .map(|kinds| serde_json::json!(kinds).to_string());
-    let params = params![before, filter.module, filter.subject, kinds];
-    statement.query_row(params, from_row).optional()
+    let module = filter.module.as_deref().map(|module| renamed.held(module));
+    let params = params![before, module, filter.subject, kinds];
+    let event = statement.query_row(params, from_row).optional()?;
+    Ok(event.map(|event| renamed.read(event)))
 }
 
 /// How many events of `tally`'s module and kind the log took in its span,
@@ -175,15 +233,22 @@ pub(crate) fn tally(
     sql: &Connection,
     tally: &crate::Tally,
     path: &str,
+    renamed: &Renamed,
 ) -> rusqlite::Result<Vec<(String, u64)>> {
     let mut statement = sql.prepare_cached(
         "SELECT CASE WHEN json_type(payload, ?3) = 'text'
                 THEN json_extract(payload, ?3) ELSE '' END, COUNT(*)
          FROM kernel_events
-         WHERE module = ?1 AND kind = ?2 AND at >= ?4 AND at < ?5
+         WHERE module IN (SELECT value FROM json_each(?1)) AND kind = ?2 AND at >= ?4 AND at < ?5
          GROUP BY 1",
     )?;
-    let params = params![tally.module, tally.kind, path, tally.from, tally.to];
+    let params = params![
+        renamed.held(&tally.module),
+        tally.kind,
+        path,
+        tally.from,
+        tally.to
+    ];
     let rows = statement.query_map(params, |row| {
         Ok((row.get(0)?, row.get::<_, i64>(1)?.unsigned_abs()))
     })?;

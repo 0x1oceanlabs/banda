@@ -90,6 +90,20 @@ fn served(
     Ok((here, right))
 }
 
+/// `method` of `module` by its name now: one called by an id the module
+/// had before is the same method, to a pass, a receipt and the module.
+fn named<'a>(module: &dyn Module, method: &'a str, rest: &str) -> std::borrow::Cow<'a, str> {
+    let name = module.name();
+    if method
+        .strip_suffix(rest)
+        .is_some_and(|prefix| prefix.strip_suffix('.') == Some(name))
+    {
+        method.into()
+    } else {
+        format!("{name}.{rest}").into()
+    }
+}
+
 impl Kernel {
     /// Routes a call: `projects.*` to the kernel, `<module>.*` to that module
     /// in the given Project. Every method passes the Project wall and the
@@ -203,6 +217,7 @@ impl Kernel {
             return self.own_call(ask, own, params).await.map(plain);
         }
         let (module, rest, right) = self.method(method)?;
+        let method = &*named(&*module, method, rest);
         let (project, wall) = self.place(&*module, method, rest, project, only).await?;
         let _moving = project.moving.read().await;
         let (module, right) = served(&project, &participant, &*module, method, rest, right)?;
@@ -345,6 +360,7 @@ impl Kernel {
             return Ok(power());
         }
         let (module, rest, right) = self.method(method)?;
+        let method = &*named(&*module, method, rest);
         let (project, wall) = self.place(&*module, method, rest, project, only).await?;
         let (module, right) = served(&project, &participant, &*module, method, rest, right)?;
         access::decide(&participant, right, project.owner())?;
@@ -361,13 +377,14 @@ impl Kernel {
         module.stream(call, rest, params).await
     }
 
-    /// The module of `method`, the method without its prefix, and the
-    /// right it needs.
+    /// The module of `method`, by its name or an id it had before (ADR
+    /// 0085, decision 12), the method without its prefix, and the right
+    /// it needs.
     fn method<'a>(&self, method: &'a str) -> Result<(Arc<dyn Module>, &'a str, Right), Refusal> {
         let (prefix, rest) = method.split_once('.').ok_or_else(|| no_method(method))?;
         let runs = self.runs();
         let module = (runs.modules.iter())
-            .find(|m| m.name() == prefix)
+            .find(|m| m.name() == prefix || m.was().contains(&prefix))
             .ok_or_else(|| no_method(method))?;
         let right = module.right(rest).ok_or_else(|| no_method(method))?;
         Ok((module.clone(), rest, right))
