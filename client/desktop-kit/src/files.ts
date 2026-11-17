@@ -151,7 +151,9 @@ export async function copyTo(
  */
 export const relay = <E, R>(
   request: Request,
-  addressOf: (machine: string | null) => Effect.Effect<Address, E, R>,
+  addressOf: (
+    machine: string | null
+  ) => Effect.Effect<Pick<Address, "url">, E, R>,
   url: string = request.url
 ) =>
   Effect.gen(function* () {

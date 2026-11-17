@@ -39,7 +39,7 @@ import { actsAnswers, runOwn } from "./acts"
 import { BRIDGE } from "./bridge"
 import { openDoor } from "./door"
 import { engineLayer, OwnEngine, Stop } from "./engine"
-import { deviceKey } from "./key"
+import { windowKey } from "./key"
 import { loginPath } from "./login"
 import { firstLook, lookLayer } from "./look"
 import { appUpdates, modules } from "./modules"
@@ -55,7 +55,7 @@ import { listApp, listedImage, listShortcut } from "./entry"
 import { hasMenuBar } from "./menubar"
 import { Status, statusLayer } from "./status"
 import { menuBar } from "./tray"
-import { forwardAnswer, reaching } from "./forward"
+import { forwardAnswer, reaching, signedHello } from "./forward"
 import { Hosts, terminalArgs } from "./hosts"
 import { problemsAnswers, startLog, watchProblems } from "./problems"
 import { Editors } from "./editors"
@@ -124,6 +124,7 @@ const node: Record<string, string> = ownNode
 // The window keeps its profile in the engine's state folder, so Banda,
 // Banda Dev, a checkout and a test never share one (ADR 0033).
 const state = stateFolder(app.getPath("appData"))
+const key = windowKey(state, DEV_PAGE)
 app.setPath("userData", join(state, "window"))
 // The window's log and crash dumps, beside the engine's (ADR 0039).
 const banda = (contents: WebContents) => fromPage(contents.getURL())
@@ -171,10 +172,7 @@ const runtime = ManagedRuntime.make(
             runtime.runSync(
               Quitting.use((quitting) => Effect.sync(quitting.engineStopped))
             ),
-          // This device's key, which the window is paired by (ADR 0124). A
-          // page served for development is of another origin than the one
-          // a window pairs from: it reaches the engine as before.
-          DEV_PAGE ? undefined : deviceKey(join(state, "device.key"))
+          key
         ),
         // The windows (os-window/windows.ts), over what they are made of
         // (os-window/material.ts), over the look. What the system says of
@@ -203,7 +201,9 @@ const runtime = ManagedRuntime.make(
         )
       )
     ),
-    Layer.merge(reaching(configFolder(app.getPath("appData")), installScript)),
+    Layer.merge(
+      reaching(configFolder(app.getPath("appData")), installScript, key, state)
+    ),
     // The Panes' own windows, over the windows (os-window/popped.ts).
     (services) => Popped.layer.pipe(Layer.provideMerge(services)),
     // What the app is asked from outside its windows (os-window/asked.ts).
@@ -325,10 +325,7 @@ async function ready(): Promise<void> {
       ([name]) => Hosts.use((hosts) => late(hosts.address(name))),
     ],
     // No name is this machine's own engine, stopped (ADR 0124).
-    sign: [
-      text,
-      ([message]) => OwnEngine.use((engine) => engine.sign(message)),
-    ],
+    sign: [text, ([message]) => signedHello(message)],
     hostStart: [
       text,
       ([name]) =>

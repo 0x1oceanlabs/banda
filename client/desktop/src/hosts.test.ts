@@ -8,7 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs"
-import { tmpdir } from "node:os"
+import { hostname, tmpdir } from "node:os"
 import { delimiter, dirname, join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
@@ -22,6 +22,7 @@ import {
   diffOf,
   followerArgs,
   forwardArgs,
+  pairCommand,
   forwardsIn,
   failedIn,
   foundIn,
@@ -46,6 +47,7 @@ import {
   TIMES,
   type Times,
 } from "./hosts"
+import type { DeviceKey } from "./key"
 import { Program } from "./program"
 import { script } from "./testing"
 
@@ -828,7 +830,7 @@ if (args[0] === "-G") {
 }
 const kind = args.includes("-N")
   ? "forward"
-  : / (status|stop)\\b|\\| sh -s --/.test(args.at(-1))
+  : / (status|stop|devices add)\\b|\\| sh -s --/.test(args.at(-1))
     ? "command"
     : "follower"
 const runs = play[kind + "s"] ?? [[kind === "command" ? { exit: 0 } : { listen: true }]]
@@ -893,7 +895,9 @@ function fakeSsh(play: Play) {
     runs: (kind: "-G" | "-N" | "follower" | "command", ssh?: string) =>
       calls().filter(({ args }) => {
         if (ssh !== undefined && !args.includes(ssh)) return false
-        const command = / (status|stop)\b|\| sh -s --/.test(args.at(-1)!)
+        const command = / (status|stop|devices add)\b|\| sh -s --/.test(
+          args.at(-1)!
+        )
         if (kind === "command") return args[0] !== "-G" && command
         return kind === "follower"
           ? args[0] !== "-G" && !args.includes("-N") && !command
@@ -910,8 +914,14 @@ function fakeSsh(play: Play) {
 }
 
 /** What `start --with-parent` prints first, with `secret` and `port`. */
-const running = (secret: string, port: number, protocol = 1) =>
+const running = (
+  secret: string,
+  port: number,
+  protocol = 1,
+  door: { door?: number; host_key?: string } = {}
+) =>
   JSON.stringify({
+    ...door,
     protocol,
     port,
     secret,
@@ -941,7 +951,9 @@ function hostsOn(
   fake: ReturnType<typeof fakeSsh>,
   times: Partial<Times> = {},
   toml = DEVBOX_TOML,
-  install?: string
+  install?: string,
+  key?: DeviceKey,
+  proved?: string
 ) {
   const file = join(fake.dir, "hosts.toml")
   writeFileSync(file, toml)
@@ -949,6 +961,8 @@ function hostsOn(
     env: fake.env,
     times: { ...FAST, ...times },
     install,
+    key,
+    proved,
   }).pipe(
     Layer.provide(
       Program.layer({
@@ -1023,6 +1037,183 @@ afterEach(() => {
   vi.restoreAllMocks()
   for (const dir of folders.splice(0))
     rmSync(dir, { recursive: true, force: true })
+})
+
+/** A device's key that signs as `signed:<message>`. */
+const KEY: DeviceKey = { public: "K3Y", sign: (message) => `signed:${message}` }
+/** A host key, as an engine says its own. */
+const HOST_KEY = "h".repeat(43)
+/** The page's `hello` to the door that proves `hostKey`. */
+const hello = (hostKey: string) =>
+  ["banda-door/hello/1", "nonce", hostKey, "app://banda", "mine"].join("\n")
+
+it.live(
+  "a machine with a door is reached there, as the device its ssh login pairs: the forward goes to the door, the page gets no secret, and this device signs its hello to that door alone",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [
+          [
+            {
+              out: running("s3cr3t-one", 4321, 1, {
+                door: 22_633,
+                host_key: HOST_KEY,
+              }),
+            },
+          ],
+        ],
+        commands: [
+          [{ out: JSON.stringify({ ok: { id: "device-1" } }), exit: 0 }],
+        ],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        const address = yield* hosts.address("devbox")
+        const port = portOf(fake)
+        expect(address).toEqual({
+          url: `ws://127.0.0.1:${port}/ws`,
+          door: { device: "device-1", hostKey: HOST_KEY },
+        })
+        expect(fake.runs("-N")[0]!.args).toEqual(
+          forwardArgs(DEVBOX, port, 22_633)
+        )
+        const [pairs] = fake.runs("command")
+        expect(pairs!.args.at(-1)).toBe(
+          pairCommand(DEVBOX.banda, "K3Y", hostname())
+        )
+        expect(pairs!.args.at(-1)).toContain("devices add --key K3Y --name ")
+        expect(pairs!.args.at(-1)).toContain(
+          "--kind desktop --origin app://banda"
+        )
+        expect(yield* hosts.signed(hello(HOST_KEY))).toBe(
+          `signed:${hello(HOST_KEY)}`
+        )
+        expect(yield* hosts.signed(hello("o".repeat(43)))).toBeUndefined()
+        expect(yield* hosts.signed("pay Bob")).toBeUndefined()
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(hostsOn(fake, {}, DEVBOX_TOML, undefined, KEY))
+      )
+      expect(logged.join("\n")).not.toContain("s3cr3t-one")
+    }),
+  20_000
+)
+
+it.live(
+  "a machine that does not pair this device is reached as before, and the log says so; so is one with no door",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [
+          [
+            {
+              out: running("s3cr3t-one", 4321, 1, {
+                door: 22_633,
+                host_key: HOST_KEY,
+              }),
+            },
+          ],
+        ],
+        commands: [[{ err: "banda: unknown command", exit: 2 }]],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        const address = yield* hosts.address("devbox")
+        expect(address).toEqual({
+          url: `ws://127.0.0.1:${portOf(fake)}/ws`,
+          secret: "s3cr3t-one",
+        })
+        expect(fake.runs("-N")[0]!.args).toEqual(
+          forwardArgs(DEVBOX, portOf(fake), 4321)
+        )
+        expect(yield* hosts.signed(hello(HOST_KEY))).toBeUndefined()
+        expect(logged).toContain(
+          "banda: devbox did not pair this device; it is reached as before"
+        )
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(hostsOn(fake, {}, DEVBOX_TOML, undefined, KEY))
+      )
+      const old = fakeSsh({
+        followers: [[{ out: running("s3cr3t-two", 4321) }]],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        expect(yield* hosts.address("devbox")).toHaveProperty(
+          "secret",
+          "s3cr3t-two"
+        )
+        expect(old.runs("command")).toHaveLength(0)
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(hostsOn(old, {}, DEVBOX_TOML, undefined, KEY))
+      )
+    }),
+  20_000
+)
+
+it.live(
+  "a machine that says the host key another proved is not held to it: it is reached as before, and this device signs no hello for it",
+  () =>
+    Effect.gen(function* () {
+      const key = "p".repeat(43)
+      const fake = fakeSsh({
+        followers: [
+          [
+            {
+              out: running("s3cr3t-one", 4321, 1, {
+                door: 22_633,
+                host_key: key,
+              }),
+            },
+          ],
+        ],
+        commands: [
+          [{ out: JSON.stringify({ ok: { id: "device-1" } }), exit: 0 }],
+        ],
+      })
+      const proved = join(fake.dir, "host-keys.json")
+      // devbox proved the key in a run before; arc says it now.
+      writeFileSync(proved, JSON.stringify({ [key]: "devbox" }))
+      const toml = `${DEVBOX_TOML}[[hosts]]\nname = "arc"\nssh = "arc"\n`
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        expect(yield* hosts.address("devbox")).toHaveProperty("door")
+        expect(yield* hosts.address("arc")).toHaveProperty(
+          "secret",
+          "s3cr3t-one"
+        )
+        expect(logged).toContain(
+          "banda: arc says the host key that devbox proved; it is not held to it, and is reached as before"
+        )
+        expect(JSON.parse(readFileSync(proved, "utf8"))).toEqual({
+          [key]: "devbox",
+        })
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(hostsOn(fake, {}, toml, undefined, KEY, proved))
+      )
+      // devbox taken out of hosts.toml, arc may have the key.
+      const alone = `[[hosts]]\nname = "arc"\nssh = "arc"\n`
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        expect(yield* hosts.address("arc")).toHaveProperty("door")
+        expect(JSON.parse(readFileSync(proved, "utf8"))).toEqual({
+          [key]: "arc",
+        })
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(hostsOn(fake, {}, alone, undefined, KEY, proved))
+      )
+    }),
+  20_000
+)
+
+it("a device's name goes to the other machine with nothing a shell reads", () => {
+  expect(pairCommand("banda", "K3Y", `Roma's "Mac"; rm -rf $HOME`)).toContain(
+    `--name "Romas Mac rm -rf HOME" --kind`
+  )
+  expect(pairCommand("banda", "K3Y", "'$`")).toContain(`--name "This device"`)
 })
 
 it.live(

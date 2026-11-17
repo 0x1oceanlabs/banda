@@ -13,7 +13,6 @@
  */
 import { BROWSER_BRIDGE, type BrowserHost } from "@banda/browser-pane/desktop"
 import { NOTIFY_BRIDGE } from "@banda/notifications-pane/desktop"
-import type { Address } from "@banda/contract"
 import type {
   ActAnswer,
   ActAsk,
@@ -51,7 +50,7 @@ export const BRIDGE = bridge({
   /** Where host `name`'s engine listens, through the window's forward:
    * it waits while the host connects or is stopped, tries a refused one
    * again, and fails for one refused or not in `hosts.toml`. */
-  hostEngine: invoke<[name: string], Address>(),
+  hostEngine: invoke<[name: string], EngineAt>(),
   /** Starts host `name` again when its engine is stopped there or it is
    * refused; fails for one not in `hosts.toml`. */
   hostStart: invoke<[name: string]>(),

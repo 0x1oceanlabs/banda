@@ -29,7 +29,9 @@ import {
 } from "effect"
 import { ChildProcessSpawner } from "effect/process"
 import { command } from "./child"
+import { OwnEngine } from "./engine"
 import { forwardArgs, Hosts, linesOf } from "./hosts"
+import type { DeviceKey } from "./key"
 
 /** How many ports are tried, from the machine's own on. */
 const TRIES = 10
@@ -255,11 +257,38 @@ export class Forwards extends Context.Service<
 /**
  * The other machines of `hosts.toml` in the config folder `config`, and
  * their ports opened here, which go by the same ssh: what main's root
- * builds of both. `install` is this build's `install.sh` (`Hosts.layer`).
+ * builds of both. `install` is this build's `install.sh`, and `key` this
+ * device's, by which it pairs at their doors; the host keys they proved
+ * are kept in Banda's `state` (`Hosts.layer`).
  */
-export const reaching = (config: string, install?: string) =>
+export const reaching = (
+  config: string,
+  install?: string,
+  key?: DeviceKey,
+  state?: string
+) =>
   Forwards.layer().pipe(
-    Layer.provideMerge(Hosts.layer(join(config, "hosts.toml"), { install }))
+    Layer.provideMerge(
+      Hosts.layer(join(config, "hosts.toml"), {
+        install,
+        key,
+        proved: state && join(state, "host-keys.json"),
+      })
+    )
+  )
+
+/** The bridge's `sign`, answered beside its code: this device's
+ * signature of the page's `hello` to this machine's door, or to that of
+ * another machine it is paired at; anything else is refused. */
+export const signedHello = (message: string) =>
+  OwnEngine.use((engine) => engine.sign(message)).pipe(
+    Effect.catch((refused) =>
+      Hosts.use((hosts) => hosts.signed(message)).pipe(
+        Effect.flatMap((signed) =>
+          signed === undefined ? Effect.fail(refused) : Effect.succeed(signed)
+        )
+      )
+    )
   )
 
 /** The bridge's `hostForward`, answered beside its code (ADR 0089,

@@ -99,6 +99,7 @@ const hostsLayer = ({
     address: () => Effect.die("unused"),
     addressNow,
     addressWhenBack,
+    signed: () => Effect.die("unused"),
     current: Effect.die("unused"),
     changes: Stream.die("unused"),
     start: () => Effect.die("unused"),

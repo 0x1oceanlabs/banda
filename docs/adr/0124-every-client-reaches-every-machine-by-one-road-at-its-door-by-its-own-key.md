@@ -393,6 +393,27 @@ repository), with an adversarial check.
   look, by that device's window, and the Inbox here fills as ever. Two
   windows both in front both tell: a machine knows which windows are in
   front, not which of them the Person's eyes are on.
+- **A desktop at another machine's door (SE4, PR 1a).** Where the
+  engine the follower started says a door and its host key, main pairs
+  this device there by its ssh login (`ssh <machine> banda devices add
+  --key … --kind desktop --origin app://banda`, the same device each
+  time), forwards to the door's port and not the API's, and gives the
+  page the device it is there and the host key to hold that door to. The
+  page signs its hello through main, which signs for its own engine's
+  door and for a machine live at its door, and nothing else. So the page
+  holds no other machine's owner secret, and what a window does on arc it
+  does as a device arc lists and can remove. A machine is believed about its own host
+  key, as ssh reached it, but only the first to say a key is held to it
+  (`host-keys.json` in the window's state, kept as ssh keeps
+  `known_hosts`, a machine taken out of `hosts.toml` freeing its key):
+  this device has one key at every door, so a machine naming another's
+  host key could carry the page's hello on to that door. An engine with
+  no door, a window served for development, a machine that would not
+  pair and one that says another's key are reached as before, and the
+  log says so. Not yet: the follower itself,
+  which still starts the engine and reads its secret in main; the tailnet
+  route and the race between routes; hosts by host key; a device removed
+  there while the window runs, which is away until its next go.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

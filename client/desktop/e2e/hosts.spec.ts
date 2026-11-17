@@ -530,6 +530,24 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(placeOf(there, "banda").first()).toBeVisible()
   await expect(there.getByText("Bench window tests")).toBeVisible()
   await stands(page, "live")
+  // It is reached at arc's door, as the device its ssh login paired
+  // there, with no secret of arc's owner in the page (ADR 0124, SE4).
+  const at = await page.evaluate(() =>
+    (
+      globalThis as unknown as {
+        banda: { hostEngine: (name: string) => Promise<object> }
+      }
+    ).banda.hostEngine("arc")
+  )
+  expect(at).not.toHaveProperty("secret")
+  const { devices } = JSON.parse(arc.banda("devices", "list")).ok
+  expect(devices).toContainEqual(
+    expect.objectContaining({
+      id: (at as { door: { device: string } }).door.device,
+      kind: "desktop",
+      origin: "app://banda",
+    })
+  )
   // A Thread started there shows as it starts, with how long it works.
   send(arc, banda, "Hosts over ssh, wait")
   await expect(
@@ -1408,10 +1426,10 @@ test("a Mac there, with no banda in hosts.toml: the window finds its Banda in th
   window = await withArc(arc, null)
   const there = arcOf(window.page)
   await expect(there.getByText("Bench window tests")).toBeVisible()
-  // It ran the copy a Mac keeps, as arc's uname said Darwin.
-  expect(readFileSync(join(arc.dir, "home/ran"), "utf8")).toBe(
-    `${join(arc.dir, "home", MAC_COPY)}\n`
-  )
+  // It ran the copy a Mac keeps, as arc's uname said Darwin: to follow
+  // arc's engine, and to pair this device at its door.
+  const copy = `${join(arc.dir, "home", MAC_COPY)}\n`
+  expect(readFileSync(join(arc.dir, "home/ran"), "utf8")).toBe(copy + copy)
 })
 
 test("another machine's Thread that calls opens on its engine by Alt+U and from its toast, never on this one's", async () => {

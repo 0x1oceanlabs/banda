@@ -18,7 +18,7 @@ import {
   sign,
 } from "node:crypto"
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
-import { dirname } from "node:path"
+import { dirname, join } from "node:path"
 
 /** A device's key: its public half, as an engine pairs it, and what
  * signs with the other. Both as base64url. */
@@ -26,6 +26,29 @@ export type DeviceKey = {
   readonly public: string
   readonly sign: (message: string) => string
 }
+
+/** The origin of Banda's page, which a window pairs from. */
+export const ORIGIN = "app://banda"
+
+/** Whether `message` is the `hello` a page of Banda's signs for the door
+ * that proves `hostKey` (`helloMessage` in the contract): nothing else is
+ * signed with this device's key. */
+export function helloTo(message: string, hostKey: string): boolean {
+  const lines = message.split("\n")
+  return (
+    lines.length === 5 &&
+    lines[0] === "banda-door/hello/1" &&
+    lines[2] === hostKey &&
+    lines[3] === ORIGIN
+  )
+}
+
+/** The key a window of Banda's is paired by (ADR 0124), kept in Banda's
+ * `state`; none for a page served for development (`dev`), which is of
+ * another origin than the one a window pairs from, and reaches the
+ * engines as before. */
+export const windowKey = (state: string, dev: unknown) =>
+  dev ? undefined : deviceKey(join(state, "device.key"))
 
 /** The key kept in `file`, made there where none can be read. */
 export function deviceKey(file: string): DeviceKey {
