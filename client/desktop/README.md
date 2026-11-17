@@ -81,7 +81,10 @@ page is one part of. A change to main changes this page in the same PR.
   `client/desktop/icons/menu-bar/draw.mjs`, which draws the five signs
   for Linux and Windows too, in `tray/`: each for a light bar and a dark
   one, a PNG at 1x and `@2x` and an `.ico` of 16, 20, 24 and 32 px, which
-  nothing shows yet). An engine with no app opens
+  nothing shows yet; whether a tray host is there to show one,
+  `os-window/tray-host.ts` answers, which nothing asks yet: on Linux the
+  session bus's `org.kde.StatusNotifierWatcher`, asked with `busctl`,
+  and anything but a clear yes is no; issue #1870). An engine with no app opens
   Banda.app hidden, by its path (`open -g -j <app> --args --hidden`),
   which then shows no window and no Dock icon, only the menu bar's; it
   never opens an app that runs, nor one the Person quit or ended with
