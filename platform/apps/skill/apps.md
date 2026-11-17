@@ -87,8 +87,10 @@ Each method has a `kind` and `about`, and `params` when it takes any:
   only it and `params`, and decides from them whether to call the
   method. Say what it does, what it takes and what it answers.
 - **`params`** is a JSON Schema of an object; describe each property.
-  Banda hands a method what it was sent: check in the method what it
-  needs.
+  Banda refuses a call whose params do not fit its `type`, `enum`,
+  `required`, `properties`, `additionalProperties: false` and `items`,
+  and says where; a `pattern`, a range or a `format` the method checks
+  itself.
 - **`right`**: `read` for a call and `write` for a command when left
   out. `manage` is for what only your Person may do.
 - Every call and command is an Agent's tool, `<id>_<method>`. `"tool":

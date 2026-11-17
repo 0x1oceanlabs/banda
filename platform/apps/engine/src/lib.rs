@@ -32,6 +32,7 @@
 pub mod folder;
 pub mod installed;
 pub mod new;
+mod params;
 pub mod served;
 pub mod tree;
 mod worker;

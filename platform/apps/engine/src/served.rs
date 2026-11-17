@@ -111,8 +111,13 @@ impl Module for Served {
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
-        let kind = (self.kind(method))
+        let declared = (self.declared(method))
             .ok_or_else(|| Refusal::invalid(format!("{} has no method {method}.", self.name)))?;
+        // Held to what the App declared before its code runs: the App is
+        // handed what it said it takes.
+        crate::params::check(&declared.params, &params)
+            .map_err(|why| Refusal::invalid(format!("{}.{method}: {why}.", self.name)))?;
+        let kind = declared.kind;
         let project = call.project().clone();
         let turn = (kind == Kind::Command).then(|| self.turn(project.id()));
         let _turn = match &turn {
