@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
-import { type Arc, newArc, put, SHOTS, withArc } from "./arc"
+import { type Arc, newArc, put, shot, SHOTS, withArc } from "./arc"
 import type { Window } from "./window"
 
 let window: Window | undefined
@@ -259,4 +259,75 @@ test("the update widget shows every machine in a word, asks before it stops Agen
       },
     })
   }
+})
+
+test("a Pane on arc, of another build with a newer Banda in place, says so and offers Update arc, which opens the widget at arc's row (ADR 0120, decision 7)", async () => {
+  test.setTimeout(180_000)
+  arc = newArc()
+  stopArc = await arc.start()
+  const folder = join(arc.code.arc, "banda")
+  put(arc.disk(folder), { "who.txt": "arc\n" })
+  const project = JSON.parse(arc.banda("project", "add", folder)).ok
+    .id as string
+  arc.send(project, "Bench the update")
+  await expect
+    .poll(
+      () =>
+        arc!.states(project).find(([one]) => one === "Bench the update")?.[1]
+    )
+    .toBe("done")
+  const dir = mkdtempSync(join(tmpdir(), "banda-window-"))
+  window = await withArc(arc, {
+    dir,
+    files: { "config/machine.toml": 'name = "laptop"\nicon = "laptop"\n' },
+  })
+  const { page } = window
+  await answerUpdates(page, [])
+  await page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("group", { name: "arc", exact: true })
+    .getByText("Bench the update")
+    .click()
+  const thread = page.getByRole("region", {
+    name: "Bench the update",
+    exact: true,
+  })
+  await expect(thread.getByText("You said: Bench the update")).toBeVisible()
+  const pill = thread.locator("[data-machine-pill=arc]")
+  // On this window's build, arc says nothing.
+  await expect(pill).toHaveCount(0)
+  // arc is of an older build than this window, as main tells it: a
+  // checkout's arc runs the window's own.
+  type Told = { state: string; own?: object }
+  const hosts = await page.evaluate(() =>
+    (
+      globalThis as unknown as {
+        banda: { hosts: { current: () => Promise<Told[]> } }
+      }
+    ).banda.hosts.current()
+  )
+  await window.app.evaluate(
+    ({ BrowserWindow }, told) => {
+      for (const one of BrowserWindow.getAllWindows())
+        one.webContents.send("hosts.listen", told)
+    },
+    hosts.map((host: Told) =>
+      host.state === "live"
+        ? {
+            ...host,
+            version: "0.1.0-dev.640",
+            own: { ...host.own, version: "0.1.0-dev.642" },
+          }
+        : host
+    )
+  )
+  await expect(pill).toContainText("arc runs another build")
+  await shot(page, "update-arc-pill")
+  await pill.getByRole("button", { name: "Update arc" }).click()
+  const popover = page.locator("[data-slot=popover-content]")
+  await expect(
+    popover
+      .locator('[data-machine="arc"]')
+      .getByRole("button", { name: "Update" })
+  ).toBeVisible()
 })

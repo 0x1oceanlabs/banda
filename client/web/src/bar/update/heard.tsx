@@ -5,10 +5,11 @@
  * reads the same. A host away keeps what it last said, so its row still
  * names its version.
  */
-import { HERE } from "@banda/core"
+import { HERE, otherBuild } from "@banda/core"
 import {
   createContext,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -22,6 +23,7 @@ import {
   Store,
   useHereNamed,
   useHosts,
+  useShownOf,
   useStore,
 } from "@banda/core/react"
 import type { MachineUpdates } from "./machines"
@@ -97,6 +99,36 @@ export const useHeard = (): ReadonlyMap<string, Heard> =>
 export function useOpenUpdates() {
   const { opened } = useKeptUpdates()
   return (host?: string) => opened.set({ host, n: opened.get().n + 1 })
+}
+
+/**
+ * "Update arc", as a Pane of host `host` offers it (ADR 0120, decision
+ * 7): it opens the widget at that machine's row, where its Update is.
+ * Only while that machine is live on another build than this window's
+ * and has a newer Banda in place, so the button does something; none
+ * otherwise, and none for this machine.
+ */
+export function useUpdateThere(
+  host: string | undefined
+): (() => void) | undefined {
+  const { heard, opened } = useKeptUpdates()
+  const shown = useShownOf(host)
+  const ready = useStore(
+    heard,
+    useCallback(
+      (all: ReadonlyMap<string, Heard>) =>
+        host !== undefined && all.get(host)?.said?.ready !== undefined,
+      [host]
+    )
+  )
+  const other = shown !== undefined && otherBuild(shown.state) !== undefined
+  return useMemo(
+    () =>
+      ready && other
+        ? () => opened.set({ host, n: opened.get().n + 1 })
+        : undefined,
+    [ready, other, opened, host]
+  )
 }
 
 /** This machine first, then each host the window shows, with what each

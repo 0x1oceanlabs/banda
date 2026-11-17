@@ -241,7 +241,10 @@ export const PaneFrame = memo(function PaneFrame({
   const words = at && reachWords(at.key, at.shown, seenNamed)
   // Its host out of reach while the Pane shows: a pill under its header
   // says so, in a band of its own, so it covers none of the Pane (#955).
-  const pill = !away && reach.engine !== undefined && words !== undefined
+  // So where the Window has something to say of a machine it reaches, as
+  // its update (ADR 0120, decision 7): the band is there for what the
+  // Slot draws, and the Frame knows nothing of it.
+  const pill = !away && reach.engine !== undefined
   // Another machine, by its name under its icon where its Pane cannot
   // show (ADR 0095, decision 7); its header names it in the Slot.
   const machine =
@@ -482,10 +485,7 @@ export const PaneFrame = memo(function PaneFrame({
               )}
             </PaneHeader>
           )}
-          <div
-            data-pill={pill || undefined}
-            className="relative min-h-0 flex-1 data-pill:pt-8"
-          >
+          <div className="relative min-h-0 flex-1 has-[>[data-band]_[data-machine-pill]]:pt-8">
             {away ? (
               <button
                 type="button"
@@ -502,7 +502,13 @@ export const PaneFrame = memo(function PaneFrame({
               <Elsewhere machine={machine}>{words}</Elsewhere>
             ) : "why" in gate ? (
               machine ? (
-                <Elsewhere machine={machine}>{gate.why}</Elsewhere>
+                <Elsewhere machine={machine}>
+                  {gate.why}
+                  {/* An App that machine's build lacks comes with its
+                      update, which the Window offers in the Slot; a kind
+                      this window opens on no other machine does not. */}
+                  {kind?.elsewhere && <PaneSlot {...slot} at="absent" />}
+                </Elsewhere>
               ) : (
                 <p className="p-4 text-ui text-muted-foreground">{gate.why}</p>
               )
@@ -530,7 +536,10 @@ export const PaneFrame = memo(function PaneFrame({
                 catches up once that host is back. What the pill says and
                 does is the Window's, in the Slot: it knows the machines. */}
             {pill && (
-              <div className="pointer-events-none absolute inset-x-2 top-1 z-10 flex justify-center">
+              <div
+                data-band=""
+                className="pointer-events-none absolute inset-x-2 top-1 z-10 flex justify-center"
+              >
                 <PaneSlot {...slot} at="pill" />
               </div>
             )}
