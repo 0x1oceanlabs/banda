@@ -3,6 +3,8 @@
  * updates are, as its engine says them on `updates.state`, and what the
  * Person asks of them.
  */
+export type { AppPhase } from "./generated/updates/AppPhase"
+export type { AppUpdate } from "./generated/updates/AppUpdate"
 export type { Moving } from "./generated/updates/Moving"
 export type { Taking } from "./generated/updates/Taking"
 export type { Updated } from "./generated/updates/Updated"

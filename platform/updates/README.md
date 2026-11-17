@@ -88,36 +88,44 @@ PR.
   While Turns run that this would end, it refuses, restarts with
   `force`, or with `wait` holds it (`held`) until none runs;
   `updates.later` (`banda update --later`) drops that.
-- **The window only swaps its own app** (ADR 0119, decisions 2 and 4;
+- **The window only swaps its own app, and says each step to the
+  engine** (ADR 0119, decisions 2 and 4; ADR 0137;
   `platform/updates/desktop`, `@banda/updates-desktop`). It follows its
   engine's `updates.state` and, at each look the engine made, reads the
   release the engine found newest with electron-updater: that release's
-  app update file, naming only this app's files, and the notes since the
-  running version (`releases.ts`). It downloads at once and installs on
-  Restart, or at the quit while a look at most an hour old still offered
-  it. From the Person's Update to the new window, its machine's row
-  says what it does, with no button: Installing, then Restarting (the
-  `Update`'s `doing`; the row says so from the click, before main
-  answers). Windows' installer shows its own window while it works, as
-  Banda has none then. Where the engine stops with the app, as the
-  window's child does and Windows' (`updates.state`'s `with_app`), the
-  app's restart is what stops the Agents: Update asks first while they
-  work, and "Update when they finish" restarts once they are done.
-  "Check now" is the engine's `updates.check`. One machine does all of
-  this on every system (`app.ts`); what differs is how a version is taken
-  and installed, its `Installer` (`installer.ts`): electron-updater's for
-  an AppImage and Windows, brew's for a Mac. With no window shown, a
-  Banda with a version ready restarts into it by itself, unseen, where
-  its installer can start it so (`unseen`): a Mac's today, and the others
-  once Banda has a tray there (#1870). Where the engine
-  takes nothing (`off`), the app takes nothing. The restart stops no
-  engine: the engine and its Agents go on, as when the window closes,
-  and a window's packed copy put in place beside the running engine
-  (`program.ts`) is ready to it at its next look, which the window asks
-  for at once when the engine runs another version than the app. One
-  rule, the engine's: the newest copy in place wins, whoever put it
-  there, and the engine moves onto it once nothing runs. An engine older
-  than step 3, which answers no `updates.state`, leaves the app as it is.
+  app update file, naming only this app's files (`releases.ts`). It
+  downloads at once and installs at the quit while a look at most an
+  hour old still offered it, or as the engine asks (`wants_app`): the
+  Person's Update is the engine's `updates.restart`, and main has no
+  call of its own for it. One machine does this on every system
+  (`app.ts`); what differs is how a version is taken and installed, its
+  `Installer` (`installer.ts`): electron-updater's for an AppImage and
+  Windows, brew's for a Mac. Windows' installer shows its own window
+  while it works, as Banda has none then. With no window shown, a Banda
+  with a version ready restarts into it by itself, unseen, where its
+  installer can start it so (`unseen`): a Mac's today, and the others
+  once Banda has a tray there (#1870). It tells the engine what its
+  update is at each change (`updates.app`), and again an engine that has
+  it not, as one that started since. Where the engine takes nothing
+  (`off`), the app takes nothing. The restart stops no engine: the
+  engine and its Agents go on, as when the window closes, and a window's
+  packed copy put in place beside the running engine (`program.ts`) is
+  ready to it at its next look, which the window asks for at once when
+  the engine runs another version than the app. One rule, the engine's:
+  the newest copy in place wins, whoever put it there, and the engine
+  moves onto it once nothing runs. An engine older than ADR 0137 refuses
+  `updates.app`: its app still takes its version and installs it at the
+  quit, and its row has no Update for the app until that engine moved.
+- **The page only draws** (ADR 0137, decision 5;
+  `client/web/src/bar/update`). It reads each machine's `updates.state`
+  and draws one row a machine, this machine's with its app's part in it.
+  From the Person's Update to the new window that row says what it does,
+  with no button: Installing, then Restarting. Update is one call,
+  `updates.restart`; where it would stop Agents the page asks first, and
+  "Update when they finish" is `wait`, which the engine holds (`held`),
+  so a window that loads again still shows it. "Check now" is
+  `updates.check` on each machine. That Banda updated a window shows
+  once, and keeps for itself that it did.
 - **A machine with no Banda is set up by `scripts/install.sh`** (ADR
   0119, decision 8), one POSIX sh script, published with each release
   and packed in the app's resources: it puts the engine bundle of a

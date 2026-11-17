@@ -39,6 +39,14 @@ function states(now: number): Record<string, object> {
       looked: now - 3 * MINUTE,
       updated: { from: "0.1.0-dev.640", at: now - 4 * MINUTE, idle: true },
       takes: "when-idle",
+      // Its app, as its main said it: dev.642 down.
+      app: {
+        name: "Banda Dev",
+        running: "0.1.0-dev.640",
+        always: true,
+        phase: "ready",
+        version: "0.1.0-dev.642",
+      },
     },
     // arc has its copy in place and asks the Person, while two Threads
     // and a terminal run there.
@@ -102,36 +110,6 @@ async function answerUpdates(page: Page, asked: object[]) {
   await page.reload()
 }
 
-/** This window's app, as main tells it: dev.642 down, and its notes. */
-const tellApp = (window: Window) =>
-  window.app.evaluate(({ BrowserWindow, ipcMain }) => {
-    const value = {
-      name: "Banda Dev",
-      have: "0.1.0-dev.640",
-      always: true,
-      state: "ready",
-      version: "0.1.0-dev.642",
-      notes: [
-        {
-          version: "0.1.0-dev.642",
-          text: "feat(files): arc's Files open on arc",
-        },
-        {
-          version: "0.1.0-dev.641",
-          text: "feat(agents): a sub-agent's Question names who asks",
-        },
-        {
-          version: "0.1.0-dev.641",
-          text: "fix(ui): a refused act says its state without an ellipsis",
-        },
-        { version: "0.1.0-dev.641", text: "chore: the lockfile" },
-      ],
-    }
-    ipcMain.removeHandler("update.current")
-    ipcMain.handle("update.current", () => value)
-    BrowserWindow.getAllWindows()[0]?.webContents.send("update.listen", value)
-  })
-
 /** Light or dark, the glass off, from now on. */
 async function look(page: Page, dir: string, mode: "light" | "dark") {
   writeFileSync(
@@ -165,7 +143,6 @@ test("the update widget shows every machine in a word, asks before it stops Agen
   const { page } = window
   const asked: object[] = []
   await answerUpdates(page, asked)
-  await tellApp(window)
 
   // The bar: its icon alone, a dot for what is ready.
   const icon = page.locator("[data-update]")

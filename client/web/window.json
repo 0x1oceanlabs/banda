@@ -547,13 +547,6 @@
       "keys": []
     },
     {
-      "id": "update.restart",
-      "title": "Restart Banda to install its update",
-      "section": "Banda",
-      "keys": [],
-      "unlisted": true
-    },
-    {
       "id": "banda.quit",
       "title": "Quit Banda",
       "section": "Banda",

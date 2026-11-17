@@ -10,11 +10,10 @@
  * Update takes both. Each machine decides for itself; the widget only
  * shows and asks.
  *
- *   in    this window's app's update (the device's `update`), and what
- *         each machine's engine says on `updates.state` (`heard.tsx`)
+ *   in    what each machine's engine says on `updates.state`
+ *         (`heard.tsx`), this machine's with its app's part (ADR 0137)
  *   draws its icon, the worst state over them all, and the popover
- *   runs  `update.check`, `update.restart` and `update.now`, and
- *         `updates.check` and `updates.restart` on a machine
+ *   runs  `updates.check` and `updates.restart` on a machine
  *
  * It always stands on the bar, last on the right where `[bar]` does not
  * place it (`../layout/placed.ts`).
@@ -44,6 +43,7 @@ import {
   DialogTitle,
 } from "@banda/ui/components/dialog"
 import { useNow } from "@banda/ui/hooks/use-now"
+import { kept } from "@banda/ui/lib/kept"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE } from "@banda/ui/lib/words"
 import {
@@ -54,7 +54,7 @@ import {
   useState,
 } from "react"
 import type { Engine } from "@banda/contract"
-import type { Update } from "@banda/core"
+import type { AppUpdate, Moving } from "@banda/contract/updates"
 import { sameEach, useStore } from "@banda/core/react"
 import { CheckIcon, ChevronRightIcon, ClockIcon } from "lucide-react"
 import {
@@ -70,7 +70,6 @@ import {
   useMachineUpdates,
 } from "./heard"
 import {
-  heldRow,
   lookedOf,
   lookedWords,
   type MachineUpdates,
@@ -84,42 +83,23 @@ import {
   type Worst,
   worstOf,
 } from "./machines"
-import { shortOf, SHOW_AFTER, UPDATED_FOR } from "./updating"
-import { device } from "../../boot"
+import { SHOW_AFTER, UPDATED_FOR } from "./updating"
 
 /** How long the widget takes to grow into the bar or out of it. */
 const LEAVES_IN = 240
-
-/** Where this window's app's update is, as main tells it; none outside
- * the desktop. */
-function useUpdate(): Update | undefined {
-  const [update, setUpdate] = useState<Update>()
-  useEffect(() => device.update.follow(setUpdate), [])
-  return update
-}
 
 /** How long a machine may update, since the Person said so, before its
  * row says it could not. */
 const UPDATES_IN = 2 * MINUTE
 
 /** What the Person's Update did on a machine, until its row says the
- * rest by itself: it could not (`trouble`, as the program said it), it
- * updates to `to` since `busy`, or it waits for the Agents there before
- * it updates to `to` (`held`). */
-export type Acted =
-  | { trouble: string }
-  | { busy: number; to?: string }
-  | { held: true; to?: string }
+ * rest by itself: it could not (`trouble`, as the program said it), or
+ * it updates to `to` since `busy`. */
+type Acted = { trouble: string } | { busy: number; to?: string }
 
-/** `row` as it stands at `now` since the Person acted on its machine,
- * where `turns` Agents work. An Update said of another version than the
- * row's is over. */
-function actedRow(
-  row: Row,
-  acted: Acted | undefined,
-  turns: number,
-  now: number
-): Row {
+/** `row` as it stands at `now` since the Person acted on its machine.
+ * An Update said of another version than the row's is over. */
+function actedRow(row: Row, acted: Acted | undefined, now: number): Row {
   if (!acted) return row
   const failed = (trouble: string): Row => ({
     ...row,
@@ -130,43 +110,66 @@ function actedRow(
     act: "retry",
   })
   if ("trouble" in acted) return failed(acted.trouble)
-  if ((row.kind !== "ready" && row.kind !== "waits") || row.to !== acted.to)
-    return row
-  // The Agents it waited for are done: main says the rest.
-  if ("held" in acted) return turns > 0 ? heldRow(row, turns) : row
+  if (row.kind !== "ready" || row.to !== acted.to) return row
   if (now - acted.busy > UPDATES_IN) return failed("Updating took too long.")
   return updatingRow(row)
 }
 
-/** The rows, this machine's with this window's app in it, each as it
- * stands since the Person last acted on its machine; `turns` Agents work
- * on this machine. */
-export function useRows(
-  app: Update | undefined,
+/** The rows, this machine's with its app in it, each as it stands since
+ * the Person last acted on its machine; `turns` Agents work on this
+ * machine. */
+function useRows(
   machines: readonly MachineUpdates[],
   now: number,
   acted: ReadonlyMap<string, Acted>,
-  turns = 0
+  turns?: number
 ) {
   return machines.map((machine) => {
     const said = rowOf(
       machine,
       now,
-      machine.host === undefined ? app : undefined
+      machine.host === undefined ? turns : undefined
     )
-    const row = actedRow(said, acted.get(machine.host ?? ""), turns, now)
-    return { machine, row }
+    return { machine, row: actedRow(said, acted.get(machine.host ?? ""), now) }
   })
+}
+
+/** The versions this app's windows showed it updated to: a window that
+ * loads again, or another of its windows, says no more of it (ADR 0137,
+ * decision 5). */
+const seenUpdates = kept(
+  "banda.update.seen",
+  (value): value is true => value === true,
+  8
+)
+
+/** This machine, as the widget shows it: once this app's windows showed
+ * that Banda updated (`seen`), its app says nothing more of it. */
+function shownHere(machine: MachineUpdates, seen: boolean): MachineUpdates {
+  const app = machine.said?.app
+  if (machine.host !== undefined || !seen || app?.phase !== "updated")
+    return machine
+  return {
+    ...machine,
+    said: { ...machine.said!, app: { ...app, phase: "none" } },
+  }
 }
 
 /** The widget, on this machine's `engine`. */
 export function UpdateWidget({ engine }: { engine: Engine }) {
-  const app = useUpdate()
-  const machines = useMachineUpdates()
+  const heard = useMachineUpdates()
+  // This machine is the first.
+  const running = heard[0]?.said?.app?.running
+  const seen = seenUpdates.use()[running ?? ""] === true
+  const setSeen = useCallback(() => {
+    if (running !== undefined) seenUpdates.put(running, true)
+  }, [running])
+  const here = heard[0] && shownHere(heard[0], seen)
+  const machines = here && here !== heard[0] ? [here, ...heard.slice(1)] : heard
+  const app = here?.said?.app
   const now = useNow(MINUTE)
   const [acted, setActed] = useState<ReadonlyMap<string, Acted>>(new Map())
-  const working = useWorkingHere()
-  const rows = useRows(app, machines, now, acted, working)
+  const rows = useRows(machines, now, acted, useWorkingHere())
   const act = useCallback(
     (host: string | undefined, next?: Acted) =>
       setActed((was) => {
@@ -178,22 +181,9 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
       }),
     []
   )
-  // The Update that waited for this machine's Agents: once they are
-  // done it is over, and the app restarts if the version it was said of
-  // is still the one ready.
-  const stores = useContext(StoresContext)
-  const held = acted.get("")
-  const waited = held && "held" in held ? held.to : undefined
-  const ready = app?.state === "ready" ? shortOf(app.version) : undefined
-  useEffect(() => {
-    if (waited === undefined) return
-    return stores.items.subscribe(() => {
-      if (workingHere(stores) > 0) return
-      act(undefined)
-      if (waited === ready) device.update.restart()
-    })
-  }, [stores, waited, ready, act])
-  const worst = worstOf(app, rows)
+  // The look the Person asked for runs.
+  const [checking, setChecking] = useState(false)
+  const worst = worstOf(app, rows, checking)
   const [open, setOpen] = useState(false)
   const { opened } = useKeptUpdates()
   // The machine the sidebar opened it at.
@@ -215,7 +205,7 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
     const timer = setTimeout(() => setLast(undefined), LEAVES_IN)
     return () => clearTimeout(timer)
   }, [shown])
-  useUpdatedFor(app, open)
+  useUpdatedFor(app, open, setSeen)
   const drawn = shown ? worst : last
   const follow = <FollowUpdates engine={engine} />
   if (!drawn) return follow
@@ -228,8 +218,8 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
           setOpen(next)
           if (!next) {
             setLit(undefined)
-            // What changed was seen: the update is `none` again.
-            if (app?.state === "updated") device.update.seen()
+            // That Banda updated was seen.
+            if (app?.phase === "updated") setSeen()
           }
         }}
       >
@@ -263,6 +253,7 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
             lit={lit}
             now={now}
             act={act}
+            setChecking={setChecking}
           />
         </PopoverContent>
       </Popover>
@@ -315,14 +306,16 @@ function About({
   lit,
   now,
   act,
+  setChecking,
 }: {
-  app: Update | undefined
+  app: AppUpdate | undefined
   machines: readonly MachineUpdates[]
   rows: readonly { machine: MachineUpdates; row: Row }[]
   engine: Engine
   lit?: string
   now: number
   act: (host: string | undefined, next?: Acted) => void
+  setChecking: (checking: boolean) => void
 }) {
   const engineFor = useEngineFor(engine)
   const { title, say } = titleOf(rows, newestOf(app, machines[0]))
@@ -332,19 +325,22 @@ function About({
   // Nothing looks while a machine installs or restarts.
   const busy = rows.some(({ row }) => row.kind === "updating")
   const check = (machine: MachineUpdates) =>
-    void engineFor(machine.host)
+    engineFor(machine.host)
       .call("updates.check", {})
       .catch(() => {})
+  // Each machine's engine looks, and this machine's app reads what its
+  // engine found; the bar turns while they do.
   const checkAll = () => {
-    device.update.check()
-    for (const { machine } of rows) if (!machine.away) check(machine)
+    setChecking(true)
+    void Promise.all(
+      rows
+        .filter(({ machine }) => !machine.away)
+        .map(({ machine }) => check(machine))
+    ).finally(() => setChecking(false))
   }
   const retry = (machine: MachineUpdates) => {
     act(machine.host)
-    if (machine.host === undefined)
-      if (app?.state === "failed") device.update.now()
-      else device.update.check()
-    check(machine)
+    void check(machine)
   }
   return (
     <>
@@ -512,15 +508,13 @@ function Details({ text }: { text: string }) {
 }
 
 /**
- * Update on a machine (ADR 0131, decision 1): this window's app restarts
- * at once, and the engine moves now where nothing runs. Its row says so
- * from the click (`busy`). While Agents work there it asks once, and
- * waiting is the default: a machine that updates by itself once idle does
- * so, and this window's app restarts all the same, as it stops no Agent.
- * Where the engine stops with the app (`with_app`: Windows, the window's
- * child), the app's restart is what stops them: waiting holds it until
- * they are done (`held`). What fails is said on the row (`trouble`).
- * `ask` updates a machine's row; `dialog` is drawn where it asks.
+ * Update on a machine (ADR 0137, decision 3): one call, `updates.restart`,
+ * which moves the engine and asks the app there to restart. Its row says
+ * so from the click (`busy`), until the machine says the rest itself.
+ * While Agents work there whom that would stop, it asks once, and waiting
+ * is the default: the engine holds the Update until they are done. What
+ * fails is said on the row (`trouble`). `ask` updates a machine's row;
+ * `dialog` is drawn where it asks.
  */
 export function useUpdateThere(
   engineFor: (host: string | undefined) => Engine,
@@ -534,28 +528,25 @@ export function useUpdateThere(
   }>()
   const close = useCallback(() => setAsking(undefined), [])
   const stores = useContext(StoresContext)
-  const restartApp = (row: Row) => {
-    if (row.app) device.update.restart()
-  }
-  // The row says it updates from the click, while the engine is asked.
-  // Then main says what the app does (`doing`), and an engine alone is
-  // done once its row is no longer one to update.
-  const go = (machine: MachineUpdates, row: Row, force: boolean) => {
-    if (!row.engine) return restartApp(row)
+  const go = (
+    machine: MachineUpdates,
+    row: Row,
+    how: { force?: boolean; wait?: boolean }
+  ) => {
     tell(machine, { busy: Date.now(), to: row.to })
     void engineFor(machine.host)
-      .call("updates.restart", force ? { force: true } : {})
+      .call("updates.restart", how)
       .then(
-        () => {
-          if (!row.app) return
-          tell(machine)
-          restartApp(row)
+        (moving: Moving) => {
+          // Held, its machine says so; else its row says each step.
+          if (moving.held) tell(machine)
         },
         (error: Error) => tell(machine, { trouble: error.message })
       )
   }
   const ask = (machine: MachineUpdates, row: Row) => {
     tell(machine)
+    // The app's restart stops the Agents where the engine stops with it.
     const stops = row.app === true && machine.said?.with_app === true
     const turns = stops
       ? workingHere(stores)
@@ -563,19 +554,17 @@ export function useUpdateThere(
         ? (machine.said?.waits?.turns ?? 0)
         : 0
     if (turns > 0) setAsking({ machine, row, turns, stops })
-    else go(machine, row, false)
+    else go(machine, row, {})
   }
   const now = () => {
     if (!asking) return
     close()
-    go(asking.machine, asking.row, true)
+    go(asking.machine, asking.row, { force: true })
   }
   const later = () => {
     if (!asking) return
-    const { machine, row, stops } = asking
     close()
-    if (stops) return tell(machine, { held: true, to: row.to })
-    restartApp(row)
+    go(asking.machine, asking.row, { wait: true })
   }
   return {
     ask,
@@ -661,9 +650,13 @@ function UpdateDialog({
 }
 
 /** Says that Banda updated `UPDATED_FOR`, unless the Person opened the
- * popover: then until they close it (ADR 0072, decision 4). */
-function useUpdatedFor(update: Update | undefined, open: boolean) {
-  const updated = update?.state === "updated"
+ * popover: then until they close it (ADR 0072, decision 4). `seen` then. */
+function useUpdatedFor(
+  app: AppUpdate | undefined,
+  open: boolean,
+  seen: () => void
+) {
+  const updated = app?.phase === "updated"
   useEffect(() => {
     if (!updated || open) return
     // Only while the window has the focus: a Mac's Banda that updated
@@ -672,9 +665,7 @@ function useUpdatedFor(update: Update | undefined, open: boolean) {
     let timer: ReturnType<typeof setTimeout> | undefined
     const follow = () => {
       clearTimeout(timer)
-      timer = document.hasFocus()
-        ? setTimeout(() => device.update.seen(), UPDATED_FOR)
-        : undefined
+      timer = document.hasFocus() ? setTimeout(seen, UPDATED_FOR) : undefined
     }
     follow()
     addEventListener("focus", follow)
@@ -684,7 +675,7 @@ function useUpdatedFor(update: Update | undefined, open: boolean) {
       removeEventListener("focus", follow)
       removeEventListener("blur", follow)
     }
-  }, [updated, open])
+  }, [updated, open, seen])
 }
 
 /** The titles of the Threads at work on host `host`, this machine's

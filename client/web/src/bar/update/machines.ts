@@ -2,12 +2,12 @@
  * What the update widget says of each machine (ADR 0131, decision 1):
  * one row each, one word at its right, at most one act, and a second line
  * only when the Person needs a why. This machine's row holds this
- * window's app too: one Update does both. Pure, so plain tests cover it;
+ * window's app too, as its engine says it (`app`, ADR 0137): one Update
+ * does both. Pure, so plain tests cover it;
  * Update.tsx draws it, and Settings → Machines draws the same line.
  */
 import type { MachineIcon } from "@banda/contract/machines"
-import type { UpdateState, Waits } from "@banda/contract/updates"
-import type { Update } from "@banda/core"
+import type { AppUpdate, UpdateState, Waits } from "@banda/contract/updates"
 import { ago } from "@banda/ui/lib/words"
 import { shortOf } from "./updating"
 
@@ -78,11 +78,23 @@ export type Row = {
   engine?: boolean
 }
 
-/** Machine `machine`'s row at `now`; this window's `app` on this
- * machine's. */
-export function rowOf(machine: MachineUpdates, now: number, app?: Update): Row {
+/** Machine `machine`'s row at `now`. This machine's holds its app, as
+ * its engine says it; `turns` Agents work there, where the window counts
+ * them itself. */
+export function rowOf(
+  machine: MachineUpdates,
+  now: number,
+  turns?: number
+): Row {
   const engine = engineRow(machine, now)
-  return app ? withApp(engine, app, machine.said?.with_app) : engine
+  const said = machine.said
+  // Another machine's app is its own window's to show.
+  const app = machine.host === undefined ? said?.app : undefined
+  const row = app ? withApp(engine, app, said?.with_app) : engine
+  // The Person's Update waits there for the Agents (ADR 0137, decision 4).
+  return said?.held && (row.kind === "ready" || row.kind === "waits")
+    ? heldRow(row, turns ?? said.waits?.turns ?? 0)
+    : row
 }
 
 function engineRow(machine: MachineUpdates, now: number): Row {
@@ -162,73 +174,65 @@ export function updatingRow(
 }
 
 /** `row` once the Person said to update when the Agents there finish. */
-export function heldRow(row: Row, turns: number): Row {
+function heldRow(row: Row, turns: number): Row {
+  const waits = { turns, terminals: 0, person: false }
   return {
     kind: "waits",
     from: row.from,
     to: row.to,
-    status: waitingWord({ turns, terminals: 0, person: false }, 0),
-    why: waitWords({ turns, terminals: 0, person: false }, 0),
+    status: turns > 0 ? waitingWord(waits, 0) : "After its Agents",
+    why: waitWords(waits, 0) ?? "Updates by itself once they finish.",
   }
 }
 
 /** This machine's row with this window's app in it: one Update takes
- * both, the app at once and the engine once nothing runs. */
-function withApp(engine: Row, app: Update, stops = false): Row {
-  const have = shortOf(app.have)
-  switch (app.state) {
+ * both, the app at once and the engine once nothing runs. `stops`, where
+ * the engine stops with the app. */
+function withApp(engine: Row, app: AppUpdate, stops = false): Row {
+  const have = shortOf(app.running)
+  const to = app.version && shortOf(app.version)
+  switch (app.phase) {
     case "failed":
       return {
         ...engine,
         kind: "failed",
         from: engine.from ?? have,
         status: "Couldn't update",
-        why: plainOf(app.reason),
-        details: app.reason,
+        why: plainOf(app.why ?? ""),
+        details: app.why,
         act: "retry",
       }
-    case "none":
-      return app.missed && engine.kind !== "failed"
-        ? {
-            ...engine,
-            kind: "failed",
-            from: engine.from ?? have,
-            status: "Couldn't update",
-            why: plainOf(app.missed),
-            details: app.missed,
-            act: "retry",
-          }
-        : engine
     case "downloading":
       return engine.kind === "failed"
         ? engine
         : {
             kind: "taking",
             from: have,
-            to: shortOf(app.version),
-            share: app.share,
+            to,
+            share: app.share ?? 0,
             size: app.size ? sizeOf(app.down ?? 0, app.size) : undefined,
             status: app.size ? sizeOf(app.down ?? 0, app.size) : "Updating",
           }
-    case "ready": {
+    case "ready":
+    case "installing":
+    case "restarting": {
       if (engine.kind === "failed" || engine.kind === "taking") return engine
       const ready: Row = {
         kind: "ready",
         from: have,
-        to: shortOf(app.version),
+        to,
         act: "update",
         app: true,
-        // The engine goes too where it is ready and moves by itself: one
-        // that restarts with the app is asked nothing.
+        // The engine goes too where it is ready and moves by itself.
         engine: (engine.kind === "ready" || engine.kind === "waits") && !stops,
       }
-      return app.doing ? updatingRow(ready, app.doing) : ready
+      return app.phase === "ready" ? ready : updatingRow(ready, app.phase)
     }
     case "out":
       return {
         kind: "ready",
         from: have,
-        to: shortOf(app.version),
+        to,
         status: "Ready",
         why: "Run this in a terminal to update:",
         command: app.command,
@@ -331,24 +335,23 @@ export type Worst =
   | { kind: "looking" }
   | { kind: "quiet" }
 
-/** The bar's icon over `rows`, with this window's `app`. */
+/** The bar's icon over `rows`, with this window's `app`; `checking`
+ * while the look the Person asked for runs. */
 export function worstOf(
-  app: Update | undefined,
-  rows: readonly { machine: MachineUpdates; row: Row }[]
+  app: AppUpdate | undefined,
+  rows: readonly { machine: MachineUpdates; row: Row }[],
+  checking = false
 ): Worst {
   const failed = rows.find(({ row }) => row.kind === "failed")
   if (failed) return { kind: "failed", name: failed.machine.name }
-  if (app?.state === "failed") return { kind: "failed", name: "this window" }
-  if (app?.state === "updated")
-    return { kind: "updated", version: shortOf(app.have) }
+  if (app?.phase === "updated")
+    return { kind: "updated", version: shortOf(app.running) }
   const updating = rows.find(({ row }) => row.kind === "updating")
   if (updating) return { kind: "updating", version: updating.row.to }
   const ready = rows.find(
     ({ row }) => row.kind === "ready" || row.kind === "waits"
   )
   if (ready) return { kind: "ready", version: ready.row.to }
-  if (app?.state === "ready" || app?.state === "out")
-    return { kind: "ready", version: shortOf(app.version) }
   const taking = rows.find(({ row }) => row.kind === "taking")
   if (taking)
     return {
@@ -356,19 +359,13 @@ export function worstOf(
       share: taking.row.share ?? 0,
       version: taking.row.to,
     }
-  if (app?.state === "downloading")
-    return {
-      kind: "downloading",
-      share: app.share,
-      version: shortOf(app.version),
-    }
-  if (app?.state === "looking") return { kind: "looking" }
+  if (checking) return { kind: "looking" }
   return { kind: "quiet" }
 }
 
 /** Whether the bar shows the widget at all: with something to say, or
  * always for Banda Dev (ADR 0045). */
-export const shownOn = (worst: Worst, app: Update | undefined): boolean =>
+export const shownOn = (worst: Worst, app: AppUpdate | undefined): boolean =>
   worst.kind !== "quiet" || app?.always === true
 
 /** The popover's title, and the line under it when one helps. */
@@ -401,12 +398,10 @@ export function titleOf(
 /** The newest version, as this machine's engine found it on its channel;
  * before its first look, the version this window's app goes to, or runs. */
 export function newestOf(
-  app: Update | undefined,
+  app: AppUpdate | undefined,
   here: MachineUpdates | undefined
 ): string | undefined {
-  if (here?.said?.newest) return here.said.newest
-  if (app && "version" in app) return app.version
-  return app?.have
+  return here?.said?.newest ?? app?.version ?? app?.running
 }
 
 /** The latest look of any machine reached, in ms since the epoch. */

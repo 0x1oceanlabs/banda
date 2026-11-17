@@ -16,60 +16,6 @@ import type { PaneDevice } from "./route"
 import type { Args } from "./run"
 
 /**
- * Where Banda's own update is (ADR 0041, decision 2), as main tells it:
- * nothing to say, a look the Person asked for, a version downloading, one
- * ready to install on quit or on Restart, one out that the Person installs with
- * `command` (on macOS, through brew: ADR 0033, decision 6), or one that
- * cannot install until the Person mends something. `name` is the app's, `Banda Dev`, and `have` the
- * version that runs. `always` keeps the widget on the bar with nothing to
- * say, as Banda Dev's is (ADR 0045).
- */
-export type Update = { name: string; have: string; always: boolean } & (
-  | {
-      state: "none"
-      /** When the last look ended, in ms since the epoch. */
-      looked?: number
-      /** Why the last look the Person asked for failed. */
-      missed?: string
-    }
-  | { state: "looking" }
-  | {
-      state: "downloading"
-      version: string
-      share: number
-      notes: Note[]
-      /** Banda restarts into it once it is down (`update.now`). */
-      restarts: boolean
-      /** Bytes down, and of how many, when electron-updater says. */
-      down?: number
-      size?: number
-    }
-  | {
-      /** Down: Restart starts it at once, and the engine and its Agents
-       * go on (ADR 0119, decision 4); or the quit installs it. */
-      state: "ready"
-      version: string
-      notes: Note[]
-      /** What Banda does since the Person said Update: it installs the
-       * version, then restarts into it. None while it waits for them. */
-      doing?: "installing" | "restarting"
-    }
-  | {
-      /** The first moments of a Banda that restarted into a new version
-       * (ADR 0072, decision 4), until the window says it was seen. */
-      state: "updated"
-      from: string
-      notes: Note[]
-    }
-  | { state: "out"; version: string; notes: Note[]; command: string }
-  | { state: "failed"; reason: string }
-)
-
-/** What one release since the Person's changed: a Dev's commit title,
- * a Stable's PRs (ADR 0033, decision 4). */
-export type Note = { version: string; text: string }
-
-/**
  * Where the window's page finds this machine's engine, as the desktop
  * tells it (ADR 0124, decision 5): at its door, as the device this
  * machine paired this window as, with the host key the engine must
@@ -331,14 +277,6 @@ export interface Device extends Pick<PaneDevice, "has"> {
     paste: () => void
     pastePlain: () => void
     copyImageAt: (x: number, y: number) => void
-  }
-  /** Banda's own update (ADR 0041). */
-  update: {
-    follow: (take: (update: Update) => void) => () => void
-    seen: () => void
-    now: () => void
-    check: () => void
-    restart: () => void
   }
   /** Quits Banda (ADR 0086, decision 3). */
   quit: () => void

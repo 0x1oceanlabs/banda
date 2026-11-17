@@ -734,16 +734,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     id: "update.check",
     section: "Banda",
     title: "Check for updates",
-    run: () => device.update.check(),
-  },
-  {
-    id: "update.restart",
-    section: "Banda",
-    title: "Restart Banda to install its update",
-    // The bar's update runs it; with no version ready it does nothing
-    // (ADR 0041, decision 2).
-    unlisted: true,
-    run: () => device.update.restart(),
+    run: (shell) => void shell.engine.call("updates.check", {}).catch(() => {}),
   },
   {
     id: "banda.quit",

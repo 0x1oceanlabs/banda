@@ -21,7 +21,6 @@ import type {
   HostState,
   HostTest,
   PoppedAsk,
-  Update,
 } from "@banda/core"
 import { FILES_BRIDGE } from "@banda/ui/desktop"
 import { bridge, type HostOf, invoke, push, send } from "@banda/contract/bridge"
@@ -223,28 +222,6 @@ export const BRIDGE = bridge({
    * asks first when Agents are working. Closing the window only closes
    * it. */
   quit: send<[]>(),
-  /** Banda's own app's update (ADR 0041; ADR 0119, decision 2): the
-   * engine says what is newest, and main downloads it and installs it on
-   * Restart or on quit. */
-  update: {
-    /** Where it is now. */
-    current: invoke<[], Update>(),
-    /** Calls `listener` each time that changes. */
-    listen: push<Update>(),
-    /** Looks for a new version now. */
-    check: send<[]>(),
-    /** Looks, downloads and restarts into a new version as soon as it is
-     * down; restarts at once into one that is ready (ADR 0045). */
-    now: send<[]>(),
-    /** Keeps the version that downloads for the quit, with no restart. */
-    later: send<[]>(),
-    /** Installs the version that is ready and starts it, at once: the
-     * engine and its Agents go on (ADR 0119, decision 4); nothing if none
-     * is. */
-    restart: send<[]>(),
-    /** The Person saw that Banda updated: the update is `none` again. */
-    seen: send<[]>(),
-  },
   /** The system's folder picker, which "Add Project" opens (ADR 0026). */
   folder: {
     /** The folder the Person picks, the picker opened at `at`, a whole

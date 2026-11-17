@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { UpdateState } from "@banda/contract/updates"
-import type { Update } from "@banda/core"
+import type { AppUpdate, UpdateState } from "@banda/contract/updates"
 import {
   lookedWords,
   type MachineUpdates,
@@ -27,17 +26,16 @@ const devbox = (more: Partial<MachineUpdates> = {}): MachineUpdates => ({
   ...more,
 })
 const waits = { turns: 0, terminals: 0, person: false }
-const app: Update = {
+const app: AppUpdate = {
   name: "Banda Dev",
-  have: "0.1.0-dev.640",
+  running: "0.1.0-dev.640",
   always: true,
-  state: "none",
+  phase: "none",
 }
-const ready: Update = {
+const ready: AppUpdate = {
   ...app,
-  state: "ready",
+  phase: "ready",
   version: "0.1.0-dev.642",
-  notes: [],
 }
 
 describe("a machine's row: one word, at most one button", () => {
@@ -126,54 +124,54 @@ describe("a machine's row: one word, at most one button", () => {
   })
 })
 
-describe("this machine's row holds this window's app", () => {
+describe("this machine's row holds this window's app, as its engine says it", () => {
   const here = devbox({ host: undefined, name: "M1PRO", icon: "laptop" })
+  /** This machine, whose engine says `more` and what its app does. */
+  const with_ = (app: AppUpdate, more: Partial<UpdateState> = {}) => ({
+    ...here,
+    said: said({ ...more, app }),
+  })
+  const copy = { ready: "0.1.0-dev.642", waits }
 
   it("an app ready is one Update, and the engine goes with it where it is ready", () => {
-    expect(rowOf(here, now, ready)).toMatchObject({
+    expect(rowOf(with_(ready), now)).toMatchObject({
       kind: "ready",
-      to: "dev.642",
       act: "update",
       app: true,
       engine: false,
     })
-    const engineReady = {
-      ...here,
-      said: said({ ready: "0.1.0-dev.642", waits }),
-    }
-    expect(rowOf(engineReady, now, ready)).toMatchObject({
+    expect(rowOf(with_(ready, copy), now)).toMatchObject({
       act: "update",
       app: true,
       engine: true,
     })
   })
 
-  it("a look that failed is no engine text on the bar: words, and Details", () => {
-    const missed: Update = {
+  it("another machine's app is its own window's to show", () => {
+    const there = devbox({ said: said({ app: ready }) })
+    expect(rowOf(there, now)).toMatchObject({ kind: "ok" })
+  })
+
+  it("an app that could not is no program's text on the bar: words, and Details", () => {
+    const failed: AppUpdate = {
       ...app,
-      state: "none",
-      missed: "The first frame must be hello with a token this engine knows.",
+      phase: "failed",
+      why: "The first frame must be hello with a token this engine knows.",
     }
-    expect(rowOf({ ...here, said: said() }, now, missed)).toMatchObject({
+    expect(rowOf(with_(failed), now)).toMatchObject({
       kind: "failed",
       why: "Banda lost touch with itself for a moment.",
       details: "The first frame must be hello with a token this engine knows.",
       act: "retry",
     })
   })
-})
-
-describe("since the Person said Update, the row says what it does", () => {
-  const here = devbox({ host: undefined, name: "M1PRO", icon: "laptop" })
-  const copy = said({ ready: "0.1.0-dev.642", waits })
 
   it("Installing, then Restarting, with no button", () => {
-    for (const [doing, word] of [
+    for (const [phase, word] of [
       ["installing", "Installing"],
       ["restarting", "Restarting"],
     ] as const) {
-      const row = rowOf({ ...here, said: copy }, now, { ...ready, doing })
-      expect(row).toEqual({
+      expect(rowOf(with_({ ...ready, phase }, copy), now)).toEqual({
         kind: "updating",
         from: "dev.640",
         to: "dev.642",
@@ -184,10 +182,7 @@ describe("since the Person said Update, the row says what it does", () => {
   })
 
   it("the bar turns, and the title names the version", () => {
-    const row = rowOf({ ...here, said: copy }, now, {
-      ...ready,
-      doing: "installing",
-    })
+    const row = rowOf(with_({ ...ready, phase: "installing" }, copy), now)
     const rows = [{ machine: here, row }]
     expect(worstOf(ready, rows)).toEqual({
       kind: "updating",
@@ -198,16 +193,36 @@ describe("since the Person said Update, the row says what it does", () => {
 
   it("an engine that stops with the app is asked nothing: the app's restart takes it", () => {
     const restart = { ...waits, restart: "it restarts with Banda" }
-    const there = said({
-      ready: "0.1.0-dev.642",
-      waits: restart,
-      with_app: true,
-    })
-    expect(rowOf({ ...here, said: there }, now, ready)).toMatchObject({
+    const there = with_(ready, { ...copy, waits: restart, with_app: true })
+    expect(rowOf(there, now)).toMatchObject({
       kind: "ready",
       act: "update",
       app: true,
       engine: false,
+    })
+  })
+
+  it("an Update the engine holds for the Agents says so, with no button", () => {
+    const held = with_(ready, { with_app: true, held: true })
+    expect(rowOf(held, now, 2)).toEqual({
+      kind: "waits",
+      from: "dev.640",
+      to: "dev.642",
+      status: "After 2 Agents",
+      why: "Updates by itself once 2 Agents finish.",
+    })
+    // Another machine's, by what its engine says it waits for.
+    const there = devbox({
+      said: said({
+        ...copy,
+        takes: "ask",
+        held: true,
+        waits: { ...waits, turns: 1 },
+      }),
+    })
+    expect(rowOf(there, now)).toMatchObject({
+      kind: "waits",
+      status: "After 1 Agent",
     })
   })
 })

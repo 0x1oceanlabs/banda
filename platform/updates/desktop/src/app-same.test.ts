@@ -8,7 +8,6 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { UpdateState } from "@banda/contract/updates"
-import type { Update } from "@banda/core"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 const updater = vi.hoisted(() => ({
@@ -34,7 +33,7 @@ vi.mock("node:child_process", () => ({ spawn: () => ({ unref() {} }) }))
 const cask = vi.hoisted(() => ({ brew: undefined as Brew | undefined }))
 vi.mock("./brew", () => ({ brewOf: () => cask.brew }))
 
-import { type App, updates } from "./app"
+import { type App, appOf, updates } from "./app"
 import type { Brew } from "./brew"
 
 const NEW = "0.1.0-dev.827"
@@ -96,17 +95,15 @@ function on(system: System) {
     alone: () => alone,
     quits: () => false,
   }
-  const told: Update[] = []
-  const update = updates(mine, { check: async () => looked() }, (now) =>
-    told.push(now)
-  )
+  const told: string[] = []
+  const update = updates(mine, {
+    check: async () => looked(),
+    app: async (said) => told.push(said.phase),
+  })
   return {
     update,
-    /** Each thing it said, in a word. */
-    said: () =>
-      told.map((now) =>
-        now.state === "ready" && now.doing ? now.doing : now.state
-      ),
+    /** Each thing it told the engine, in a word. */
+    said: () => told,
     /** The engine looked, and the release offers the new version. */
     async offered() {
       update.heard(looked())
@@ -130,10 +127,16 @@ it.each(SYSTEMS)(
     const banda = on(system)
     await banda.offered()
     expect(banda.update.current()).toMatchObject({ state: "ready" })
-    banda.update.restart()
+    // The engine asks, as the Person said Update.
+    banda.update.heard({
+      ...looked(),
+      app: appOf(banda.update.current()),
+      wants_app: Date.now() + 60_000,
+    })
     await vi.advanceTimersByTimeAsync(1000)
     // A download shows only where the installer says how far it is.
     expect(banda.said().filter((word) => word !== "downloading")).toEqual([
+      "none",
       "ready",
       "installing",
       "restarting",
@@ -155,6 +158,7 @@ it.each(SYSTEMS)(
     // A Mac's lives in the menu bar; the others have no tray yet (#1870).
     expect(banda.restarted()).toBe(system === "macOS")
     expect(banda.said().filter((word) => word !== "downloading")).toEqual([
+      "none",
       "ready",
     ])
   }

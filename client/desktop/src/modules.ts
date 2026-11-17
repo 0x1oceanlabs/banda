@@ -58,7 +58,7 @@ export const modules = {
   opened: browserDesktop.opened,
 }
 
-/** The updates module's part (ADR 0119, decision 2): the swap of the
- * window's own app, which main wires to the bridge's `update` and to its
- * engine's `updates.state`. */
+/** The updates module's part (ADR 0119, decision 2; ADR 0137): the swap
+ * of the window's own app, which main wires to its engine's
+ * `updates.state` and `updates.app`. */
 export const appUpdates = { updates, followEngine }
