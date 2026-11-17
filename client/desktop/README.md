@@ -93,7 +93,13 @@ page is one part of. A change to main changes this page in the same PR.
   dump from before is not the app's), and
   stops trying after three opens with no app that ran five minutes
   (`engine/src/service/app.rs`). Linux and Windows have no menu bar icon
-  yet (`hasMenuBar`). `banda look --follow --with-parent` stays the window's
+  yet (`hasMenuBar`). In main the icon, the app's menu (macOS's: the app
+  menu, File, Edit, and Window, whose Banda shows the main window) and
+  the door `banda menu [route]` knocks at (`door.ts`, ADR 0017) are one
+  part, `os-window/menus.ts`, over the windows: the icon follows the
+  status and the door is open while main's runtime lives, and the
+  bridge's `menu` is answered there.
+  `banda look --follow --with-parent` stays the window's
   child. Both are Effect services in main (`Engine`, `Look`; ADR 0020),
   started by one runtime and stopped when it is disposed. The client
   then reconnects and follows on from the last event it delivered, so a
