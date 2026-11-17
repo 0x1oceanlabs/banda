@@ -250,9 +250,11 @@ let dock: Dock["Service"] | null = null
 const LOOK_WAIT = 300
 
 if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
-  // electron-updater runs the AppImage it moved in once. It has the old
-  // one's APPIMAGE, so the old Banda lists the new file (@banda/updates-desktop), and
-  // nothing starts here (ADR 0041, decision 3).
+  // A Banda older than ADR 0137's step 4 updates through electron-updater,
+  // which runs the AppImage it moved in once. It has the old one's
+  // APPIMAGE, so the old Banda lists the new file, and nothing starts
+  // here (ADR 0041, decision 3). A newer one renames the file itself
+  // (@banda/updates-desktop).
   app.exit(0)
 } else if (!app.requestSingleInstanceLock()) {
   app.quit()

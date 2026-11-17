@@ -4,7 +4,7 @@
  * installs (installer.ts).
  */
 import { EventEmitter } from "node:events"
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { UpdateState } from "@banda/contract/updates"
@@ -108,14 +108,19 @@ function on(system: System) {
     async offered() {
       update.heard(looked())
       events.emit("update-available", { version: NEW })
-      // electron-updater's download ends; brew's needs no word.
-      events.emit("update-downloaded", { version: NEW })
+      // electron-updater's download ends, with the file it took; brew's
+      // needs no word.
+      const downloadedFile = join(folder, "cache", "banda-dev-new.AppImage")
+      mkdirSync(join(folder, "cache"), { recursive: true })
+      writeFileSync(downloadedFile, "")
+      events.emit("update-downloaded", { version: NEW, downloadedFile })
       await vi.advanceTimersByTimeAsync(0)
     },
+    // Windows' installer quits Banda; the others quit by themselves.
     restarted: () =>
-      system === "macOS"
-        ? electron.quit.mock.calls.length > 0
-        : updater.quitAndInstall.mock.calls.length > 0,
+      system === "Windows"
+        ? updater.quitAndInstall.mock.calls.length > 0
+        : electron.quit.mock.calls.length > 0,
   }
 }
 

@@ -99,9 +99,19 @@ PR.
   Person's Update is the engine's `updates.restart`, and main has no
   call of its own for it. One machine does this on every system
   (`app.ts`); what differs is how a version is taken and installed, its
-  `Installer` (`installer.ts`): electron-updater's for an AppImage and
-  Windows, brew's for a Mac. Windows' installer shows its own window
-  while it works, as Banda has none then. With no window shown, a Banda
+  `Installer` (`installer.ts`): electron-updater's for Windows, whose
+  installer shows its own window while it works, as Banda has none
+  then; brew's for a Mac; and for an AppImage Banda's own
+  (`appimage.ts`). electron-updater downloads the file, which is put
+  beside the one that runs as soon as it is down (`.<name>.new`), so
+  installing is one rename. The file that ran stays until the new Banda
+  ran a minute. The new one starts once Banda is gone (`after.ts`), and
+  if it ends badly within fifteen seconds the old one starts in its
+  place, told so by the script that started it
+  (`BANDA_UPDATE_FELL_BACK`): it says "did not start", and takes that
+  version no more (`update-swap.json`, `update-bad.json` in the app's
+  data). The files of versions that were not installed go as the next
+  one is placed, and as Banda starts. With no window shown, a Banda
   with a version ready restarts into it by itself, unseen, where its
   installer can start it so (`unseen`): a Mac's today, and the others
   once Banda has a tray there (#1870). It tells the engine what its
