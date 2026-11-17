@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 import {
+  bandaMenu,
   firstThread,
   layoutOf,
   newProject,
@@ -442,4 +443,74 @@ for (const flow of ["free"] as const)
     await page.screenshot({
       path: `test-results/placing-banda-pane-${flow}.png`,
     })
+  })
+
+/** The clients App of the apps module's tests, an App from a folder: no
+ * code of Banda's names it, and its Pane's kind declares nothing of where
+ * it stands. */
+const CLIENTS = resolve(
+  import.meta.dirname,
+  "../../../platform/apps/engine/tests/folders/clients"
+)
+
+for (const ruled of [false, true])
+  test(`an App from elsewhere opens by the first rule, right of the Pane in front and in focus${ruled ? "; a line of tiling.toml for its kind moves it and says how wide" : ""} (ADR 0135, decision 1, step 5)`, async () => {
+    const rule = '[rule.apps.view]\nopens = "here"\nwidth = "1/3"\n'
+    window = await startWindow({
+      files: {
+        "config/tiling.toml": `flow = "free"\n${ruled ? `\n${rule}` : ""}`,
+      },
+    })
+    const { page } = window
+    await firstThread(page)
+    window.banda("app", "install", CLIENTS)
+    // Two terminals right of the Thread, and the first of them in front.
+    const terminals = page.getByRole("region", { name: "Terminal screen" })
+    for (let n = 1; n <= 2; n++) {
+      await page.keyboard.press("Control+Alt+Enter")
+      await expect(terminals).toHaveCount(n)
+    }
+    await page.keyboard.press("Alt+ArrowLeft")
+    const [, [first], [second]] = await layoutOf(page)
+    await expect(page.locator(`[data-tile="${first}"]`)).toHaveAttribute(
+      "data-focused",
+      "true"
+    )
+
+    // The Person finds the App in the Banda menu, by its name.
+    const menu = await bandaMenu(page)
+    await menu.getByRole("combobox", { name: "Search" }).fill("clients")
+    await menu.getByRole("option", { name: /^Clients/ }).click()
+    const pane = page.getByRole("region", { name: "Clients" })
+    await expect(pane.getByText("The people I work with:")).toBeVisible()
+
+    const columns = kept(window)[0].columns
+    const at = columns.findIndex((column) =>
+      column.panes.some((one) => one.kind === "apps.view")
+    )
+    const app = columns[at].panes[0].id
+    if (ruled) {
+      // The Person's line: last on the workspace on screen, a third wide.
+      expect(columns.map((column) => column.panes[0].id).slice(1)).toEqual([
+        first,
+        second,
+        app,
+      ])
+      expect(columns[at].width).toBe("1/3")
+    } else {
+      // The first rule: right of the Pane in front, as wide as any.
+      expect(columns.map((column) => column.panes[0].id).slice(1)).toEqual([
+        first,
+        app,
+        second,
+      ])
+      expect(columns[at].width).toBeUndefined()
+    }
+    // Either way it is the Person's, and takes the focus.
+    await expect(page.locator(`[data-tile="${app}"]`)).toHaveAttribute(
+      "data-focused",
+      "true"
+    )
+    // The file's check knows the kind: the line is no stranger's.
+    expect(window.banda("settings", "check")).not.toContain("apps.view")
   })
