@@ -218,6 +218,9 @@ pub struct Tx<'c> {
     tx: rusqlite::Transaction<'c>,
     authorizer: &'c Authorizer,
     module: &'static str,
+    /// The name its rows of the kernel's go by at rest: see
+    /// [`kept`](crate::tables::kept).
+    kept: &'static str,
     now: i64,
     emitted: Vec<Event>,
     enqueued: bool,
@@ -307,7 +310,7 @@ impl Tx<'_> {
         self.kernel().execute(
             "INSERT INTO kernel_outbox (module, kind, key, payload, state, next_at, created_at, runner)
              VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?5, ?6)",
-            params![self.module, kind, key, payload, self.now, runner],
+            params![self.kept, kind, key, payload, self.now, runner],
         )?;
         self.enqueued = true;
         Ok(())
@@ -329,7 +332,7 @@ impl Tx<'_> {
     /// worker under a lease, so a worker writes nothing once its effect was
     /// taken again, after its lease ran out, or settled (ADR 0082, A6).
     pub fn holds(&self, claim: Claim) -> Result<(), Error> {
-        if crate::outbox::holds(&self.kernel(), self.module, claim)? {
+        if crate::outbox::holds(&self.kernel(), self.kept, claim)? {
             Ok(())
         } else {
             Err(crate::outbox::lost_lease().into())
@@ -381,6 +384,18 @@ impl Store {
             running: Runs::default(),
             off: std::sync::RwLock::new(off.into_iter().map(Arc::new).collect()),
         })
+    }
+
+    /// The name the kernel keeps `module`'s rows by at rest here: see
+    /// [`kept`](crate::tables::kept).
+    pub(crate) fn kept(&self, module: &'static str) -> &'static str {
+        self.writer_authorizer.kept(module)
+    }
+
+    /// The ids this store's modules had before, each with its name now:
+    /// what its log is read by.
+    pub(crate) fn renamed(&self) -> events::Renamed {
+        self.writer_authorizer.renamed()
     }
 
     /// The modules turned off here now.
@@ -648,6 +663,7 @@ fn transact<T>(
         tx,
         authorizer,
         module,
+        kept: authorizer.kept(module),
         now: now_ms(),
         emitted: Vec::new(),
         enqueued: false,
@@ -776,6 +792,9 @@ const OTHER_CALL: &str = "This command ID was already used for another call.";
 pub(crate) struct Receipt {
     pub(crate) command: CommandId,
     pub(crate) module: &'static str,
+    /// The name the receipt is kept under: see
+    /// [`kept`](crate::tables::kept).
+    pub(crate) kept: &'static str,
     pub(crate) method: String,
     pub(crate) author: Participant,
     /// [`Receipt::hash`] of its params.
@@ -830,7 +849,7 @@ impl Receipt {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 self.command,
-                self.module,
+                self.kept,
                 self.method,
                 self.author.kind(),
                 self.author.id(),
@@ -874,7 +893,7 @@ impl Receipt {
             return Ok(None);
         };
         let author = Participant::from_parts(&stored.author_kind, &stored.author_id);
-        let same = stored.module == self.module
+        let same = stored.module == self.kept
             && stored.method == self.method
             && author == Some(self.author)
             && (stored.params.as_ref()).is_none_or(|params| *params == self.params);
@@ -1067,6 +1086,7 @@ pub fn try_steps(module: &'static str, steps: &[&str]) -> Result<(), String> {
     let tables = Tables {
         module,
         legacy: &[],
+        was: &[],
         migrations: &[],
     };
     let tried = || -> Result<(), Off> {
@@ -1102,7 +1122,13 @@ fn ready(writer: &mut Connection, modules: &[Tables]) -> Result<Arc<Authorizer>,
 /// off, when they do not come.
 fn bring_up(writer: &mut Connection, authorizer: &Authorizer, tables: &Tables) -> Option<Off> {
     let of = Some((authorizer, tables));
-    migrate_in(writer, tables.module, tables.migrations, of).err()
+    let off = migrate_in(writer, tables.kept(), tables.migrations, of).err()?;
+    // The ledger goes by the name kept at rest; who is turned off, by its
+    // name now.
+    Some(Off {
+        module: tables.module,
+        ..off
+    })
 }
 
 /// Runs one step of `ledger` and writes it in the ledger, in one
@@ -1119,7 +1145,9 @@ fn apply(
         None => tx.execute_batch(script)?,
         Some((authorizer, tables)) => {
             {
-                let _as = authorizer.migrate(&tx, ledger);
+                // As the module by its name now, which the authorizer
+                // knows it by; its ledger goes by the name kept at rest.
+                let _as = authorizer.migrate(&tx, tables.module);
                 tx.execute_batch(script)?;
             }
             tables.parents_are_its_own(&tx)?;
@@ -1143,6 +1171,7 @@ mod tests {
         [Tables {
             module: "notes",
             legacy: &[],
+            was: &[],
             migrations,
         }]
     }
@@ -1182,6 +1211,7 @@ mod tests {
         Receipt {
             command,
             module: "notes",
+            kept: "notes",
             method: method.to_owned(),
             author,
             params: Receipt::hash(params),
@@ -1231,7 +1261,15 @@ mod tests {
         assert_eq!(event.payload, Value::from("kept"));
         assert_eq!(event.module, "notes");
         let stored = store
-            .read(|sql| Ok(events::after(sql, 0, &EventFilter::default(), 10)?))
+            .read(|sql| {
+                Ok(events::after(
+                    sql,
+                    0,
+                    &EventFilter::default(),
+                    10,
+                    &events::Renamed::default(),
+                )?)
+            })
             .await
             .unwrap();
         assert_eq!(stored.len(), 1);
@@ -1278,14 +1316,30 @@ mod tests {
             ),
         ];
         let all = store
-            .read(|sql| Ok(events::after(sql, 0, &EventFilter::default(), 10)?))
+            .read(|sql| {
+                Ok(events::after(
+                    sql,
+                    0,
+                    &EventFilter::default(),
+                    10,
+                    &events::Renamed::default(),
+                )?)
+            })
             .await
             .unwrap();
         for (filter, expected) in filters {
             let stored = store
                 .read({
                     let filter = filter.clone();
-                    move |sql| Ok(events::after(sql, 0, &filter, 10)?)
+                    move |sql| {
+                        Ok(events::after(
+                            sql,
+                            0,
+                            &filter,
+                            10,
+                            &events::Renamed::default(),
+                        )?)
+                    }
                 })
                 .await
                 .unwrap();
@@ -1748,6 +1802,7 @@ mod tests {
         let other = Tables {
             module: "other",
             legacy: &[],
+            was: &[],
             migrations: &["CREATE TABLE other_items (text TEXT)"],
         };
         let with = |steps| [tables_of_notes(steps)[0], other];
@@ -1884,6 +1939,7 @@ mod tests {
                 Tables {
                     module: "other",
                     legacy: &[],
+                    was: &[],
                     migrations: &["CREATE TABLE other_items (text TEXT NOT NULL)"],
                 },
             ],
@@ -1972,6 +2028,7 @@ mod tests {
         let renamed = [Tables {
             module: "notes",
             legacy: &["jots"],
+            was: &[],
             // A key SQLite makes an index for, and keys between its tables.
             migrations: &[
                 "CREATE TABLE jots_items (text TEXT PRIMARY KEY, at INTEGER UNIQUE);

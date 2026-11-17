@@ -117,7 +117,17 @@ pub(crate) fn owned_by(module: &str, legacy: &[&str], name: &str) -> bool {
 pub(crate) struct Tables {
     pub module: &'static str,
     pub legacy: &'static [&'static str],
+    /// The ids it had before, the oldest first: [`Module::was`].
+    pub was: &'static [&'static str],
     pub migrations: &'static [&'static str],
+}
+
+/// The name the kernel keeps `module`'s own rows by at rest: its ledger of
+/// migrations, its listeners' cursors, its effects and its commands'
+/// receipts. The oldest id it had, or its name: an id that changes
+/// renames nothing at rest (ADR 0085, decision 12).
+pub(crate) fn kept(module: &'static str, was: &[&'static str]) -> &'static str {
+    was.first().copied().unwrap_or(module)
 }
 
 impl Tables {
@@ -125,8 +135,14 @@ impl Tables {
         Tables {
             module: module.name(),
             legacy: module.legacy_prefixes(),
+            was: module.was(),
             migrations: module.migrations(),
         }
+    }
+
+    /// [`kept`], of this module.
+    pub(crate) fn kept(&self) -> &'static str {
+        kept(self.module, self.was)
     }
 
     /// Whether `name`, a table's or an index's, is this module's: its name
@@ -242,6 +258,19 @@ impl Authorizer {
         }
     }
 
+    /// [`kept`], of `module`: its own name for one this store has no
+    /// tables of, as the kernel's.
+    pub(crate) fn kept(&self, module: &'static str) -> &'static str {
+        let modules = self.modules.read().unwrap();
+        (modules.iter().find(|had| had.module == module)).map_or(module, Tables::kept)
+    }
+
+    /// The ids this store's modules had before, each with its name now.
+    pub(crate) fn renamed(&self) -> crate::events::Renamed {
+        let modules = self.modules.read().unwrap();
+        crate::events::Renamed::of(modules.iter().map(|had| (had.module, had.was)))
+    }
+
     /// Runs what comes next on `sql` for `module`, the kernel's name
     /// included, until the guard is dropped.
     pub(crate) fn enter<'a>(&'a self, sql: &Connection, module: &str) -> Entered<'a> {
@@ -341,9 +370,10 @@ impl Drop for AsKernel<'_> {
     }
 }
 
-/// Refuses modules whose tables would meet: one named as a reserved name,
-/// or a legacy prefix not of lowercase letters, reserved, another
-/// module's name, or two modules'.
+/// Refuses modules whose names would meet: one named as a reserved name,
+/// or a legacy prefix or an id it had before that is not of lowercase
+/// letters, is reserved, or is another module's name, legacy prefix or
+/// id before. A module's own id before may be its legacy prefix too.
 pub(crate) fn check(modules: &[Arc<dyn Module>]) -> Result<(), Refusal> {
     let mut taken: Vec<&str> = modules.iter().map(|module| module.name()).collect();
     if let Some(name) = taken.iter().find(|name| !module_name(name)) {
@@ -352,6 +382,7 @@ pub(crate) fn check(modules: &[Arc<dyn Module>]) -> Result<(), Refusal> {
         )));
     }
     for module in modules {
+        let before = taken.len();
         for &prefix in module.legacy_prefixes() {
             let plain = !prefix.is_empty() && prefix.bytes().all(|b| b.is_ascii_lowercase());
             if !plain || RESERVED.contains(&prefix) || taken.contains(&prefix) {
@@ -362,6 +393,24 @@ pub(crate) fn check(modules: &[Arc<dyn Module>]) -> Result<(), Refusal> {
             }
             taken.push(prefix);
         }
+        // Its methods answer by an id it had, so one is a name as a
+        // module's is; its own legacy prefix may be one.
+        let its = &taken[before..];
+        let mut ids: Vec<&str> = Vec::new();
+        for &id in module.was() {
+            let met = !its.contains(&id) && taken.contains(&id);
+            if !module_name(id) || met || ids.contains(&id) {
+                return Err(Refusal::invalid(format!(
+                    "\"{id}\" cannot be an id {} had before.",
+                    module.name()
+                )));
+            }
+            ids.push(id);
+        }
+        taken.extend(
+            ids.into_iter()
+                .filter(|id| !module.legacy_prefixes().contains(id)),
+        );
     }
     Ok(())
 }
@@ -374,6 +423,7 @@ mod tests {
     const NOTES: Tables = Tables {
         module: "notes",
         legacy: &["jots"],
+        was: &[],
         migrations: &[],
     };
 

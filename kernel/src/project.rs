@@ -584,8 +584,9 @@ impl Project {
         filter: EventFilter,
         limit: usize,
     ) -> Result<Vec<Event>, Error> {
+        let renamed = self.store.renamed();
         self.store
-            .read(move |sql| Ok(events::after(sql, after, &filter, limit)?))
+            .read(move |sql| Ok(events::after(sql, after, &filter, limit, &renamed)?))
             .await
     }
 
@@ -983,6 +984,12 @@ impl ModuleProject {
         self.project.store.write(self.module, change).await
     }
 
+    /// The name the kernel keeps this module's rows by at rest here: see
+    /// [`kept`](crate::tables::kept).
+    fn kept(&self) -> &'static str {
+        self.project.store.kept(self.module)
+    }
+
     /// This module's events of `kinds` about `subject`, from now on, as
     /// each is committed: a module waits on them for what was written, in
     /// place of reading again. Made before the read it waits after, so
@@ -1025,8 +1032,9 @@ impl ModuleProject {
         before: i64,
         filter: EventFilter,
     ) -> Result<Option<Event>, Error> {
+        let renamed = self.project.store.renamed();
         (self.project.store)
-            .read(move |sql| Ok(events::before(sql, before, &filter)?))
+            .read(move |sql| Ok(events::before(sql, before, &filter, &renamed)?))
             .await
     }
 
@@ -1059,7 +1067,7 @@ impl ModuleProject {
         filter: EventFilter,
         carried: Option<i64>,
     ) -> Result<Listener, Error> {
-        let cursor = Cursor::new(self.module, name, self.project.id, None)?;
+        let cursor = Cursor::new(self.module, self.kept(), name, self.project.id, None)?;
         Listener::begin(&self.project, cursor, filter, carried, None).await
     }
 
@@ -1081,7 +1089,13 @@ impl ModuleProject {
         let Some(machine) = &self.project.machine else {
             return Ok(None);
         };
-        let cursor = Cursor::new(self.module, name, machine.id, Some(&self.project))?;
+        let cursor = Cursor::new(
+            self.module,
+            self.kept(),
+            name,
+            machine.id,
+            Some(&self.project),
+        )?;
         let home = Some(self.project.open.subscribe());
         let listener = Listener::begin(machine, cursor, filter, None, home).await?;
         Ok(Some(listener))
@@ -1130,8 +1144,9 @@ impl ModuleProject {
         };
         let mut all = BTreeMap::new();
         for project in open {
-            let (tally, path) = (tally.clone(), path.clone());
-            let read = move |sql: &rusqlite::Connection| Ok(events::tally(sql, &tally, &path)?);
+            let (tally, path, renamed) = (tally.clone(), path.clone(), project.store.renamed());
+            let read =
+                move |sql: &rusqlite::Connection| Ok(events::tally(sql, &tally, &path, &renamed)?);
             for (by, count) in project.store.read(read).await? {
                 *all.entry(by).or_default() += count;
             }
@@ -1199,6 +1214,7 @@ impl ModuleProject {
         Receipt {
             command,
             module: self.module,
+            kept: self.kept(),
             method: method.to_owned(),
             author,
             params: Receipt::hash(params),

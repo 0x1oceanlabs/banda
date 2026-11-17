@@ -3,8 +3,8 @@
 //! with real SQLite in a temporary folder.
 
 use banda_kernel::{
-    Call, Code, CommandId, Error, Kernel, KernelBuilder, Kind, Module, ModuleProject, Participant,
-    PersonId, ProjectSummary, Refusal, Right,
+    Call, Code, CommandId, Error, EventFilter, Kernel, KernelBuilder, Kind, Module, ModuleProject,
+    Participant, PersonId, ProjectSummary, Refusal, Right,
 };
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -43,6 +43,54 @@ impl Module for Agents {
             Ok(Value::Null)
         })
         .await
+    }
+}
+
+/// The agents module once its id is `threads`: the same steps, tables and
+/// command, and the id it had before (ADR 0085, decision 12). It keeps
+/// each Project it opens in, for a test to read its log.
+#[derive(Clone, Default)]
+struct Threads {
+    projects: Arc<Mutex<Vec<ModuleProject>>>,
+}
+
+#[async_trait::async_trait]
+impl Module for Threads {
+    fn name(&self) -> &'static str {
+        "threads"
+    }
+
+    fn was(&self) -> &'static [&'static str] {
+        &["agents"]
+    }
+
+    fn legacy_prefixes(&self) -> &'static [&'static str] {
+        &["agents"]
+    }
+
+    fn migrations(&self) -> &'static [&'static str] {
+        // The step it had, and one it grew since.
+        &[
+            "CREATE TABLE agents_threads (id INTEGER PRIMARY KEY, title TEXT NOT NULL)",
+            "CREATE TABLE threads_marks (thread INTEGER NOT NULL)",
+        ]
+    }
+
+    fn right(&self, method: &str) -> Option<Right> {
+        Agents.right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Agents.kind(method)
+    }
+
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        self.projects.lock().unwrap().push(project);
+        Ok(())
+    }
+
+    async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
+        Agents.call(call, method, params).await
     }
 }
 
@@ -138,7 +186,15 @@ fn builder(root: &Path, owner: PersonId) -> KernelBuilder {
 }
 
 async fn create(kernel: &Kernel, owner: PersonId) -> Result<ProjectSummary, Refusal> {
-    let params = json!({ "name": "Walls" });
+    create_named(kernel, owner, "Walls").await
+}
+
+async fn create_named(
+    kernel: &Kernel,
+    owner: PersonId,
+    name: &str,
+) -> Result<ProjectSummary, Refusal> {
+    let params = json!({ "name": name });
     let created = kernel.call(
         Participant::Person(owner),
         "projects.create",
@@ -150,15 +206,27 @@ async fn create(kernel: &Kernel, owner: PersonId) -> Result<ProjectSummary, Refu
 }
 
 async fn start(kernel: &Kernel, owner: PersonId, project: &ProjectSummary) {
+    start_as(kernel, owner, project, "agents.start")
+        .await
+        .unwrap();
+}
+
+/// Starts a Thread by `method`, the command under one of its App's ids.
+async fn start_as(
+    kernel: &Kernel,
+    owner: PersonId,
+    project: &ProjectSummary,
+    method: &str,
+) -> Result<Value, Refusal> {
     let command = Some(CommandId::new());
     let started = kernel.call(
         Participant::Person(owner),
-        "agents.start",
+        method,
         Some(project.id),
         command,
         json!({}),
     );
-    started.await.unwrap();
+    started.await
 }
 
 /// Drops `kernel` and waits until nothing holds its Projects.
@@ -330,6 +398,76 @@ async fn a_module_whose_steps_reach_past_its_tables_is_turned_off_and_its_projec
 }
 
 #[tokio::test]
+async fn an_app_whose_id_changed_answers_by_both_and_its_log_reads_under_the_new_one() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let data = root.path().join(".data");
+    let kernel = builder(root.path(), owner).module(Agents).open().await;
+    let kernel = kernel.unwrap();
+    let project = create(&kernel, owner).await.unwrap();
+    start(&kernel, owner, &project).await;
+    let_go(kernel, &data).await;
+
+    // Its id is `threads` now. Its ledger is found where it was, so no
+    // step runs again and it is not turned off: both ids answer.
+    let threads = Threads::default();
+    let kernel = builder(root.path(), owner).module(threads.clone()).open();
+    let kernel = kernel.await.unwrap();
+    for method in ["agents.start", "threads.start"] {
+        let started = start_as(&kernel, owner, &project, method).await;
+        assert!(started.is_ok(), "{method}: {started:?}");
+    }
+    // What the log held as `agents` reads as `threads`, and a filter by
+    // either id hears all three.
+    let log = threads.projects.lock().unwrap().remove(0);
+    let by = |module: Option<&str>| EventFilter {
+        module: module.map(str::to_owned),
+        kinds: Some(vec!["thread.started".to_owned()]),
+        ..EventFilter::default()
+    };
+    for module in [Some("agents"), Some("threads"), None] {
+        let read = log.events_after(0, by(module), 10).await.unwrap();
+        let modules: Vec<&str> = read.iter().map(|event| event.module.as_str()).collect();
+        assert_eq!(modules, ["threads"; 3], "{module:?}");
+    }
+    let newest = log.event_before(i64::MAX, by(Some("agents"))).await;
+    assert_eq!(newest.unwrap().unwrap().module, "threads");
+    // The step it grew ran as its own, here and in a Project made since,
+    // where every step did.
+    let marks = log.read(count("SELECT count(*) FROM threads_marks")).await;
+    assert_eq!(marks.unwrap(), 0);
+    let new = create_named(&kernel, owner, "Since").await.unwrap();
+    let started = start_as(&kernel, owner, &new, "threads.start").await;
+    assert!(started.is_ok(), "{started:?}");
+    drop(log);
+    threads.projects.lock().unwrap().clear();
+    let_go(kernel, &data).await;
+
+    // A build that knows it as `agents` opens the same data (with the
+    // step it grew, as a ledger ahead of a build turns it off whatever
+    // its id): the ledger, the tables and its own events are where it
+    // left them, and what was written as `threads` it does not take for
+    // its own.
+    let old = Spy::new(
+        "agents",
+        &["threads"],
+        &[
+            "CREATE TABLE agents_threads (id INTEGER PRIMARY KEY, title TEXT NOT NULL)",
+            "CREATE TABLE threads_marks (thread INTEGER NOT NULL)",
+        ],
+    );
+    let kernel = builder(root.path(), owner).module(old.clone()).open();
+    let kernel = kernel.await.unwrap();
+    let log = old.project();
+    let threads = log.read(count("SELECT count(*) FROM agents_threads")).await;
+    assert_eq!(threads.unwrap(), 3);
+    let its = log.events_after(0, by(Some("agents")), 10).await.unwrap();
+    assert_eq!(its.len(), 1);
+    assert_eq!(log.events_after(0, by(None), 10).await.unwrap().len(), 3);
+    drop(kernel);
+}
+
+#[tokio::test]
 async fn names_and_legacy_prefixes_that_meet_another_s_tables_are_refused() {
     let root = tempfile::tempdir().unwrap();
     let refused = async |builder: KernelBuilder| match builder.open().await {
@@ -356,6 +494,17 @@ async fn names_and_legacy_prefixes_that_meet_another_s_tables_are_refused() {
     }
     let other = Spy::new("other", &["old"], &[]);
     assert!(refused(modules().module(renamed(&["old"])).module(other)).await);
+    // An id a module had before is a name as its own is: none another
+    // module goes by, and none the kernel routes or keeps.
+    assert!(refused(modules().module(Agents).module(Threads::default())).await);
+    assert!(
+        refused(
+            modules()
+                .module(Threads::default())
+                .module(renamed(&["agents"]))
+        )
+        .await
+    );
     for name in ["sqlite", "pragma", "json"] {
         let reserved = Spy::new(name, &[], &[]);
         assert!(refused(modules().module(reserved)).await, "{name}");

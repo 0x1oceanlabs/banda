@@ -97,13 +97,14 @@ impl Said<'_> {
 impl Kernel {
     /// The export of the App `app` in `project`, in pieces. An App that
     /// keeps nothing there exports its `app.json` alone. Refused for a
-    /// name that is no App's, or that another App's tables still go by.
+    /// name that is no App's, or that another App's tables still go by or
+    /// that another App had before.
     pub(crate) async fn export(&self, project: ProjectId, app: &str) -> Result<Stream, Refusal> {
         let runs = self.runs();
         let others = runs.modules.iter().filter(|module| module.name() != app);
         if !module_name(app)
             || others
-                .flat_map(|m| m.legacy_prefixes())
+                .flat_map(|m| m.legacy_prefixes().iter().chain(m.was()))
                 .any(|had| *had == app)
         {
             return Err(Refusal::invalid(format!("\"{app}\" is no App's id.")));
@@ -139,7 +140,11 @@ async fn exported(
     legacy: &'static [&'static str],
     said: &mut Said<'_>,
 ) -> Result<bool, Error> {
-    let (id, ledger) = (app.to_owned(), app.to_owned());
+    // Its ledger goes by the name the kernel keeps for it at rest.
+    let modules = project.modules();
+    let running = modules.iter().find(|module| module.name() == app);
+    let ledger = running.map_or(app, |m| crate::tables::kept(m.name(), m.was()));
+    let (id, ledger) = (app.to_owned(), ledger.to_owned());
     let (tables, steps) = project
         .store()
         .read(move |sql| {

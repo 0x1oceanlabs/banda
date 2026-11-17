@@ -58,7 +58,9 @@ const NAME: usize = 64;
 pub(crate) struct Cursor {
     module: &'static str,
     /// Its row in `kernel_cursors`: `<module>.<name>`, with `@<Project>`
-    /// for a Project's module that hears this machine's log.
+    /// for a Project's module that hears this machine's log. The module
+    /// is named as the kernel keeps it at rest
+    /// ([`kept`](crate::tables::kept)).
     key: String,
     /// The scope whose log it hears, where its cursor is.
     source: ProjectId,
@@ -72,6 +74,7 @@ impl Cursor {
     /// module's own Project when that log is another scope's.
     pub(crate) fn new(
         module: &'static str,
+        kept: &'static str,
         name: &str,
         source: ProjectId,
         home: Option<&Arc<Project>>,
@@ -85,8 +88,8 @@ impl Cursor {
             )));
         }
         let key = match home {
-            Some(home) => format!("{module}.{name}@{}", home.id()),
-            None => format!("{module}.{name}"),
+            Some(home) => format!("{kept}.{name}@{}", home.id()),
+            None => format!("{kept}.{name}"),
         };
         Ok(Cursor {
             module,
@@ -224,7 +227,7 @@ impl Heard {
         Heard {
             project: Arc::downgrade(project),
             live: project.subscribe(),
-            filter,
+            filter: project.store().renamed().asked(filter),
             last: after,
             given: after,
             began: after,
@@ -441,6 +444,7 @@ impl Listener {
         let receipt = Receipt {
             command: CommandId::derive(&self.cursor.key, &event.id.to_string()),
             module: self.cursor.module,
+            kept: home.store().kept(self.cursor.module),
             method: self.cursor.key.clone(),
             author: event.author,
             params: Receipt::hash(&serde_json::json!(event.id)),
@@ -467,10 +471,16 @@ mod tests {
     #[test]
     fn a_listener_is_named_plainly() {
         let source = ProjectId::new();
-        let own = Cursor::new("notes", "copies", source, None).unwrap();
+        let own = Cursor::new("notes", "notes", "copies", source, None).unwrap();
         assert_eq!(own.key, "notes.copies");
+        // A module whose id changed keeps its place under the id it had.
+        let renamed = Cursor::new("jottings", "notes", "copies", source, None).unwrap();
+        assert_eq!(renamed.key, "notes.copies");
         for bad in ["", "A", "a.b", "a@b", "a b", &"a".repeat(NAME + 1)] {
-            assert!(Cursor::new("notes", bad, source, None).is_err(), "{bad}");
+            assert!(
+                Cursor::new("notes", "notes", bad, source, None).is_err(),
+                "{bad}"
+            );
         }
     }
 }

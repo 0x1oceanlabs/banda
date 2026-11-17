@@ -311,8 +311,14 @@ const FIRST_OF_ITS_KEY: &str = "o.id = (SELECT MIN(p.id) FROM kernel_outbox p
            AND NOT EXISTS (SELECT 1 FROM kernel_outbox r
                  WHERE r.module = o.module AND r.key = o.key AND r.state = 'running')";
 
-fn find<'m>(modules: &'m [Arc<dyn Module>], name: &str) -> Option<&'m Arc<dyn Module>> {
-    modules.iter().find(|m| m.name() == name)
+/// The module whose effects the outbox keeps under `kept`: the name its
+/// rows go by at rest ([`kept`](crate::tables::kept)).
+fn find<'m>(modules: &'m [Arc<dyn Module>], kept: &str) -> Option<&'m Arc<dyn Module>> {
+    modules.iter().find(|m| kept_of(&***m) == kept)
+}
+
+fn kept_of(module: &dyn Module) -> &'static str {
+    crate::tables::kept(module.name(), module.was())
 }
 
 /// What cut a run short.
@@ -483,7 +489,7 @@ async fn start_ready(project: &Arc<Project>) -> Result<Duration, Error> {
     }
     // The effects of a module that does not run here, turned off or not
     // this engine's, wait as they are.
-    let names: Vec<_> = project.modules().iter().map(|m| m.name()).collect();
+    let names: Vec<_> = project.modules().iter().map(|m| kept_of(&**m)).collect();
     let run_here = serde_json::to_string(&names)?;
     let (id, here) = (boot.id.clone(), run_here.clone());
     let claimed = project
@@ -587,6 +593,7 @@ pub(crate) async fn lease(
     kinds: &[&str],
     term: Duration,
 ) -> Result<Option<Lease>, Error> {
+    let module = project.store().kept(module);
     let boot = project.boot();
     let (id, now, term) = (boot.id.clone(), boot.now(), ms(term.min(LONGEST_LEASE)));
     let (worker, kinds) = (worker.to_owned(), serde_json::to_string(kinds)?);
@@ -637,6 +644,7 @@ pub(crate) async fn renew(
     claim: Claim,
     term: Duration,
 ) -> Result<(), Refusal> {
+    let module = project.store().kept(module);
     let (now, term) = (project.boot().now(), ms(term.min(LONGEST_LEASE)));
     let renewed = project
         .store()
@@ -664,7 +672,8 @@ pub(crate) async fn finish_leased(
     claim: Claim,
     outcome: Outcome,
 ) -> Result<(), Refusal> {
-    let Some(of) = find(&project.modules(), module).cloned() else {
+    let kept = project.store().kept(module);
+    let Some(of) = find(&project.modules(), kept).cloned() else {
         return Err(Refusal::not_found(format!("No module is named {module}.")));
     };
     let held = project
@@ -678,7 +687,7 @@ pub(crate) async fn finish_leased(
                          WHERE o.id = ?1 AND o.module = ?2 AND o.claim = ?3
                            AND o.state = 'running' AND o.runner = 'worker'"
                     ),
-                    params![claim.effect, module, claim.token],
+                    params![claim.effect, kept, claim.token],
                     read_claimed,
                 )
                 .optional()?;

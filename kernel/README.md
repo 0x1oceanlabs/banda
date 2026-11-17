@@ -159,7 +159,14 @@ The kernel holds only what every module needs, and it names no module.
   prefixes it kept, `legacy-prefixes`, which its engine part tells the
   kernel (`Module::legacy_prefixes`), and the kernel refuses one that is
   another module's name or reserved (`kernel`, `sqlite`, `pragma`,
-  `json`) (ADR 0085, decision 12). Entering a module empties its
+  `json`) (ADR 0085, decision 12). It declares the ids it had too,
+  `was`, the oldest first (`Module::was`): its methods answer by one
+  (`agents.send` as `threads.send`), and what a log holds under one is
+  read under its name, a filter by either hearing both. What the kernel
+  keeps for it at rest (its ledger of migrations, its listeners'
+  cursors, its effects, its commands' receipts) stays under the oldest
+  id, so a build from before the change opens the same data; only its
+  new events carry the new name. Entering a module empties its
   connection's statement cache, so it is never handed a statement
   decided for someone else, and both connections run with
   `trusted_schema = OFF`. What a module's SQL reaches past is refused as

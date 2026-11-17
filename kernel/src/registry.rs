@@ -95,7 +95,8 @@ impl Kernel {
         let _adding = self.adding.lock().await;
         let runs = self.runs();
         let replaces = runs.added.contains(&name);
-        if !replaces && runs.modules.iter().any(|had| had.name() == name) {
+        let taken = |had: &Arc<dyn Module>| had.name() == name || had.was().contains(&name);
+        if !replaces && runs.modules.iter().any(taken) {
             return Err(Refusal::conflict(format!(
                 "The id {name} is taken on this machine."
             )));
@@ -151,9 +152,12 @@ impl Kernel {
 /// kernel does not keep, with tools no other module has.
 pub(crate) fn admits(others: &Runs, module: &dyn Module, app: &App) -> Result<(), Refusal> {
     let name = module.name();
-    if module.scope() != Scope::Project || !module.legacy_prefixes().is_empty() {
+    if module.scope() != Scope::Project
+        || !module.legacy_prefixes().is_empty()
+        || !module.was().is_empty()
+    {
         return Err(Refusal::invalid(format!(
-            "{name} cannot be added: only a module of the Projects' scope is, with no legacy prefix."
+            "{name} cannot be added: only a module of the Projects' scope is, with no legacy prefix and no id before."
         )));
     }
     if !module_name(name) || app.id != name {
