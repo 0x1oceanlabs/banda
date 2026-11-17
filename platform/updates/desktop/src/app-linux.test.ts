@@ -219,7 +219,9 @@ it("restarts at once into a version the last look offered, and stops no engine",
   const leaving = vi.fn()
   const update = ready(leaving)
   update.restart()
-  // It says so before the install holds main.
+  expect(update.current()).toMatchObject({ doing: "installing" })
+  // It says it restarts before the install holds main.
+  await vi.advanceTimersByTimeAsync(0)
   expect(update.current()).toMatchObject({ doing: "restarting" })
   expect(updater.quitAndInstall).not.toHaveBeenCalled()
   expect(await restarted()).toBe(true)
@@ -332,6 +334,32 @@ it("Update now whose download fails restarts nothing later", async () => {
   events.emit("update-available", offer("0.1.0-dev.421"))
   events.emit("update-downloaded", offer("0.1.0-dev.421"))
   expect(update.current()).toMatchObject({ state: "ready" })
+  expect(await restarted()).toBe(false)
+})
+
+it("a download that fails does not hold the next look's, and a Restart waits for the version that comes down", async () => {
+  const update = ready()
+  sleep(3 * HOUR)
+  // The engine is away as the Restart asks it, yet its look came: a newer
+  // version comes down, and the Restart goes on into it.
+  engine.check.mockRejectedValueOnce(new Error("Banda's engine is away"))
+  update.restart()
+  update.heard(looked("0.1.0-dev.425"))
+  events.emit("update-available", offer("0.1.0-dev.425"))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(update.current()).toMatchObject({
+    state: "downloading",
+    restarts: true,
+  })
+  // Its download fails: nothing restarts, and the next look takes it.
+  events.emit("error", new Error("net::ERR_CONNECTION_RESET"))
+  expect(update.current()).toMatchObject({ state: "none" })
+  vi.advanceTimersByTime(HOUR)
+  update.heard(looked("0.1.0-dev.425"))
+  events.emit("update-available", offer("0.1.0-dev.425"))
+  expect(update.current()).toMatchObject({ state: "downloading" })
+  expect(updater.downloadUpdate).toHaveBeenCalledTimes(3)
+  events.emit("update-downloaded", offer("0.1.0-dev.425"))
   expect(await restarted()).toBe(false)
 })
 
