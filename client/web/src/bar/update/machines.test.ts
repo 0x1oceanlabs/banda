@@ -418,6 +418,9 @@ describe("the bar's icon and the title", () => {
   })
 
   it("words a few failures the Person can act on", () => {
+    expect(
+      plainOf("0.1.0-dev.827 did not start, so 0.1.0-dev.826 is back")
+    ).toBe("The new version didn't start, so the one before is back.")
     expect(plainOf("no room on devbox (needs 180 MB)")).toBe(
       "Not enough disk space."
     )

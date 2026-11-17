@@ -51,7 +51,8 @@ import {
 import { app } from "electron"
 import { autoUpdater, type UpdateInfo } from "electron-updater"
 import { brewOf } from "./brew"
-import { brewInstaller, electronInstaller, type Installer } from "./installer"
+import { appImageInstaller } from "./appimage"
+import { brewInstaller, type Installer, windowsInstaller } from "./installer"
 import { isAbove, sourceOf, versionInName, type Which } from "./releases"
 
 /** How long after this system's files, or brew's tap, are found missing
@@ -254,15 +255,21 @@ export function updates(
    * install, which only says the command. */
   const brew =
     image || windows ? undefined : brewOf(mine.folder, process.execPath)
-  const installer: Installer | undefined =
-    image || windows
-      ? electronInstaller({
-          image: image || undefined,
-          listApp: mine.listApp,
-          quits: mine.quits,
-        })
+  const installer: Installer | undefined = image
+    ? appImageInstaller({
+        image,
+        have,
+        data: app.getPath("userData"),
+        listApp: mine.listApp,
+        folder: mine.folder,
+      })
+    : windows
+      ? windowsInstaller(mine)
       : brew && brewInstaller(brew)
-  /** Whether electron-updater downloads, and installs at the quit. */
+  // The version it last installed did not start, and this one is back.
+  if (installer?.failed)
+    now = { ...known, state: "failed", reason: installer.failed }
+  /** Whether electron-updater downloads. */
   const downloads = installer?.downloads ?? false
   // What a Mac's Banda brew did not install says: `brew upgrade` alone
   // reads the tap as it was at the last `brew update`, which may be a day
@@ -284,6 +291,8 @@ export function updates(
    * ms since the epoch; and the one acted on, each only once. */
   let wants = 0
   let obeyed = 0
+  /** Whether the engine heard this Banda's update once. */
+  let told = false
   /** Set while a restart's look waits for an engine that is away: what
    * ends the wait. */
   let away: ReturnType<typeof setTimeout> | undefined
@@ -351,19 +360,19 @@ export function updates(
   const publishing = (soon: boolean) =>
     `The ${system} release is still publishing${soon ? "; checking again in a minute" : ""}`
 
-  // The quit installs only what `installsAtQuit` says, set as Banda quits:
-  // electron-updater reads this at the quit, and after a download only
-  // listens for the quit while it is on.
-  autoUpdater.autoInstallOnAppQuit = downloads
-  if (downloads)
+  // The quit installs only what `installsAtQuit` says, said as Banda
+  // quits.
+  if (installer)
     app.on("will-quit", () => {
       const listed = mine.listedImage()
-      autoUpdater.autoInstallOnAppQuit = installsAtQuit({
-        ready: now.state === "ready" ? now.version : undefined,
-        offered,
-        listed: listed && versionInName(basename(listed), mine.folder),
-        at: Date.now(),
-      })
+      installer.quitting(
+        installsAtQuit({
+          ready: now.state === "ready" ? now.version : undefined,
+          offered,
+          listed: listed && versionInName(basename(listed), mine.folder),
+          at: Date.now(),
+        })
+      )
     })
 
   // A newer version replaces one that is ready: the installer keeps one,
@@ -424,7 +433,10 @@ export function updates(
       failed(error) {
         taking = undefined
         console.warn(`${by.name} could not take Banda's update:`, error.message)
-        drop(info)
+        // Its own download's file: the Person mends it. brew's says the
+        // command instead.
+        if (by.downloads) fail(firstLine(error.message))
+        else drop(info)
       },
     })
   }
@@ -493,9 +505,11 @@ export function updates(
    * not yet read. */
   const heard = (state: UpdateState): boolean => {
     said = state
-    // An engine that started since has nothing of this app, or what
-    // another version of it said: it hears it.
-    if (state.app?.running !== have) say()
+    // The engine hears what this app's update is as this Banda first
+    // hears it, as it may have what the Banda before it said; and again
+    // one that started since, which has nothing of this app.
+    if (!told || state.app?.running !== have) say()
+    told = true
     wants = state.wants_app ?? 0
     if (wants > Date.now() && wants !== obeyed) {
       obeyed = wants
