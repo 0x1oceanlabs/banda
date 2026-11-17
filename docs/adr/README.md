@@ -104,7 +104,8 @@ Apps, their manifests, and the SDK.
 | --- | --- | --- | --- |
 | [0022](0022-a-module-declares-itself-in-its-code-and-a-short-module-toml.md) | A module declares itself in its code and a short module.toml | **standing** | module.toml became app.toml by 0062; changed by 0082 (1), 0071 (3), 0085 (1, 5) |
 | [0062](0062-banda-is-a-kernel-a-platform-and-apps-built-on-one-sdk.md) | Banda is a kernel, a platform and Apps built on one SDK | **standing** | decisions 9, 13, 17, 18 amended by 0101; 4 and 14 by 0126 (proposed) |
-| [0085](0085-apps-are-disposable-and-their-data-is-durable.md) | Apps are disposable, and their data is durable | **standing** | only decision 8 built; rename to threads, export, purge and move not built |
+| [0085](0085-apps-are-disposable-and-their-data-is-durable.md) | Apps are disposable, and their data is durable | **standing** | only decision 8 built; decision 12 (rename to threads) replaced by 0138, decision 2 amended by it; export, purge and move not built |
+| [0138](0138-the-app-stays-agents-and-what-a-person-gives-an-agent-is-a-task.md) | The App stays `agents`, and what a Person gives an Agent is a Task | **standing** | replaces 0085 decision 12, amends its decision 2; step 1, the words a Person sees, next |
 | [0126](0126-an-app-an-agent-writes-is-a-folder-and-a-worker-runs-it.md) | An App an Agent writes is a folder, and a worker runs it | proposed | amends 0062 decision 4 once accepted; apps.install already in code |
 
 ### Agents
