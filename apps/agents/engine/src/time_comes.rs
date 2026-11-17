@@ -45,7 +45,7 @@ pub async fn watch(mut heard: Listener) {
         // tried again on the next look.
         for (thread, _) in due {
             if let Err(error) = project.write(move |tx| comes(tx, thread)).await {
-                tracing::warn!(%error, "a put-off Thread did not wake at its time");
+                tracing::warn!(%error, "a put-off Task did not wake at its time");
             }
         }
         drop(project);
@@ -89,7 +89,7 @@ fn comes(tx: &mut Tx<'_>, thread: ThreadId) -> Result<(), Error> {
     if let Some(turn) = resume
         && let Err(error) = crate::retry(tx, by, turn)
     {
-        tracing::warn!(%error, "a put-off Thread's failed turn did not go again");
+        tracing::warn!(%error, "a put-off Task's failed turn did not go again");
     }
     Ok(())
 }

@@ -26,7 +26,7 @@ function WaitingThreads({ engine, account, limits, now }: SpentProps) {
   return (
     <div className="mt-2.5 flex items-center gap-2 text-meta text-muted-foreground">
       <span className="min-w-0 flex-1 truncate">
-        {count} {count === 1 ? "Thread waits" : "Threads wait"}
+        {count} {count === 1 ? "Task waits" : "Tasks wait"}
       </span>
       <Button
         size="xs"

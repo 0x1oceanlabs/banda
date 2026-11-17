@@ -345,7 +345,7 @@ impl Agents {
                 Ok(Target::New(harness, start))
             }
             (None, None) => Err(Refusal::invalid(
-                "Name a Thread, or a Harness to start one on.",
+                "Name a Task, or a Harness to start one on.",
             )),
         }
     }
@@ -377,9 +377,9 @@ impl Agents {
     ) -> Result<String, Refusal> {
         let found = project.read(move |sql| titles::asking(sql, thread)).await?;
         let (harness, settings, prompt) =
-            found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+            found.ok_or_else(|| Refusal::not_found("There is no such Task."))?;
         if harness.is_empty() {
-            return Err(Refusal::conflict("This Thread's Harness is gone."));
+            return Err(Refusal::conflict("This Task's Harness is gone."));
         }
         let connection = self.running(project, &harness).await?;
         let name = connection.process().name().to_owned();
@@ -410,7 +410,7 @@ impl Agents {
         let title = match self.title_for(&project, thread).await {
             Ok(title) => title,
             Err(refusal) => {
-                tracing::info!(%thread, %refusal, "no title came for a new Thread");
+                tracing::info!(%thread, %refusal, "no title came for a new Task");
                 return Outcome::Done;
             }
         };
@@ -1158,7 +1158,7 @@ impl Agents {
                 }))
             })
             .await?;
-        let view = found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        let view = found.ok_or_else(|| Refusal::not_found("There is no such Task."))?;
         Ok(ThreadView { at, ..view })
     }
 
@@ -1223,7 +1223,7 @@ impl Agents {
             })
             .await?;
         let (turns, mut files) =
-            found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+            found.ok_or_else(|| Refusal::not_found("There is no such Task."))?;
         // A file in the Project's folder is named from there, as git names it.
         let folder = call.project().folder();
         for file in &mut files {
@@ -1265,7 +1265,7 @@ impl Agents {
                         Ok(Some((summary.harness, store::settings(sql, thread)?)))
                     })
                     .await?;
-                found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?
+                found.ok_or_else(|| Refusal::not_found("There is no such Task."))?
             }
             // As a new Thread on it starts.
             Target::New(harness, start) => {
@@ -1279,7 +1279,7 @@ impl Agents {
             }
         };
         if harness.is_empty() {
-            return Err(Refusal::conflict("This Thread's Harness is gone."));
+            return Err(Refusal::conflict("This Task's Harness is gone."));
         }
         let connection = self.running(call.project(), &harness).await?;
         let folder = call.project().folder();
@@ -1401,7 +1401,7 @@ impl Agents {
         let author = call.participant();
         call.command(move |tx| {
             store::thread(tx.sql(), thread)?
-                .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+                .ok_or_else(|| Refusal::not_found("There is no such Task."))?;
             writer::resume(tx, author, thread)
         })
         .await
@@ -1416,7 +1416,7 @@ impl Agents {
         let fence = call.project().environment().fence();
         call.command(move |tx| {
             store::thread(tx.sql(), thread)?
-                .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+                .ok_or_else(|| Refusal::not_found("There is no such Task."))?;
             configure(tx, author, thread, settings, &fence, None)
         })
         .await
@@ -1505,7 +1505,7 @@ impl Agents {
     async fn draft_issue(&self, call: Call, draft: DraftIssue) -> Result<String, Refusal> {
         let Participant::Agent(agent) = call.participant() else {
             return Err(Refusal::forbidden(
-                "Only a Thread's Agent drafts an issue, in its own Thread.",
+                "Only a Task's Agent drafts an issue, in its own Task.",
             ));
         };
         call.command(move |tx| issues::draft(tx, agent, draft))
@@ -1516,7 +1516,7 @@ impl Agents {
     async fn notify(&self, call: Call, notify: Notify) -> Result<String, Refusal> {
         let Participant::Agent(agent) = call.participant() else {
             return Err(Refusal::forbidden(
-                "Only a Thread's Agent tells its Person, from its own Thread.",
+                "Only a Task's Agent tells its Person, from its own Task.",
             ));
         };
         call.command(move |tx| notes::note(tx, agent, notify))
@@ -1591,14 +1591,14 @@ impl Agents {
         let author = call.participant();
         if author.agent().is_some() {
             return Err(Refusal::forbidden(
-                "Only a Person moves a Thread to another account.",
+                "Only a Person moves a Task to another account.",
             ));
         }
 
         let was = (call.project())
             .read(move |sql| store::thread(sql, thread))
             .await?
-            .ok_or_else(|| Refusal::not_found("There is no such Thread."))?
+            .ok_or_else(|| Refusal::not_found("There is no such Task."))?
             .harness;
         self.harness(&harness)?;
         call.command(move |tx| switching::switch(tx, author, thread, was, harness))
@@ -1613,7 +1613,7 @@ impl Agents {
         let author = call.participant();
         if author.agent().is_some() {
             return Err(Refusal::forbidden(
-                "Only a Person moves a Thread to another account.",
+                "Only a Person moves a Task to another account.",
             ));
         }
         self.harness(&harness)?;
@@ -1628,7 +1628,7 @@ impl Agents {
                 return Ok(None);
             }
             let was = (store::thread(tx.sql(), thread)?)
-                .ok_or_else(|| Refusal::not_found("There is no such Thread."))?
+                .ok_or_else(|| Refusal::not_found("There is no such Task."))?
                 .harness;
             laters::wake(tx, author, Some(thread))?;
             switching::switch(tx, author, thread, was, harness)?;
@@ -1691,7 +1691,7 @@ impl Agents {
         } = params;
         let Participant::Agent(agent) = call.participant() else {
             return Err(Refusal::forbidden(
-                "Only a Thread's Agent shows a Visual, in its own Thread.",
+                "Only a Task's Agent shows a Visual, in its own Task.",
             ));
         };
         let (title, height) = visuals::may_show(&html, &title, height)?;
@@ -2140,7 +2140,7 @@ fn send(
     let (thread, agent) = match target {
         Target::Thread(id) => {
             let (title, agent) = store::title_and_agent(tx.sql(), id)?
-                .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+                .ok_or_else(|| Refusal::not_found("There is no such Task."))?;
             if let Some((Opener::Asked, from)) = by {
                 let (asks, waiting) = (
                     store::asks(tx.sql(), id)?,
@@ -2256,7 +2256,7 @@ fn fork(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Forked, Er
     let works = store::running(tx.sql(), from)?.is_some();
     rules::may_fork(found.state, works, store::lanes_at_work(tx.sql(), from)?)?;
     let source = store::thread(tx.sql(), from)?
-        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        .ok_or_else(|| Refusal::not_found("There is no such Task."))?;
     let cannot = || Refusal::conflict("Its Agent named no reply of this turn to fork from.");
     let message = store::last_named_reply(tx.sql(), from, turn)?.ok_or_else(cannot)?;
     let evidence: acp::Evidence = store::evidence(tx.sql(), from)?.ok_or_else(cannot)?;

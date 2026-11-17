@@ -36,8 +36,8 @@ export function FileDiff({
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={`Open the change to ${path} beside the Thread`}
-            title="Open beside the Thread"
+            aria-label={`Open the change to ${path} beside the Task`}
+            title="Open beside the Task"
             onClick={onOpen}
           >
             <SquareArrowOutUpRightIcon className="size-3.5" />

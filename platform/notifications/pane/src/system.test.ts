@@ -63,7 +63,7 @@ test("many calls at once make one notice that names them all", () => {
   const calls = [heard("A", "done"), heard("B", "failed"), heard("C", "done")]
   expect(summaryOf(calls)).toEqual({
     key: "calls",
-    title: "3 Threads call you",
+    title: "3 Tasks call you",
     body: "A, B, C",
     answer: "Show",
     lasts: true,
@@ -141,7 +141,7 @@ test("done calls that show at once join in one toast, a line each", () => {
   expect(joined).toMatchObject({
     key: JOINED,
     kind: "done",
-    title: "2 Threads done",
+    title: "2 Tasks done",
     body: "Docs: PR #470 is open\nTests",
     buttons: [{ label: "Show", action: "sidebar.show" }],
   })

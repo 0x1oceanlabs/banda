@@ -75,7 +75,7 @@ export function WhoPicker({
             {who.others.map((row) => (
               <Row key={row.move.harness.id} row={row} onPick={pick} />
             ))}
-            <Note>Reads this Thread's history and goes on from here.</Note>
+            <Note>Reads this Task's history and goes on from here.</Note>
           </>
         )}
       </PopoverContent>
@@ -172,7 +172,7 @@ export function Handoff({
   const to = move.harness.short
   return (
     <Docked
-      label={`Hand this Thread to ${to}?`}
+      label={`Hand this Task to ${to}?`}
       className="flex flex-col gap-2 p-3"
       onKeyDown={(event) => {
         if (event.key === "Escape") onStay()
@@ -180,12 +180,12 @@ export function Handoff({
     >
       <div className="flex items-center gap-1.5 text-meta font-semibold">
         <Emblem of={move.harness} />
-        Hand this Thread to {to}?
+        Hand this Task to {to}?
       </div>
       <p className="text-muted-foreground">
         {move.back
-          ? `${to} goes on with its own session of this Thread, and reads only what came after it.`
-          : `${to} reads this Thread's history and goes on from here, in a session of its own.`}
+          ? `${to} goes on with its own session of this Task, and reads only what came after it.`
+          : `${to} reads this Task's history and goes on from here, in a session of its own.`}
       </p>
       <div className="flex justify-end gap-1.5">
         <Button variant="ghost" size="sm" onClick={onStay}>

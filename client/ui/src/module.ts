@@ -412,7 +412,7 @@ export type ItemAt = {
 export function itemArgs(more: { [name: string]: Takes } = {}): ArgsSchema {
   return takes({
     project: "the Project of the Item it acts on",
-    item: "the Item's id in its Project, as a Thread's; none for the one in focus",
+    item: "the Item's id in its Project, as a Task's; none for the one in focus",
     ...more,
   })
 }

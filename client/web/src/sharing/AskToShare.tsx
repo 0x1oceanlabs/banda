@@ -56,7 +56,7 @@ const CHOICES: { key: keyof Shares; title: string; about: string }[] = [
     key: "usage",
     title: "Send usage counts",
     about:
-      "Once a day: how many Threads, Turns and Panes, by kind, and your country from the system's language. Never words, paths or names.",
+      "Once a day: how many Tasks, Turns and Panes, by kind, and your country from the system's language. Never words, paths or names.",
   },
 ]
 

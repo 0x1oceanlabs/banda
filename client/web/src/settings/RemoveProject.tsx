@@ -43,8 +43,8 @@ export async function removingOf(
 function questionOf({ project, threads }: Removing): string {
   const what =
     threads === undefined
-      ? "its Threads"
-      : `its ${threads} ${threads === 1 ? "Thread" : "Threads"}`
+      ? "its Tasks"
+      : `its ${threads} ${threads === 1 ? "Task" : "Tasks"}`
   return `Remove Project "${project.name}" and delete ${what}?`
 }
 

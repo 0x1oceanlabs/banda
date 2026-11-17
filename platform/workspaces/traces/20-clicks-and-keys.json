@@ -1,5 +1,5 @@
 {
-  "about": "A Thread's Group holds what its Thread opens, and the Person's keys open beside it (ADR 0134): a click in a Thread, or in a Pane in its Group, opens into that Group; a key from either opens as a column of its own right of the whole Group, in the Flow free and in the row alike, and a key from what it opened right of that. A rule that opens into a Group wins over a key.",
+  "about": "A Thread's Group holds what its Task opens, and the Person's keys open beside it (ADR 0134): a click in a Thread, or in a Pane in its Group, opens into that Group; a key from either opens as a column of its own right of the whole Group, in the Flow free and in the row alike, and a key from what it opened right of that. A rule that opens into a Group wins over a key.",
   "start": [
     {
       "id": "29ad5832-2d5c-5884-8613-aabe1e1901cb",

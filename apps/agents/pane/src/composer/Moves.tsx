@@ -43,7 +43,7 @@ export function MoveConfirm({
       ) : (
         <>
           <p className="px-1 text-muted-foreground">
-            {to} starts a session of its own and reads this Thread's history:
+            {to} starts a session of its own and reads this Task's history:
           </p>
           <ul className="list-disc space-y-0.5 pr-1 pl-6 text-muted-foreground">
             <li>

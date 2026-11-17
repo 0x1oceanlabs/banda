@@ -1,5 +1,5 @@
 {
-  "about": "In the row, nothing moves onto a workspace another Project owns: a Pane alone as its own Project's, a column as its first Pane's, a Group as its lead's, an Agent's Thread's, and a Pane brought to a place as one moved there. It goes to its Project's workspace, a free one and a new one, and moves as it likes on the workspace it stands on. A Pane opened at a place that is not brought opens there. In the Flow free nothing is refused.",
+  "about": "In the row, nothing moves onto a workspace another Project owns: a Pane alone as its own Project's, a column as its first Pane's, a Group as its lead's, an Agent's Task's, and a Pane brought to a place as one moved there. It goes to its Project's workspace, a free one and a new one, and moves as it likes on the workspace it stands on. A Pane opened at a place that is not brought opens there. In the Flow free nothing is refused.",
   "start": [
     {
       "id": "99f9baf8-3319-55d5-a44f-97f01c530534",

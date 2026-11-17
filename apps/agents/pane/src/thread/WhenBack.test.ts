@@ -109,11 +109,11 @@ test("what comes back says why: not sent while the machine was away, may have go
   )
   expect(
     backWords(
-      { kind: "refused", message: "There is no such Thread." },
+      { kind: "refused", message: "There is no such Task." },
       "arc",
       at1442
     )
-  ).toBe("Not sent: There is no such Thread.")
+  ).toBe("Not sent: There is no such Task.")
 })
 
 test("a message that did not go in its time goes back into its draft with a toast, which has Open unless its Thread is the Pane in focus", async () => {

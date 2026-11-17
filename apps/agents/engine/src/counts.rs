@@ -163,7 +163,7 @@ impl AgentCounts {
                     _ => woke_at(thread, now).map_or(changed, |woke| woke.max(changed)),
                 };
                 let title = match thread.thread.title.as_str() {
-                    "" => "New Thread",
+                    "" => "New Task",
                     title => title,
                 };
                 let row = CountedThread {
@@ -361,7 +361,7 @@ mod tests {
         assert_eq!(
             rows,
             [
-                ("New Thread", "banda", CountedAs::Failed),
+                ("New Task", "banda", CountedAs::Failed),
                 ("Fix the bar", "banda", CountedAs::Done),
                 ("Earlier work", "No Project", CountedAs::Working),
                 ("Port the menu", "banda", CountedAs::Working),

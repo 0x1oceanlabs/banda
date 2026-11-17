@@ -861,7 +861,7 @@ function Row({
                     onClose={() => onClosePane(entry.id)}
                   />
                   {/* What the Apps show of it at a size to read: how its
-                      Thread is, and what it asks when it calls. With
+                      Task is, and what it asks when it calls. With
                       nothing to show, no label. */}
                   <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-control border border-overview-foreground/15 bg-popover px-1.5 py-0.5 text-meta text-popover-foreground empty:hidden">
                     <PaneSlot

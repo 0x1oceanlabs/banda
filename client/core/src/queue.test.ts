@@ -266,7 +266,7 @@ test("a message its host refuses comes back: expired by the host's clock, as one
     })
   )
   settles[2]!.fail(
-    new Refused({ code: "not_found", message: "There is no such Thread." })
+    new Refused({ code: "not_found", message: "There is no such Task." })
   )
   settles[3]!.fail(new Unreachable("arc", "arc is away"))
   settles[4]!.fail(new Lost())
@@ -274,7 +274,7 @@ test("a message its host refuses comes back: expired by the host's clock, as one
   expect(back.map(({ wait, why }) => [wait.text, why])).toEqual([
     ["expired", { kind: "expired" }],
     ["cut short", { kind: "went" }],
-    ["gone", { kind: "refused", message: "There is no such Thread." }],
+    ["gone", { kind: "refused", message: "There is no such Task." }],
   ])
   expect(waiting.get()).toEqual([
     expect.not.objectContaining({ went: true, going: true }),

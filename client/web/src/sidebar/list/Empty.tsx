@@ -46,12 +46,12 @@ export function emptySays(
     case "later":
       return {
         big: "Nothing for later",
-        ...(key ? { small: `${key} on a Thread puts it here.` } : {}),
+        ...(key ? { small: `${key} on a Task puts it here.` } : {}),
       }
     case "archive":
       return {
         big: "Nothing archived yet",
-        ...(key ? { small: `${key} on a Thread closes it here.` } : {}),
+        ...(key ? { small: `${key} on a Task closes it here.` } : {}),
       }
   }
 }

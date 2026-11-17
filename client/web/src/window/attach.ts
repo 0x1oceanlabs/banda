@@ -99,7 +99,7 @@ export function attachChips(
           THIS_COMPUTER
         )
       : undefined
-  toast.warning(why ?? "No Thread in this Project to add it to.", {
+  toast.warning(why ?? "No Task in this Project to add it to.", {
     id: "attach",
   })
 }

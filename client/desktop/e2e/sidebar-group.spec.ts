@@ -198,7 +198,7 @@ test("grouped by Project, each header has its sign, name and chevron, by name; i
   await expect(more).toHaveAttribute("tabindex", "-1")
   await expect(more).toBeVisible()
   await expect(
-    work.getByRole("button", { name: "New Thread in Work" })
+    work.getByRole("button", { name: "New Task in Work" })
   ).toHaveCount(0)
   await expect(waiting).toBeHidden()
   await shots(window, "project-focus", { pointer: true })
@@ -467,7 +467,7 @@ test("a Project whose folder is missing is a card in Your turn: Enter opens Loca
   await old.hover()
   await old.getByText("Remove…", { exact: true }).click()
   const ask = page.getByRole("dialog", {
-    name: 'Remove Project "old" and delete its Threads?',
+    name: 'Remove Project "old" and delete its Tasks?',
   })
   await expect(ask).toContainText("/nonexistent/banda-old")
   await ask.getByRole("button", { name: "Remove Project" }).click()
@@ -496,7 +496,7 @@ test("a group's header is a stop of the pick: picked, it shows ⋯, and Shift+F1
   await expect(header).toHaveAttribute("aria-selected", "true")
   await expect(work.locator("[data-head-acts]")).toHaveCSS("opacity", "1")
   await expect(
-    work.getByRole("button", { name: "New Thread in Work" })
+    work.getByRole("button", { name: "New Task in Work" })
   ).toHaveCount(0)
   await shots(window, "group-picked", { step: "s11" })
 
@@ -508,7 +508,7 @@ test("a group's header is a stop of the pick: picked, it shows ⋯, and Shift+F1
   await expect(menu.getByRole("menuitem")).toHaveText([
     "Open folder",
     "Project settings…",
-    "Archive its Threads",
+    "Archive its Tasks",
     "Remove from Banda…",
   ])
   await expect(menu).toContainText("Work")

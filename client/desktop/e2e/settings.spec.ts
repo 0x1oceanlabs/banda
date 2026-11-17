@@ -200,7 +200,7 @@ test("Agents show each account as a card, its page who is signed in, and write h
   await expect
     .poll(() => readFileSync(file, "utf8"))
     .toContain("enabled = false")
-  await expect(fake.getByText("Off: no new Thread starts on it.")).toBeVisible()
+  await expect(fake.getByText("Off: no new Task starts on it.")).toBeVisible()
   await fake.getByRole("switch", { name: "Fake AI on" }).click()
   await expect.poll(() => readFileSync(file, "utf8")).not.toContain("enabled")
 
@@ -302,12 +302,12 @@ test("General, how the sidebar groups and a card's lines, and hearing a sound", 
   // where each Harness's new Threads' mode is (ADR 0083).
   const fence = settings.locator('[data-key="fence"]')
   await expect(fence).toContainText(
-    "Off. It is off until it is designed whole (BANDA_FENCE=on turns it on). New Threads start Supervised, unless you set another mode for them."
+    "Off. It is off until it is designed whole (BANDA_FENCE=on turns it on). New Tasks start Supervised, unless you set another mode for them."
   )
   await expect(fence).toContainText(
     "In Full access, an Agent is you, in Banda too."
   )
-  await fence.getByRole("button", { name: "New Threads' mode" }).click()
+  await fence.getByRole("button", { name: "New Tasks' mode" }).click()
   await expect(settings.getByRole("group", { name: "Fake AI" })).toBeVisible()
 
   await sections.getByRole("button", { name: /Sidebar/ }).click()
@@ -596,9 +596,7 @@ test("Usage never becomes a tile: the launcher and an empty workspace leave it o
   await page.keyboard.press("Alt+KeyN")
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher).toHaveAttribute("data-focused", "true")
-  await expect(
-    launcher.getByRole("button", { name: /New Thread/ })
-  ).toBeVisible()
+  await expect(launcher.getByRole("button", { name: /New Task/ })).toBeVisible()
   await expect(launcher.getByRole("button", { name: /Usage/ })).toHaveCount(0)
   await page.keyboard.press("Alt+KeyW")
   await expect(launcher).toHaveCount(0)
@@ -606,7 +604,7 @@ test("Usage never becomes a tile: the launcher and an empty workspace leave it o
   await page.getByRole("button", { name: "New workspace" }).click()
   const empty = page.getByRole("main")
   await expect(
-    empty.getByRole("button", { name: "New Thread", exact: true })
+    empty.getByRole("button", { name: "New Task", exact: true })
   ).toBeVisible()
   await expect(empty.getByRole("button", { name: /Usage/ })).toHaveCount(0)
 })
@@ -832,7 +830,7 @@ test("Terminal: terminal.toml's rows write the file, and a terminal open follows
   const { page, dir } = window
   const file = join(dir, "config/terminal.toml")
   await firstThread(page)
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })

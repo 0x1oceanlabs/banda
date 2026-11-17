@@ -263,7 +263,7 @@ test.each<[string, InboxView, string[]]>([
     ["# Your turn · 6", "turn: jot done ship asks woke invoices"],
   ],
   [
-    "Working: every Thread at work, by when it began",
+    "Working: every Task at work, by when it began",
     { tab: "working", order: "newest" },
     ["working: lint build tests"],
   ],

@@ -697,7 +697,7 @@ function ThreadLink({
   return (
     <button
       type="button"
-      title="Go to the Thread"
+      title="Go to the Task"
       onClick={onClick}
       className={cn("font-semibold hover:underline", className)}
     >

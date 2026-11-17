@@ -36,17 +36,17 @@ pub struct Stands {
 /// other Project's Agents would read.
 pub fn may_move(stands: Stands) -> Result<(), Refusal> {
     let why = if stands.asks {
-        "This Thread asks its Person: answer it before moving it."
+        "This Task asks its Person: answer it before moving it."
     } else if stands.works {
-        "This Thread is at work: move it once its turn ends."
+        "This Task is at work: move it once its turn ends."
     } else if stands.lanes {
-        "A sub-agent of this Thread is at work: move it once its sub-agents end."
+        "A sub-agent of this Task is at work: move it once its sub-agents end."
     } else if stands.waits {
-        "A message waits in this Thread: send it or take it back before moving the Thread."
+        "A message waits in this Task: send it or take it back before moving the Task."
     } else if stands.awaited {
-        "Another Thread works on what this one asked: move it once that answer comes."
+        "Another Task works on what this one asked: move it once that answer comes."
     } else if stands.forks {
-        "This Thread has not gone on yet from where it was forked or rewound: send it a \
+        "This Task has not gone on yet from where it was forked or rewound: send it a \
          message before moving it."
     } else {
         return Ok(());
@@ -59,7 +59,7 @@ pub fn may_move(stands: Stands) -> Result<(), Refusal> {
 pub fn may_go_to(scratch: bool) -> Result<(), Refusal> {
     if scratch {
         return Err(Refusal::invalid(
-            "A Thread moves into a Project, not into another Thread's in No project.",
+            "A Task moves into a Project, not into another Task's in No project.",
         ));
     }
     Ok(())

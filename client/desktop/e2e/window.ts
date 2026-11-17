@@ -540,9 +540,7 @@ export async function newThreadIn(page: Page, name: string): Promise<void> {
   await search.fill(name)
   await expect(menu.getByRole("option").first()).toContainText(name)
   await search.press("Enter")
-  await expect(menu.getByRole("option").first()).toContainText(
-    "New Thread here"
-  )
+  await expect(menu.getByRole("option").first()).toContainText("New Task here")
   await search.press("Enter")
   await expect(menu).toBeHidden()
 }
@@ -565,10 +563,10 @@ export async function firstThread(
   page: Page,
   mod?: string
 ): Promise<{ thread: Locator; composer: Locator }> {
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   await page
-    .getByRole("region", { name: "New Thread" })
-    .getByRole("button", { name: "Close New Thread", exact: true })
+    .getByRole("region", { name: "New Task" })
+    .getByRole("button", { name: "Close New Task", exact: true })
     .click()
   await newProject(page, "Work", mod)
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
@@ -581,7 +579,7 @@ export async function firstThread(
 export async function startAgent(page: Page, text: string): Promise<Locator> {
   await page.keyboard.press("Alt+Enter")
   const box = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .getByRole("textbox", { name: "Message to Fake AI" })
   await expect(box).toBeFocused()
   await box.fill(text)
@@ -802,9 +800,9 @@ export async function sendAndLeave(
   // The first message must have started it, so the new one is the only
   // New Thread.
   const thread = composer.locator("xpath=ancestor::section[1]")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await expect(thread).not.toHaveAccessibleName("New Task")
   await page.keyboard.press("Alt+Enter")
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
 }
 
 /** What the recorded desktop was asked to show (platform/notifications/desktop/src/notices.ts). */
@@ -871,7 +869,7 @@ export async function setInFront(page: Page, front: boolean) {
  * header says where it is: paths it prints start there. */
 export async function newTerminal(page: Page): Promise<Locator> {
   await firstThread(page)
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   const screen = await openTerminal(page)
   await expect(
     page.locator("section[data-tile]").filter({ has: screen }).locator("header")

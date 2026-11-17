@@ -100,8 +100,8 @@ impl Hold {
     /// The refusal of what finds a Thread held so.
     pub fn refused(self) -> Refusal {
         Refusal::conflict(match self {
-            Hold::Moving => "This Thread is moving to another Project now.",
-            Hold::Deleting => "This Thread is being deleted now.",
+            Hold::Moving => "This Task is moving to another Project now.",
+            Hold::Deleting => "This Task is being deleted now.",
         })
     }
 }

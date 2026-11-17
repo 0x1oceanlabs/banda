@@ -161,8 +161,8 @@ test("a scope's key works with the mod still held, unless the window's takes it"
 test("an action acts as the Person always, or given an arg that makes it so", () => {
   const action = (runsAsPerson?: true | readonly string[]): Action<null> => ({
     id: "thread.new",
-    title: "New Thread",
-    section: "Threads",
+    title: "New Task",
+    section: "Tasks",
     runsAsPerson,
     run: () => undefined,
   })

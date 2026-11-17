@@ -24,7 +24,7 @@ use std::sync::Arc;
 /// was for none of them; one not there is not found.
 pub fn delete(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
     let changed = store::thread(tx.sql(), thread)?
-        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?
+        .ok_or_else(|| Refusal::not_found("There is no such Task."))?
         .updated_at;
     let (works, asks) = marks::state(tx.sql(), thread)?;
     may_delete(store::archived(tx.sql(), thread)?, changed, works, asks)?;

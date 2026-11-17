@@ -1417,7 +1417,7 @@ fn refused_moves() -> Tracing {
         "refused-moves",
         "In the row, nothing moves onto a workspace another Project owns: a Pane alone \
          as its own Project's, a column as its first Pane's, a Group as its lead's, an \
-         Agent's Thread's, and a Pane brought to a place as one moved there. It goes \
+         Agent's Task's, and a Pane brought to a place as one moved there. It goes \
          to its Project's workspace, a free one and a new one, and moves as it likes \
          on the workspace it stands on. A Pane opened at a place that is not brought \
          opens there. In the Flow free nothing is refused.",
@@ -1674,7 +1674,7 @@ fn clicks_and_keys() -> Tracing {
     let mut t = Tracing::new(
         20,
         "clicks-and-keys",
-        "A Thread's Group holds what its Thread opens, and the Person's keys open \
+        "A Thread's Group holds what its Task opens, and the Person's keys open \
          beside it (ADR 0134): a click in a Thread, or in a Pane in its Group, \
          opens into that Group; a key from either opens as a column of its own \
          right of the whole Group, in the Flow free and in the row alike, and a key \

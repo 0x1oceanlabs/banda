@@ -17,8 +17,8 @@ import { Thread } from "./thread/Thread"
 
 export const threadPane = definePane<ThreadArgs>({
   kind: "agents.thread",
-  name: "Thread",
-  title: (args) => args.title || "New Thread",
+  name: "Task",
+  title: (args) => args.title || "New Task",
   shows: (args) => args.thread,
   icon: MessageSquareIcon,
   // No line under it: the messages fade out under it (ADR 0031).

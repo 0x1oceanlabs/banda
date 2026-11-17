@@ -321,7 +321,7 @@ impl Lists {
             Listing::Unread(error) => {
                 let known = self.projects.get(&project);
                 if known.is_none_or(|known| known.list.is_some()) {
-                    tracing::warn!(%project, %error, "a Project's Threads are not read: no counts");
+                    tracing::warn!(%project, %error, "a Project's Tasks are not read: no counts");
                 }
                 None
             }
@@ -810,7 +810,7 @@ mod tests {
         assert!(counts_its_threads(&listed(false, false, false)));
         assert!(
             counts_its_threads(&listed(false, false, true)),
-            "one Thread's own"
+            "one Task's own"
         );
         assert!(!counts_its_threads(&listed(true, false, false)), "archived");
         assert!(

@@ -104,7 +104,7 @@ export function LendButton({
   const threads = useThreadsOf(project)
   const name = useProjectName(project)
   const now = useNow(MINUTE, open)
-  const words = "Lend this tab to a Thread"
+  const words = "Lend this tab to a Task"
   const menu = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open || !byKey) return
@@ -159,7 +159,7 @@ export function LendButton({
             </DropdownMenuItem>
           ))}
           {!threads.length && (
-            <DropdownMenuItem disabled>No Thread here yet</DropdownMenuItem>
+            <DropdownMenuItem disabled>No Task here yet</DropdownMenuItem>
           )}
         </DropdownMenuGroup>
         <p className="mt-1 border-t px-1.5 pt-1.5 pb-1 text-meta leading-snug text-muted-foreground">
@@ -221,7 +221,7 @@ export function LentChip({
           </span>
         </div>
         <p className="mb-2.5 text-meta leading-normal text-muted-foreground">
-          This Thread sees and drives this tab. The lend ends when you take it
+          This Task sees and drives this tab. The lend ends when you take it
           back, close the tab, or its session ends.
         </p>
         <div className="flex justify-end gap-1.5">

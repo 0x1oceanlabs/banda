@@ -136,9 +136,9 @@ impl Lending {
             title => format!("{words} · “{title}”"),
         };
         match self {
-            Lending::Lent => named("You lent this Thread a tab"),
+            Lending::Lent => named("You lent this Task a tab"),
             Lending::Back => named("You took the tab back"),
-            Lending::Closed => "The tab you lent closed. This Thread no longer sees it.".into(),
+            Lending::Closed => "The tab you lent closed. This Task no longer sees it.".into(),
             Lending::Session => "The session ended. The tab you lent is yours again.".into(),
         }
     }

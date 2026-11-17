@@ -27,7 +27,7 @@ export function tabName(tab: Tab, { count }: TabCount): string {
 /** What the tab in view says aloud, as it is shown or its count changes:
  * "Later, 5 Threads", "Inbox, no Threads". */
 export function tabSaid(tab: Tab, { count }: TabCount): string {
-  const many = count === 1 ? "1 Thread" : `${count || "no"} Threads`
+  const many = count === 1 ? "1 Task" : `${count || "no"} Tasks`
   return `${TAB_WORDS[tab]}, ${many}`
 }
 
@@ -73,7 +73,7 @@ export function Tabs({
     <>
       <div
         role="tablist"
-        aria-label="Threads by where they stand"
+        aria-label="Tasks by where they stand"
         className="flex items-center gap-0.5 px-1.5 pt-2 pb-1.5"
         onKeyDown={onKeyDown}
       >

@@ -45,7 +45,7 @@ export const answering: Action[] = [
   {
     id: ANSWER,
     title: "Answer a Question",
-    section: "Threads",
+    section: "Tasks",
     unlisted: true,
     run: (window, args) => {
       const [project, item, choice] = ["project", "item", "choice"].map((key) =>
@@ -61,7 +61,7 @@ export const answering: Action[] = [
   {
     id: RETRY,
     title: "Try a turn again",
-    section: "Threads",
+    section: "Tasks",
     unlisted: true,
     run: (window, args) => {
       const [project, turn] = ["project", "turn"].map((key) =>
@@ -76,8 +76,8 @@ export const answering: Action[] = [
   },
   {
     id: SHOW,
-    title: "Show a Thread",
-    section: "Threads",
+    title: "Show a Task",
+    section: "Tasks",
     unlisted: true,
     run: (window, args) => {
       const [project, thread, harness] = ["project", "thread", "harness"].map(

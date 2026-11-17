@@ -30,7 +30,7 @@ function FindAsk({ words, at, found }: FindProps) {
     return [
       {
         id: entered ? `agents.ask.${project}` : "agents.ask",
-        title: words ? `New Thread: “${words}”` : "New Thread here",
+        title: words ? `New Task: “${words}”` : "New Task here",
         icon: first ? (
           <Emblem of={first} className="size-4" />
         ) : (

@@ -531,7 +531,7 @@ function rootIdOf(row: Choice): string {
 
 /** The key sheet's sections first, in this order; a module's own section
  * (`Action.section`) after them. */
-const SECTIONS = ["Threads", "Panes", "Columns", "Workspaces", "Banda"]
+const SECTIONS = ["Tasks", "Panes", "Columns", "Workspaces", "Banda"]
 
 /** How many rows of each group a search shows. */
 const SHOWN = { threads: 8, projects: 5, actions: 8, recent: 6 }
@@ -641,7 +641,7 @@ export function menuOf({
     return nonEmpty([
       last,
       {
-        label: "Threads",
+        label: "Tasks",
         rows: fitting(
           threadsOf(here, lists[here] ?? []).toSorted(byRecent),
           threadTexts
@@ -711,7 +711,7 @@ export function menuOf({
         })
       }
     }
-    sections.get("Threads")?.push(VIEWS_BRANCH)
+    sections.get("Tasks")?.push(VIEWS_BRANCH)
     sections.get("Banda")?.push(ADD_BRANCH, THEME_BRANCH)
     return nonEmpty([...sections].map(([label, rows]) => ({ label, rows })))
   }
@@ -736,7 +736,7 @@ export function menuOf({
     const offered = ranked.filter((row) => kept(row) || others.includes(row))
     return nonEmpty([
       {
-        label: "Recent Threads",
+        label: "Recent Tasks",
         rows: threads.toSorted(byRecent).slice(0, SHOWN.recent),
       },
       { label: "Actions", rows: offered },
@@ -745,7 +745,7 @@ export function menuOf({
 
   return nonEmpty([
     {
-      label: "Threads",
+      label: "Tasks",
       rows: fitting(threads, threadTexts).slice(0, SHOWN.threads),
     },
     {
@@ -805,7 +805,7 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
       return [
         { title: "Open", key: OPEN, row },
         {
-          title: "New Thread here",
+          title: "New Task here",
           row: {
             kind: "ask",
             id: `ask:${row.project.id}`,

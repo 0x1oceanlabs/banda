@@ -235,7 +235,7 @@ export async function moveTo(
   } catch (error) {
     dismiss()
     if (error instanceof Stopped) {
-      toast(`Not moved: the Thread stays on ${from.machine}.`)
+      toast(`Not moved: the Task stays on ${from.machine}.`)
     } else if (error instanceof Unsent) {
       follow(window, project, to.project, listed)
       // Its words are not lost: the toast keeps them to copy.

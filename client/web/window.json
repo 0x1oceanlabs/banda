@@ -15,8 +15,8 @@
     },
     {
       "id": "sidebar.archive",
-      "title": "Archive the Thread you look at, or bring it back",
-      "section": "Threads",
+      "title": "Archive the Task you look at, or bring it back",
+      "section": "Tasks",
       "keys": [
         {
           "code": "KeyS",
@@ -32,7 +32,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -40,8 +40,8 @@
     },
     {
       "id": "drawer.toggle",
-      "title": "The drawer: a quick Thread over the workspace",
-      "section": "Threads",
+      "title": "The drawer: a quick Task over the workspace",
+      "section": "Tasks",
       "keys": [
         {
           "code": "Backquote",
@@ -52,7 +52,7 @@
     {
       "id": "calls.answer",
       "title": "Go to what calls you",
-      "section": "Threads",
+      "section": "Tasks",
       "keys": [
         {
           "code": "KeyU",
@@ -62,8 +62,8 @@
     },
     {
       "id": "project.make",
-      "title": "Make a Project from a Thread in No Project",
-      "section": "Threads",
+      "title": "Make a Project from a Task in No Project",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -71,7 +71,7 @@
         "properties": {
           "project": {
             "type": "string",
-            "description": "the No Project's Project its Thread is in"
+            "description": "the No Project's Project its Task is in"
           }
         },
         "required": [
@@ -82,8 +82,8 @@
     },
     {
       "id": "sidebar.later-picker",
-      "title": "Pick when the Thread you look at wakes",
-      "section": "Threads",
+      "title": "Pick when the Task you look at wakes",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {
@@ -95,7 +95,7 @@
           },
           "item": {
             "type": "string",
-            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+            "description": "the Item's id in its Project, as a Task's; none for the one in focus"
           }
         },
         "additionalProperties": false
@@ -221,7 +221,7 @@
     },
     {
       "id": "file.attach",
-      "title": "Add a file to a Thread's message",
+      "title": "Add a file to a Task's message",
       "section": "Banda",
       "keys": [],
       "unlisted": true,
@@ -573,7 +573,7 @@
     {
       "id": "sidebar.toggle",
       "title": "Show or hide the sidebar",
-      "section": "Threads",
+      "section": "Tasks",
       "keys": [
         {
           "code": "KeyA",
@@ -584,7 +584,7 @@
     {
       "id": "quiet.toggle",
       "title": "Turn Quiet on or off",
-      "section": "Threads",
+      "section": "Tasks",
       "keys": [
         {
           "code": "KeyQ",
@@ -595,7 +595,7 @@
     {
       "id": "sidebar.show",
       "title": "Show the sidebar",
-      "section": "Threads",
+      "section": "Tasks",
       "keys": [],
       "unlisted": true,
       "args": {

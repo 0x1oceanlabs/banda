@@ -77,7 +77,7 @@ test("the notice of Threads from before the fence is told silently, with why, an
   expect(noticeOf(off)).toEqual({
     key: "fence.supervised",
     kind: "done",
-    title: "Threads now start Supervised",
+    title: "Tasks now start Supervised",
     body: "No fence: off until it is designed whole (BANDA_FENCE=on turns it on).",
     buttons: [
       {

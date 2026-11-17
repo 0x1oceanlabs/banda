@@ -452,7 +452,7 @@ test("S S, and the toast's Undo, not Ctrl+Z, brings both cards back; S on a card
   const tab = (name: string) => tabOf(sidebar, name)
   // The tabs' polite line names the tab in view and its count.
   const said = sidebar.locator("[aria-live=polite]")
-  await expect(said).toHaveText("Inbox, 4 Threads")
+  await expect(said).toHaveText("Inbox, 4 Tasks")
 
   // Into the list, described by the hint of its keys.
   await tab("Inbox").focus()
@@ -486,7 +486,7 @@ test("S S, and the toast's Undo, not Ctrl+Z, brings both cards back; S on a card
   await page.keyboard.press("s")
   await picked(page, list, "call three")
   await expect(tab("Archive")).toHaveAccessibleName("Archive, 2")
-  await expect(said).toHaveText("Inbox, 2 Threads")
+  await expect(said).toHaveText("Inbox, 2 Tasks")
   const archived = toastOf(page, "Archived 2")
   await expect(archived).toBeVisible()
 
@@ -497,11 +497,11 @@ test("S S, and the toast's Undo, not Ctrl+Z, brings both cards back; S on a card
   await expect(tab("Archive")).toHaveAccessibleName("Archive")
   await expect(cardOf(list, "call one")).toBeVisible()
   await expect(cardOf(list, "call two")).toBeVisible()
-  await expect(said).toHaveText("Inbox, 4 Threads")
+  await expect(said).toHaveText("Inbox, 4 Tasks")
 
   // A call that comes counts in the line.
   await send(window, "call four")
-  await expect(said).toHaveText("Inbox, 5 Threads")
+  await expect(said).toHaveText("Inbox, 5 Tasks")
 
   // The last card goes: the one that asks is put off, the rest archived,
   // and the line says the Inbox holds none.
@@ -520,13 +520,13 @@ test("S S, and the toast's Undo, not Ctrl+Z, brings both cards back; S on a card
     await page.keyboard.press("s")
   }
   await expect(sidebar.getByText("Nothing waits for you")).toBeVisible()
-  await expect(said).toHaveText("Inbox, no Threads")
+  await expect(said).toHaveText("Inbox, no Tasks")
   expect(await focusOf(page)).toBe("list")
   // A tab shown by its key says itself, and its count.
   await page.keyboard.press("3")
-  await expect(said).toHaveText("Later, 1 Thread")
+  await expect(said).toHaveText("Later, 1 Task")
   await page.keyboard.press("1")
-  await expect(said).toHaveText("Inbox, no Threads")
+  await expect(said).toHaveText("Inbox, no Tasks")
   await list.focus()
 
   // The hint was read once: the list is described by it no more.

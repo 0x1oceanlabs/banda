@@ -130,7 +130,7 @@ export const SECTIONS: Section[] = [
     icon: BellIcon,
     files: [{ name: "look.toml", tables: ["sound", "notify"] }],
     about:
-      "Banda's sounds, and how it tells you a Thread calls for you. Kept in look.toml.",
+      "Banda's sounds, and how it tells you a Task calls for you. Kept in look.toml.",
     custom: {
       "sound.done": PlaySound,
       "sound.asking": PlaySound,

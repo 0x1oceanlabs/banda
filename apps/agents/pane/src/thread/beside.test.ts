@@ -45,7 +45,7 @@ test("a top-level sub-agent's header names it and its Thread", () => {
   expect(headOf("t", general, lanes, " ")).toEqual({
     look: "working",
     label: "Fix the dots",
-    of: "sub-agent of Thread",
+    of: "sub-agent of Task",
   })
 })
 
@@ -183,7 +183,7 @@ test("a path stops at a parent its Thread does not have, and at a loop", () => {
 test("a breadcrumb keeps the first words of its Thread's title", () => {
   expect(shortTitle("Make the sidebar card calm")).toBe("Make the sidebar")
   expect(shortTitle("  Fix  it ")).toBe("Fix it")
-  expect(shortTitle("")).toBe("Thread")
+  expect(shortTitle("")).toBe("Task")
 })
 
 /** A call that runs. */

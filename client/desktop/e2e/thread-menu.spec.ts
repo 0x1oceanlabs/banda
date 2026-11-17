@@ -24,7 +24,7 @@ test("a right click in a Thread offers what is under it: a reply, a selection, a
   await composer.press("Enter")
   const reply = thread.locator("[data-quotable]")
   await expect(reply).toContainText("bold word")
-  const menu = page.getByRole("menu", { name: "Thread" })
+  const menu = page.getByRole("menu", { name: "Task" })
 
   // A reply: its Markdown, its text, and the Fork its button has.
   await reply.getByText("bold word").click({ button: "right" })
@@ -147,7 +147,7 @@ test("a card's menu in the sidebar: its rows by where it stands, each with its k
   const sidebar = sidebarOf(page)
   const card = (title: string) =>
     sidebar.getByRole("option", { name: new RegExp(`^${title}`) })
-  const menu = page.getByRole("menu", { name: "Thread menu" })
+  const menu = page.getByRole("menu", { name: "Task menu" })
 
   // A done card: Open; its acts with the sidebar's keys; its names; and
   // what it gives out. No other Project, no Move to Project.

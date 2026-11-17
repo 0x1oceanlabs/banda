@@ -77,10 +77,10 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
     ])
   ).toEqual(["Banda Local", join(window.dir, "state", "window")])
 
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   await page.screenshot({ path: "test-results/0-welcome.png" })
   const { thread, composer } = await firstThread(page)
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   await expect(composer).toBeFocused()
   await expect(
     thread.getByRole("button", { name: "Project: Work" })
@@ -142,7 +142,7 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
 
   // Alt+Enter opens another new Thread beside the first.
   await page.keyboard.press("Alt+Enter")
-  const second = page.getByRole("region", { name: "New Thread" })
+  const second = page.getByRole("region", { name: "New Task" })
   await expect(second).toBeVisible()
   await expect(
     second.getByRole("textbox", { name: "Message to Fake AI" })
@@ -153,7 +153,7 @@ test("a workspace opens Panes side by side, moves the focus by keys, and comes b
   window = await startWindow()
   const { page } = window
   await firstThread(page)
-  const draft = page.getByRole("region", { name: "New Thread" })
+  const draft = page.getByRole("region", { name: "New Task" })
   await expect(draft).toBeVisible()
 
   await page.keyboard.press("Alt+KeyN")
@@ -169,7 +169,7 @@ test("a workspace opens Panes side by side, moves the focus by keys, and comes b
   await expect(page.getByRole("region", { name: "New Pane" })).toBeVisible()
   await page.keyboard.press("Alt+KeyW")
   await expect(page.getByRole("region", { name: "New Pane" })).toBeHidden()
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
 })
 
 test("a page whose process is killed loads again, as it was (#343)", async () => {
@@ -197,11 +197,11 @@ test("a page whose process is killed loads again, as it was (#343)", async () =>
   const shown = () =>
     app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]!.webContents.executeJavaScript(
-        `["New Thread", "New Pane"].filter((name) =>
+        `["New Task", "New Pane"].filter((name) =>
           document.querySelector(\`[aria-label="\${name}"]\`))`
       )
     )
-  await expect.poll(shown).toEqual(["New Thread", "New Pane"])
+  await expect.poll(shown).toEqual(["New Task", "New Pane"])
   await expect
     .poll(() => textOf(join(window.dir, "state/logs/window.log")))
     .toContain("the page's process ended: killed, code 9; free")
@@ -211,7 +211,7 @@ test("New Pane and New Thread open a new tile at each press, as a browser's new 
   window = await startWindow({ files: FREE })
   const { page } = window
   await firstThread(page)
-  const drafts = page.getByRole("region", { name: "New Thread" })
+  const drafts = page.getByRole("region", { name: "New Task" })
   const launchers = page.getByRole("region", { name: "New Pane" })
   await expect(drafts).toHaveCount(1)
 
@@ -221,7 +221,7 @@ test("New Pane and New Thread open a new tile at each press, as a browser's new 
   await expect(launchers.last()).toHaveAttribute("data-focused", "true")
 
   // A launcher becomes a new Thread, though another waits unstarted.
-  await launchers.last().getByRole("button", { name: "New Thread" }).click()
+  await launchers.last().getByRole("button", { name: "New Task" }).click()
   await expect(launchers).toHaveCount(1)
   await expect(drafts).toHaveCount(2)
 
@@ -235,7 +235,7 @@ test("New Pane and New Thread open a new tile at each press, as a browser's new 
   await page.getByRole("button", { name: "New workspace" }).click()
   await page
     .getByRole("main")
-    .getByRole("button", { name: "New Thread", exact: true })
+    .getByRole("button", { name: "New Task", exact: true })
     .click()
   // The others wait on workspace 1, out of sight.
   await expect(drafts).toHaveCount(1)
@@ -248,7 +248,7 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   window = await startWindow({ files: FREE })
   const { page } = window
   await firstThread(page)
-  const draft = page.getByRole("region", { name: "New Thread" })
+  const draft = page.getByRole("region", { name: "New Task" })
   await expect(draft).toBeVisible()
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
   const names = () => workspaceNames(page)
@@ -284,7 +284,7 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   const overview = page.getByRole("dialog", { name: "Overview" })
   await page.keyboard.press("Alt+KeyO")
   await expect(
-    overview.getByRole("button", { name: "New Thread in Work" })
+    overview.getByRole("button", { name: "New Task in Work" })
   ).toBeVisible()
   await page.screenshot({ path: "test-results/3-overview.png" })
   await overview.getByRole("button", { name: "New Pane in Work" }).click()
@@ -763,7 +763,7 @@ test("a Person works in a terminal in the Project, and closing it stops the shel
   window = await startWindow({ files: FREE })
   const { page, dir } = window
   await firstThread(page)
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
@@ -831,7 +831,7 @@ test("with Ctrl+Alt the mod, Banda's keys hold it and Alt keys are the shell's (
   })
   const { page, dir } = window
   await firstThread(page, "Control+Alt")
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   await page.keyboard.press("Control+Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
@@ -868,7 +868,7 @@ test("a server started in a terminal shows on the bar, opens in a browser Pane a
   window = await startWindow()
   const { page, dir } = window
   await firstThread(page)
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
@@ -1034,7 +1034,7 @@ test("where the fence does not hold, Full access says the Agent is you, and Lear
   const row = fenceRow(page)
   await expect(row).toBeVisible()
   await expect(row).toContainText(
-    "Off. It is off until it is designed whole (BANDA_FENCE=on turns it on). New Threads start Supervised, unless you set another mode for them."
+    "Off. It is off until it is designed whole (BANDA_FENCE=on turns it on). New Tasks start Supervised, unless you set another mode for them."
   )
   await expect(row).toContainText("In Full access, an Agent is you")
   // What an Agent gets behind the fence is for where it holds.
@@ -1081,7 +1081,7 @@ test("where the fence holds whole, a new Thread starts Full access, with the Per
     .click()
   const row = fenceRow(page)
   await expect(row).toContainText(
-    "New Threads start Full access, unless you set another mode for them."
+    "New Tasks start Full access, unless you set another mode for them."
   )
   await expect(row.getByRole("list", { name: "It never gets" })).toContainText(
     "Banda's own data and keys"
@@ -1126,7 +1126,7 @@ test("Threads Banda keeps Supervised: one notice on the machine for those from b
     page
       .getByRole("region", { name: region, exact: true })
       .locator("[data-sonner-toast]")
-      .filter({ hasText: "Threads now start Supervised" })
+      .filter({ hasText: "Tasks now start Supervised" })
   const notice = toastIn("Notifications")
   const line = thread
     .getByRole("group", { name: "Mode" })
@@ -1279,7 +1279,7 @@ test("a new Thread's account is chosen in its phrase, and its model in the Messa
   const { page } = window
   await firstThread(page)
   // The tile, by its title: the box is named for the Harness it writes to.
-  const thread = page.getByRole("region", { name: "New Thread" })
+  const thread = page.getByRole("region", { name: "New Task" })
   // "Write to [who] in [where]": who lists each Harness's accounts.
   await thread.getByRole("button", { name: "Account: Fake AI" }).click()
   await page.getByRole("button", { name: /^Other AI/ }).click()
@@ -1291,7 +1291,7 @@ test("a new Thread's account is chosen in its phrase, and its model in the Messa
 
   // Once a Thread ran on it, a Harness's models are in the Message box.
   await page.keyboard.press("Alt+Enter")
-  const next = page.getByRole("region", { name: "New Thread" })
+  const next = page.getByRole("region", { name: "New Task" })
   await next.getByRole("button", { name: "Account: Fake AI" }).click()
   await page.getByRole("button", { name: /^Other AI/ }).click()
   await next.getByRole("button", { name: /^Model: Fast/ }).click()
@@ -1729,7 +1729,7 @@ test("a message carries images to its Agent", async () => {
     dragged.items.add(new File([blob], "wide.png", { type: "image/png" }))
     return dragged
   })
-  const transcript = thread.getByRole("region", { name: "Thread with Fake AI" })
+  const transcript = thread.getByRole("region", { name: "Task with Fake AI" })
   await transcript.dispatchEvent("dragover", { dataTransfer: wide })
   await transcript.dispatchEvent("drop", { dataTransfer: wide })
   await expect(waiting.getByRole("img", { name: "wide.png" })).toBeVisible()
@@ -1905,7 +1905,7 @@ test("a sent message moves near the top, the end says what waits, and a Thread k
     await expect(thread.getByText(`You said: ${word}`)).toBeVisible()
   }
   const log = thread.getByRole("log")
-  const view = thread.getByRole("region", { name: "Thread with Fake AI" })
+  const view = thread.getByRole("region", { name: "Task with Fake AI" })
 
   // The message sent sits near the top, its reply below it.
   await composer.fill("wait here")
@@ -1955,7 +1955,7 @@ test("scrolled up and back down by hand, the Thread's button to the end goes awa
   await composer.fill(long)
   await composer.press("Enter")
   await expect(thread.getByText("line 29").last()).toBeVisible()
-  const view = thread.getByRole("region", { name: "Thread with Fake AI" })
+  const view = thread.getByRole("region", { name: "Task with Fake AI" })
   const toEnd = thread.locator('[data-slot="message-scroller-button"]')
   await expect(toEnd).toHaveAttribute("data-active", "false")
   await view.hover()
@@ -1987,7 +1987,7 @@ test("back from another workspace, a Thread opens at the start of what came, and
   const { page } = window
   const { thread, composer } = await firstThread(page)
   const log = thread.getByRole("log")
-  const view = thread.getByRole("region", { name: "Thread with Fake AI" })
+  const view = thread.getByRole("region", { name: "Task with Fake AI" })
   for (const word of ["one", "two", "three"]) {
     await composer.fill(word)
     await composer.press("Enter")
@@ -2036,7 +2036,7 @@ test("opened again in its Pane, a Thread left at its end opens at the start of w
   const { page } = window
   const { thread, composer } = await firstThread(page)
   const log = thread.getByRole("log")
-  const view = thread.getByRole("region", { name: "Thread with Fake AI" })
+  const view = thread.getByRole("region", { name: "Task with Fake AI" })
   await composer.fill("one")
   await composer.press("Enter")
   await expect(thread.getByText("You said: one")).toBeVisible()
@@ -2887,7 +2887,7 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   // a group in it, as the file says: the row sits under its Project's
   // name.
   await expect(
-    sidebar.getByRole("tablist", { name: "Threads by where they stand" })
+    sidebar.getByRole("tablist", { name: "Tasks by where they stand" })
   ).toBeVisible()
   await expect(sidebar.getByRole("tab", { name: /^Inbox/ })).toHaveAttribute(
     "aria-selected",
@@ -2977,7 +2977,7 @@ test("Alt+K is the key sheet: sections and families, and Tab binds or frees a ke
 
   // Every action by section; a family is one row, which Enter goes into.
   await page.keyboard.press("Alt+KeyK")
-  for (const section of ["Threads", "Panes", "Columns", "Workspaces", "Banda"])
+  for (const section of ["Tasks", "Panes", "Columns", "Workspaces", "Banda"])
     await expect(menu.getByRole("group", { name: section })).toBeVisible()
   // Sideways; up and down are the family that goes on past a column.
   const focus = menu.getByRole("option", { name: /^Focus a Pane(?!,)/ })
@@ -3226,7 +3226,7 @@ test("niri's keys: a launcher's letters, heights, the Strip's edges, the room le
 
   // Shift and a letter: one more beside it, and the launcher stays.
   await page.keyboard.press("Shift+KeyH")
-  const fresh = page.getByRole("region", { name: "New Thread" })
+  const fresh = page.getByRole("region", { name: "New Task" })
   await expect(fresh).toHaveAttribute("data-focused", "true")
   await expect(launcher).toHaveCount(1)
 
@@ -3969,7 +3969,7 @@ test("a Thread is a Group from its opening, and its Agent's Diff joins it", asyn
   const { page } = window
   const plates = page.locator("[data-group-plate]")
   // The first start's New Thread, and a Project's Thread, each a Group.
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   await expect(plates).toHaveCount(1)
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
@@ -4365,7 +4365,7 @@ async function freeThenRow(window: Window) {
   await expect(terminalTile(page)).toBeVisible()
   await page.keyboard.press("Alt+Enter")
   const box = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
     .getByRole("textbox", { name: "Message to Fake AI" })
   await box.fill("again")
@@ -4501,7 +4501,7 @@ test("Arrange by Project's Undo is refused once a Pane closed since, in the engi
 /** Sends `words` from the New Thread in focus, its first message. */
 async function say(page: Page, words: string) {
   const box = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
     .getByRole("textbox", { name: "Message to Fake AI" })
   await box.fill(words)
@@ -4566,7 +4566,7 @@ test("a New Thread moved to another Project goes to that Project's workspace, or
   const current = numbers.locator("[aria-current]:not([inert])")
   const onScreen = page.locator(`${ON_SCREEN} [data-strip]`)
   const draft = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
   await firstThread(page)
   await say(page, "work one")
@@ -4595,9 +4595,9 @@ test("a New Thread moved to another Project goes to that Project's workspace, or
   // From Work's workspace to No Project: on the first free workspace,
   // where its first message keeps it.
   await numbers.getByRole("button", { name: "Workspace 1" }).click()
-  await expect(
-    onScreen.getByRole("region", { name: "New Thread" })
-  ).toHaveCount(0)
+  await expect(onScreen.getByRole("region", { name: "New Task" })).toHaveCount(
+    0
+  )
   await page.keyboard.press("Alt+Enter")
   await pickProject(draft, "Work", "No Project")
   const free = numbers.getByRole("button", { name: "Workspace 3" })
@@ -4614,7 +4614,7 @@ test("a New Thread moved to another Project goes to that Project's workspace, or
   // Work's workspace holds Work's Thread alone.
   await numbers.getByRole("button", { name: "Workspace 1" }).click()
   await expect(onScreen.getByRole("region", { name: "work one" })).toBeVisible()
-  for (const other of ["New Thread", "loose one", "brand one"])
+  for (const other of ["New Task", "loose one", "brand one"])
     await expect(onScreen.getByRole("region", { name: other })).toHaveCount(0)
 })
 
@@ -4709,7 +4709,7 @@ async function twoProjects(page: Page) {
   await expect(thread.getByText("You said: hello")).toBeVisible()
   await newProject(page, "Play")
   const playing = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .filter({ has: page.getByRole("button", { name: "Project: Play" }) })
     .getByRole("textbox", { name: "Message to Fake AI" })
   await playing.fill("play here")
@@ -5198,7 +5198,7 @@ test("a Thread that finishes while the Person is elsewhere calls them with a sou
 
   // One that ends while they are in another Thread does.
   await sendAndLeave(page, composer, "slow hello")
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(
     sidebar.getByRole("option", { name: /hello/ }).getByRole("img", {
@@ -5336,7 +5336,7 @@ test("Threads done while one's toast shows join it in one toast, a line each (AD
   await expect(page.getByRole("region", { name: "slow hello" })).toBeVisible()
   await page.keyboard.press("Alt+Enter")
   const second = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .getByRole("textbox", { name: "Message to Fake AI" })
   await expect(second).toBeFocused()
   await second.fill("slow again")
@@ -5349,9 +5349,7 @@ test("Threads done while one's toast shows join it in one toast, a line each (AD
   await page.keyboard.press("Alt+PageDown")
 
   const calls = page.getByRole("region", { name: "Notifications" })
-  const joined = calls
-    .getByRole("listitem")
-    .filter({ hasText: "2 Threads done" })
+  const joined = calls.getByRole("listitem").filter({ hasText: "2 Tasks done" })
   await expect(joined).toContainText("slow hello")
   await expect(joined).toContainText("slow again")
   // Each shows once: in the joined toast, not in one of its own.
@@ -5399,7 +5397,7 @@ test("the bell shows a call told on the desktop too, and a [bar] without it hide
   const { thread, composer } = await firstThread(page)
   await composer.fill("slow hello")
   await composer.press("Enter")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await expect(thread).not.toHaveAccessibleName("New Task")
   await setInFront(page, false)
   await expect.poll(async () => (await desktopOf(app)).shown.length).toBe(1)
   await setInFront(page, true)
@@ -5577,7 +5575,7 @@ test("a Thread that finishes behind another window sends a system notification, 
   const { thread, composer } = await firstThread(page)
   await composer.fill("slow hello")
   await composer.press("Enter")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await expect(thread).not.toHaveAccessibleName("New Task")
   await setInFront(page, false)
 
   // Its Pane has the focus, but the window is behind: it is not seen.
@@ -5632,7 +5630,7 @@ test("the desktop's Do Not Disturb leaves only the Marks", async () => {
   await setQuiet(app, true)
   await composer.fill("slow hello")
   await composer.press("Enter")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await expect(thread).not.toHaveAccessibleName("New Task")
   await setInFront(page, false)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(
@@ -5674,9 +5672,9 @@ test("a Thread is archived from its row's menu, its Pane closes, and Alt+S bring
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await expect(thread).not.toHaveAccessibleName("New Task")
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const list = placeOf(sidebar, "Threads")
+  const list = placeOf(sidebar, "Tasks")
   const row = list.getByRole("option", { name: /hello/ })
   await expect(row).toBeVisible()
 
@@ -5741,7 +5739,7 @@ function hostedOf(window: Window) {
 /** In the page, whether the sidebar's Threads list has a row with `title`,
  * and with `mark` on it when one is named. */
 const rowIn = (title: string, mark?: string) =>
-  `[...document.querySelectorAll('[data-place="Threads"] [role="option"]')].some((row) => row.textContent.includes(${JSON.stringify(title)})${mark ? ` && row.querySelector('[role="img"][aria-label=${JSON.stringify(mark)}]') !== null` : ""})`
+  `[...document.querySelectorAll('[data-place="Tasks"] [role="option"]')].some((row) => row.textContent.includes(${JSON.stringify(title)})${mark ? ` && row.querySelector('[role="img"][aria-label=${JSON.stringify(mark)}]') !== null` : ""})`
 
 /** Follows `check`, a test of the page's as `rowIn` writes one, from now:
  * what it was at first, then each change as the page drew it, once
@@ -5784,7 +5782,7 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
     })
     .toBe(true)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const list = placeOf(sidebar, "Threads")
+  const list = placeOf(sidebar, "Tasks")
   const row = list.getByRole("option", { name: /hello/ })
   const done = row.getByRole("img", { name: "Done" })
   const archive = sidebar.getByRole("tab", { name: /^Archive/ })
@@ -5856,7 +5854,7 @@ test("a Thread the focus only passes keeps its mark; one looked at for agents.to
   await composer.press("Enter")
   await expect(thread).toHaveAccessibleName("hello")
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const row = placeOf(sidebar, "Threads").getByRole("option", {
+  const row = placeOf(sidebar, "Tasks").getByRole("option", {
     name: /hello/,
   })
   const done = row.getByRole("img", { name: "Done" })
@@ -5924,7 +5922,7 @@ test("from a far host, a mark shows at once and never flips back as its fact com
     })
     .toBe(true)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const row = placeOf(sidebar, "Threads").getByRole("option", {
+  const row = placeOf(sidebar, "Tasks").getByRole("option", {
     name: /hello/,
   })
   const done = row.getByRole("img", { name: "Done" })
@@ -5986,7 +5984,7 @@ test("from a far host, a mark shows at once and never flips back as its fact com
   await expect(thread).toBeHidden(soon)
   const toasts = page.getByRole("region", { name: "Notifications" })
   await expect(
-    toasts.getByText("This Thread is at work: archive it once its turn ends.")
+    toasts.getByText("This Task is at work: archive it once its turn ends.")
   ).toBeVisible()
   const working = placeOf(sidebar, "Working").getByRole("option", {
     name: /hello/,
@@ -6029,7 +6027,7 @@ test("the marks this window kept move to its host once, and its first list shows
     .poll(() => titled("hello").seen)
     .toBe(titled("hello").latest.turn)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const list = placeOf(sidebar, "Threads")
+  const list = placeOf(sidebar, "Tasks")
   const hello = list.getByRole("option", { name: /hello/ })
   const marked = list.getByRole("option", { name: /from outside/ })
   await expect(marked.getByRole("img", { name: "Done" })).toBeVisible()
@@ -6162,7 +6160,7 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await expect(thread).not.toHaveAccessibleName("New Task")
   const hello = await ownTile(page, thread)
 
   // Its key opens it, and Esc closes it.
@@ -6170,9 +6168,9 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await sidebar.screenshot({ path: "test-results/26-sidebar.png" })
   await page.keyboard.press("Alt+Space")
   const menu = page.getByRole("dialog", { name: "Banda menu" })
-  await expect(
-    menu.getByRole("group", { name: "Recent Threads" })
-  ).toContainText("hello")
+  await expect(menu.getByRole("group", { name: "Recent Tasks" })).toContainText(
+    "hello"
+  )
   await page.keyboard.press("Escape")
   await expect(menu).toBeHidden()
 
@@ -6183,7 +6181,7 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await search.fill("hel")
   await expect(menu.getByRole("option").first()).toContainText("hello")
   await expect(
-    menu.getByRole("option", { name: /New Thread: “hel”/ })
+    menu.getByRole("option", { name: /New Task: “hel”/ })
   ).toBeVisible()
   await page.screenshot({ path: "test-results/26-banda-menu.png" })
 
@@ -6205,7 +6203,7 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
 
   // Alt+K opens it at its Actions, each with its key; Alt+K again closes it.
   await page.keyboard.press("Alt+K")
-  await expect(menu.getByRole("group", { name: "Threads" })).toContainText(
+  await expect(menu.getByRole("group", { name: "Tasks" })).toContainText(
     "Show or hide the sidebar"
   )
   await page.keyboard.press("Alt+K")
@@ -6237,7 +6235,7 @@ test("the Person renames a Thread in place: a double click on its title, F2, and
     header.getByRole("button", { name, exact: true })
   const field = header.getByRole("textbox", { name: "Title" })
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const list = placeOf(sidebar, "Threads")
+  const list = placeOf(sidebar, "Tasks")
   const width = async () => (await thread.boundingBox())?.width
   // Two columns, so a double click on the header would widen one.
   await page.keyboard.press("Alt+Enter")
@@ -6284,7 +6282,7 @@ test("the Person renames a Thread in place: a double click on its title, F2, and
 
   // Rename… in the row's menu opens the field in the row.
   await list.getByRole("option", { name: /hello/ }).click({ button: "right" })
-  const menu = page.getByRole("menu", { name: "Thread menu" })
+  const menu = page.getByRole("menu", { name: "Task menu" })
   await menu.getByRole("menuitem", { name: /Rename…/ }).click()
   const rowField = sidebar.getByRole("textbox", { name: "Title" })
   await expect(rowField).toBeFocused()
@@ -6336,7 +6334,7 @@ test("Suggest a title renames in one press with Undo, and Mark as unread calls a
   const { thread, composer } = await ownTile(page, first.thread)
   const header = thread.locator("header")
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const row = placeOf(sidebar, "Threads").getByRole("option")
+  const row = placeOf(sidebar, "Tasks").getByRole("option")
   const toasts = page.getByRole("region", { name: "Notifications" })
 
   // From the Thread menu: the Harness's model names it, and a toast says
@@ -6392,7 +6390,7 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await expect(thread).not.toHaveAccessibleName("New Task")
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
 
@@ -6403,16 +6401,12 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
   await expect(menu.getByRole("option").first()).toContainText("Work")
   await search.press("Enter")
   await expect(menu.getByText("Work", { exact: true })).toBeVisible()
-  await expect(menu.getByRole("option").first()).toContainText(
-    "New Thread here"
-  )
-  await expect(menu.getByRole("group", { name: "Threads" })).toContainText(
+  await expect(menu.getByRole("option").first()).toContainText("New Task here")
+  await expect(menu.getByRole("group", { name: "Tasks" })).toContainText(
     "hello"
   )
   await search.press("Backspace")
-  await expect(
-    menu.getByRole("group", { name: "Recent Threads" })
-  ).toBeVisible()
+  await expect(menu.getByRole("group", { name: "Recent Tasks" })).toBeVisible()
 
   // Tab on a Thread shows its acts; Archive thread puts it away.
   await search.fill("hello")
@@ -6470,7 +6464,7 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
   // Work, the first Project, is home; Play's workspace is the one emptied.
   await firstThread(page)
   await newProject(page, "Play")
-  const inPlay = page.getByRole("region", { name: "New Thread" }).filter({
+  const inPlay = page.getByRole("region", { name: "New Task" }).filter({
     has: page.getByRole("button", { name: "Project: Play" }),
   })
   const composer = inPlay.getByRole("textbox", { name: "Message to Fake AI" })
@@ -6497,7 +6491,7 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
   await expect(empty).toBeVisible()
 
   // Its own New Thread starts in Play, not in home.
-  await tiling.getByRole("button", { name: "New Thread", exact: true }).click()
+  await tiling.getByRole("button", { name: "New Task", exact: true }).click()
   await expect(inPlay).toBeVisible()
   await page.keyboard.press("Alt+KeyW")
   await expect(empty).toBeVisible()
@@ -6507,7 +6501,7 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
   const search = menu.getByRole("combobox", { name: "Search" })
   await bandaMenu(page)
   await search.fill("again")
-  await menu.getByRole("option", { name: /New Thread: “again”/ }).click()
+  await menu.getByRole("option", { name: /New Task: “again”/ }).click()
   await expect(menu).toBeHidden()
   await expect(play.getByRole("option", { name: /again/ })).toBeVisible()
 })
@@ -6534,7 +6528,7 @@ test("an emptied Project's workspace says whose it is, its terminals open first 
   // Work, the first Project, is workspace 1; Play's, 2, is the one emptied.
   await firstThread(page)
   await newProject(page, "Play")
-  const inPlay = page.getByRole("region", { name: "New Thread" }).filter({
+  const inPlay = page.getByRole("region", { name: "New Task" }).filter({
     has: page.getByRole("button", { name: "Project: Play" }),
   })
   const composer = inPlay.getByRole("textbox", { name: "Message to Fake AI" })
@@ -6650,7 +6644,7 @@ test("Alt+Enter starts in the Project in front, on its workspace; beside a Threa
   const current = numbers.locator("[aria-current]:not([inert])")
   const drafts = page
     .locator(`${ON_SCREEN} [data-strip]`)
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
   const startsIn = (project: string) =>
     expect(
       drafts
@@ -6695,7 +6689,7 @@ test("on an empty workspace no Project owns, Alt+Enter opens the new Thread ther
   const current = numbers.locator("[aria-current]:not([inert])")
   const drafts = page
     .locator(`${ON_SCREEN} [data-strip]`)
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
   const inWork = drafts
     .and(page.locator('[data-focused="true"]'))
     .getByRole("button", { name: "Project: Work", exact: true })
@@ -6717,7 +6711,7 @@ test("on an empty workspace no Project owns, Alt+Enter opens the new Thread ther
   await expect(fresh).toHaveAttribute("aria-current", "true")
   await page
     .getByRole("main")
-    .getByRole("button", { name: "New Thread", exact: true })
+    .getByRole("button", { name: "New Task", exact: true })
     .click()
   await expect(inWork).toBeVisible()
   await expect(drafts).toHaveCount(1)
@@ -6733,18 +6727,18 @@ test("banda menu opens the Banda menu at a route, from outside the window", asyn
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await expect(thread).not.toHaveAccessibleName("New Task")
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
   // At its Actions: the key sheet.
   banda("menu", "actions")
-  await expect(menu.getByRole("group", { name: "Threads" })).toContainText(
+  await expect(menu.getByRole("group", { name: "Tasks" })).toContainText(
     "Show or hide the sidebar"
   )
   // In a Project, by its name, though the menu is open.
   banda("menu", "project.work")
   await expect(menu.getByText("Work", { exact: true })).toBeVisible()
-  await expect(menu.getByRole("group", { name: "Threads" })).toContainText(
+  await expect(menu.getByRole("group", { name: "Tasks" })).toContainText(
     "hello"
   )
   // Other words are typed in.
@@ -6995,7 +6989,7 @@ test("a Project's menu opens its settings, where it is pinned, named, archived a
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await expect(thread).not.toHaveAccessibleName("New Task")
   const lab = join(dir, "lab")
   mkdirSync(lab)
   banda("project", "add", lab)
@@ -7009,7 +7003,7 @@ test("a Project's menu opens its settings, where it is pinned, named, archived a
   await expect(menu.getByRole("menuitem")).toHaveText([
     "Open folder",
     "Project settings…",
-    "Archive its Threads",
+    "Archive its Tasks",
     "Remove from Banda…",
   ])
   await page.screenshot({ path: "test-results/32-project-menu.png" })
@@ -7047,7 +7041,7 @@ test("a Project's menu opens its settings, where it is pinned, named, archived a
   // Remove asks first, then the Project goes and its folder stays.
   await settings.getByRole("button", { name: "Remove Project" }).click()
   const ask = page.getByRole("dialog", {
-    name: 'Remove Project "lab" and delete its 0 Threads?',
+    name: 'Remove Project "lab" and delete its 0 Tasks?',
   })
   await expect(ask).toContainText(lab)
   await expect(ask).toContainText("This action cannot be undone.")
@@ -7344,8 +7338,8 @@ test("with no Pane in focus, the window's keys work as the Banda menu fades", as
   const { app, page } = window
   // An empty workspace: no Pane's tile takes the focus as the menu closes.
   await page
-    .getByRole("region", { name: "New Thread" })
-    .getByRole("button", { name: "Close New Thread", exact: true })
+    .getByRole("region", { name: "New Task" })
+    .getByRole("button", { name: "Close New Task", exact: true })
     .click()
   await expect(
     page
@@ -7463,7 +7457,7 @@ test("the sidebar marks the row in focus, and after a row's click Alt+Enter star
   const { page } = window
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   const focused = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
   // A new Thread in its Project, in focus; then the pointer
   // leaves the sidebar, whose rows held still under it (ADR 0065,
@@ -7512,9 +7506,9 @@ test("the sidebar marks the row in focus, and after a row's click Alt+Enter star
   await hello.click()
   await page.keyboard.press("Alt+Enter")
   await startsIn("Work")
-  await expect(
-    sidebar.getByRole("button", { name: /^New Thread/ })
-  ).toHaveCount(0)
+  await expect(sidebar.getByRole("button", { name: /^New Task/ })).toHaveCount(
+    0
+  )
 })
 
 test("the sidebar's edge drags its width, which the Strip follows and the window keeps", async () => {
@@ -8171,7 +8165,7 @@ test("a No Project Thread starts in the mode the engine gives its Harness there,
     files: { "config/agents.toml": '[start.other]\nmode = "auto"\n' },
   })
   const { page } = window
-  const draft = page.getByRole("region", { name: "New Thread" })
+  const draft = page.getByRole("region", { name: "New Task" })
   await expect(
     draft.getByRole("textbox", { name: "Message to Fake AI" })
   ).toBeVisible()
@@ -8221,7 +8215,7 @@ test("a No Project Thread becomes a Project and keeps working after its folder m
     .click({ button: "right" })
   await page.getByRole("menuitem", { name: "Make a Project from it…" }).click()
   const dialog = page.getByRole("dialog", {
-    name: "Make a Project from this Thread",
+    name: "Make a Project from this Task",
   })
   await dialog.getByLabel("Name", { exact: true }).fill("Promoted")
   await dialog
@@ -8255,7 +8249,7 @@ test("promotion can keep the folder where it is", async () => {
     .click({ button: "right" })
   await page.getByRole("menuitem", { name: "Make a Project from it…" }).click()
   const dialog = page.getByRole("dialog", {
-    name: "Make a Project from this Thread",
+    name: "Make a Project from this Task",
   })
   await dialog.getByLabel("Name", { exact: true }).fill("Kept")
   await dialog.getByRole("radio", { name: /Keep it where it is/ }).check()
@@ -8283,7 +8277,7 @@ test("moving a No Project folder waits for its Turn and terminals", async () => 
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("option", { name: /please ask first/ })
   const dialog = page.getByRole("dialog", {
-    name: "Make a Project from this Thread",
+    name: "Make a Project from this Task",
   })
   const openPromotion = async () => {
     await row.click({ button: "right" })

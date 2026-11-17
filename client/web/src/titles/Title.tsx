@@ -162,7 +162,7 @@ export function Title({
       >
         <DropdownMenuContent
           anchor={anchor}
-          aria-label="Thread menu"
+          aria-label="Task menu"
           className="w-auto min-w-60"
           // A press elsewhere put the focus where it went; else it goes
           // back where it was, as into the composer.

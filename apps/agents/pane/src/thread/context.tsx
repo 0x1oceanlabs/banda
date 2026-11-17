@@ -121,7 +121,7 @@ const Around = createContext<ThreadAround | null>(null)
 /** What the Thread around this part gives it. */
 export function useThreadAround(): ThreadAround {
   const around = useContext(Around)
-  if (!around) throw new Error("A Thread's part is drawn in a Thread.")
+  if (!around) throw new Error("A Task's part is drawn in a Task.")
   return around
 }
 

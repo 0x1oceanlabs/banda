@@ -175,7 +175,7 @@ function Printed({
               {ended(exit)}
             </span>
           )}
-          {cut && <span>It printed more than the Thread keeps.</span>}
+          {cut && <span>It printed more than the Task keeps.</span>}
         </ConsoleFooter>
       )}
     </Console>

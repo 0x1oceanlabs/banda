@@ -368,7 +368,7 @@ test("a Thread away from its Project's workspace bears a small diamond at the st
   await pickFlow(page, "Free")
   await page.getByRole("button", { name: "New workspace" }).click()
   const box = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .getByRole("textbox", { name: "Message to Fake AI" })
   const start = async (text: string) => {
     await page.keyboard.press("Alt+Enter")

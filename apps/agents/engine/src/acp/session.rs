@@ -446,7 +446,7 @@ impl Session {
                     self.name()
                 ));
             }
-            _ => return Err("This sub-agent is not this Thread's.".to_owned()),
+            _ => return Err("This sub-agent is not this Task's.".to_owned()),
         }
         let cancel = acp::CancelNotification::new(child);
         self.connection

@@ -49,8 +49,8 @@ const newThread: Action = {
   }),
   // Its `ask` goes to the new Thread's Agent at once.
   runsAsPerson: ["ask"],
-  title: "New Thread",
-  section: "Threads",
+  title: "New Task",
+  section: "Tasks",
   keys: [{ code: "Enter", mod: true }],
   usual: true,
   run: (window, args = {}) => {
@@ -76,8 +76,8 @@ const newThread: Action = {
  * takes it, or else the focused Pane's, when that is a Thread. */
 const details: Action = {
   id: "agents.thread.details",
-  title: "Show or hide the Thread's details",
-  section: "Thread",
+  title: "Show or hide the Task's details",
+  section: "Task",
   scope: THREAD,
   keys: [{ code: "KeyB", primary: true, shift: true }],
   args: takes({
@@ -102,7 +102,7 @@ const own =
 const composer = own(COMPOSER, "Composer")
 
 /** A Thread's keys: its details card and its find are T3 Code's. */
-const thread = own(THREAD, "Thread")
+const thread = own(THREAD, "Task")
 
 /** A sub-agent's Pane's key, and its screen's: Esc, one level up. */
 const subagent = own(SUBAGENT, "Sub-agent")
@@ -139,36 +139,36 @@ export const agents = defineModule({
     }),
     composer("plan", "Plan mode on or off", { code: "Tab", shift: true }),
     // Its zoom sizes its words (ADR 0063, decision 5).
-    ...zoomActions(THREAD, "agents.thread", "the Thread", "Thread"),
+    ...zoomActions(THREAD, "agents.thread", "the Task", "Task"),
     details,
-    thread("find", "Find in the Thread", { code: "KeyF", primary: true }),
+    thread("find", "Find in the Task", { code: "KeyF", primary: true }),
     // T3 Code's keys for the provider, on Ctrl (⌘): Banda's Mod+Shift+↑/↓
     // move the Pane (ADR 0078, decision 11).
     thread(
       "account-previous",
-      "Move the Thread to the previous account of its Harness",
+      "Move the Task to the previous account of its Harness",
       { code: "ArrowUp", primary: true, shift: true }
     ),
-    thread(
-      "account-next",
-      "Move the Thread to the next account of its Harness",
-      { code: "ArrowDown", primary: true, shift: true }
-    ),
+    thread("account-next", "Move the Task to the next account of its Harness", {
+      code: "ArrowDown",
+      primary: true,
+      shift: true,
+    }),
     subagent(
       "up",
-      "Go back up, to the sub-agent that started this one or to its Thread",
+      "Go back up, to the sub-agent that started this one or to its Task",
       { code: "Escape" }
     ),
     crew(
       "back",
-      "Close the agent's detail, or go back to the Thread from its Crew",
+      "Close the agent's detail, or go back to the Task from its Crew",
       { code: "Escape" }
     ),
     ...zoomActions(VISUAL, "agents.visual", "the Visual", "Visual preview"),
   ],
   scopes: [
     { id: COMPOSER, title: "Composer", field: true },
-    { id: THREAD, title: "Thread" },
+    { id: THREAD, title: "Task" },
     { id: SUBAGENT, title: "Sub-agent" },
     { id: CREW, title: "Crew" },
     { id: VISUAL, title: "Visual preview" },

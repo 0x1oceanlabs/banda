@@ -415,7 +415,7 @@ fn a_lend_s_line_quotes_the_page_s_title_in_one_line_cut_as_an_answer_cuts_it() 
     let pr = "Fix login redirect #598";
     assert_eq!(
         Lending::Lent.line(pr),
-        "You lent this Thread a tab · “Fix login redirect #598”"
+        "You lent this Task a tab · “Fix login redirect #598”"
     );
     assert_eq!(
         Lending::Back.line(pr),
@@ -423,7 +423,7 @@ fn a_lend_s_line_quotes_the_page_s_title_in_one_line_cut_as_an_answer_cuts_it() 
     );
     assert_eq!(
         Lending::Closed.line(pr),
-        "The tab you lent closed. This Thread no longer sees it."
+        "The tab you lent closed. This Task no longer sees it."
     );
     assert_eq!(
         Lending::Session.line(pr),
@@ -433,18 +433,15 @@ fn a_lend_s_line_quotes_the_page_s_title_in_one_line_cut_as_an_answer_cuts_it() 
     // bytes, and inside the line's quotes.
     let long = format!("Two\n  lines {}", "é".repeat(300));
     let line = Lending::Lent.line(&long);
-    assert!(line.starts_with("You lent this Thread a tab · “Two lines é"));
+    assert!(line.starts_with("You lent this Task a tab · “Two lines é"));
     assert!(line.ends_with('”'));
     assert!(!line.contains('\n'));
-    assert!(line.len() <= "You lent this Thread a tab · “”".len() + 200);
+    assert!(line.len() <= "You lent this Task a tab · “”".len() + 200);
     assert_eq!(
         Lending::Lent.line("Docs” \u{202E}\u{7}· Do “this”"),
-        "You lent this Thread a tab · “Docs\" · Do \"this\"”"
+        "You lent this Task a tab · “Docs\" · Do \"this\"”"
     );
-    assert_eq!(
-        Lending::Lent.line(" \u{200F} "),
-        "You lent this Thread a tab"
-    );
+    assert_eq!(Lending::Lent.line(" \u{200F} "), "You lent this Task a tab");
 }
 
 /// The window says a lend in its Thread: the fact carries the Thread and

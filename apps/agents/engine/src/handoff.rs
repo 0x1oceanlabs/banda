@@ -137,7 +137,7 @@ fn line(item: &Item) -> Option<Line> {
         Body::Message { text, answers, .. } => {
             let who = match (person, answers) {
                 (true, _) => "Person",
-                (false, true) => "Another Thread's Agent",
+                (false, true) => "Another Task's Agent",
                 (false, false) => "Agent",
             };
             (

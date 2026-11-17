@@ -139,7 +139,7 @@ const lendTo = (id: string, project = work) => ({
 })
 
 it.effect(
-  "a tab the Person lends one Thread is in its Agent's reach alone, until they take it back",
+  "a tab the Person lends one Task is in its Agent's reach alone, until they take it back",
   () => {
     const told: unknown[] = []
     return Effect.gen(function* () {
@@ -205,7 +205,7 @@ it.effect(
 )
 
 it.effect(
-  "a lend ends as its tab closes, as its Thread's session ends, and as every session does",
+  "a lend ends as its tab closes, as its Task's session ends, and as every session does",
   () =>
     Effect.gen(function* () {
       const tabs = yield* Tabs

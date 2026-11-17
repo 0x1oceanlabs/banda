@@ -69,7 +69,7 @@ export const browser = defineModule({
     // has none.
     scoped(BROWSER, {
       id: LEND,
-      title: "Lend the tab to a Thread, or take it back",
+      title: "Lend the tab to a Task, or take it back",
       section: "Browser",
       keys: [{ code: "KeyL", mod: true, shift: true }],
     }),

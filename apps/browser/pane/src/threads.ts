@@ -75,7 +75,7 @@ export function useLentTo(agent: string | undefined): string | undefined {
   return useSyncExternalStore(watchLists, () =>
     agent === undefined
       ? undefined
-      : (threadOf(agent)?.listed.title ?? "A Thread")
+      : (threadOf(agent)?.listed.title ?? "A Task")
   )
 }
 

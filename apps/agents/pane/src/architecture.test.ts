@@ -137,11 +137,14 @@ function shown(source: string, jsx: boolean): string[] {
   return [...strings, ...templates, ...text].map(([, words]) => words.trim())
 }
 
-/** "subagent" or "task" as a word on its own, not in a name as
- * `agents.subagent` or `group/subagents`. */
-const WRONG = /(?<![\w/.-])(?:subagents?|tasks?)(?![\w/.-])/i
+/** "subagent" as a word on its own, not in a name as `agents.subagent`
+ * or `group/subagents`. "task" was refused too, as a name for a
+ * sub-agent, until a Task became what a Person gives an Agent (ADR
+ * 0138): the word is the Pane's own now, and no check tells the two
+ * uses apart. */
+const WRONG = /(?<![\w/.-])subagents?(?![\w/.-])/i
 
-test("the Pane's words say sub-agent, never subagent or task (ADR 0103, decision 1)", () => {
+test("the Pane's words say sub-agent, never subagent (ADR 0103, decision 1)", () => {
   // Words a Person reads: a phrase, or one word that starts as a sentence.
   const said = (words: string) => /\s/.test(words) || /^[A-Z]/.test(words)
   const pane = import.meta.dirname
@@ -162,8 +165,6 @@ test("the Pane's words say sub-agent, never subagent or task (ADR 0103, decision
   expect(shown(planted, true).filter((words) => WRONG.test(words))).toEqual([
     "3 subagents",
     "Ran N subagents",
-    "Stop the task",
     "N subagents",
-    "Tasks N",
   ])
 })

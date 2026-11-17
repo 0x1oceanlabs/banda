@@ -38,7 +38,7 @@ pub async fn follow(mut heard: Listener) {
             Ok(Some(event)) => event,
             Ok(None) => return,
             Err(error) => {
-                tracing::warn!(%error, "the Threads stopped hearing a module's notices");
+                tracing::warn!(%error, "the Tasks stopped hearing a module's notices");
                 return;
             }
         };

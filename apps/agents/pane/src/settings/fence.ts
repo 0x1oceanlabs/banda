@@ -81,7 +81,7 @@ export function noticeOf(fence: Fence): Args {
   return {
     key: "fence.supervised",
     kind: "done",
-    title: "Threads now start Supervised",
+    title: "Tasks now start Supervised",
     ...(reason && { body: reason }),
     buttons: [
       {

@@ -187,7 +187,7 @@ impl Pulls {
             .await?;
         if !unlinked {
             return Err(Refusal::not_found(
-                "The Thread does not link that pull request.",
+                "The Task does not link that pull request.",
             ));
         }
         self.live(call.project()).poke(false);
@@ -212,14 +212,14 @@ async fn thread(call: &Call, named: Option<String>) -> Result<String, Refusal> {
     }
     let Participant::Agent(agent) = call.participant() else {
         return Err(Refusal::invalid(
-            "Name the Thread to link the pull request to.",
+            "Name the Task to link the pull request to.",
         ));
     };
     let agent = agent.to_string();
     call.project()
         .read(move |sql| store::thread_of(sql, &agent))
         .await?
-        .ok_or_else(|| Refusal::invalid("Banda does not know this Agent's Thread yet: name it."))
+        .ok_or_else(|| Refusal::invalid("Banda does not know this Agent's Task yet: name it."))
 }
 
 /// A pull request by its URL, or by `#42` in the Project's repository on

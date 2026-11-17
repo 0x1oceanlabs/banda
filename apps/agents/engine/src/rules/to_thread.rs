@@ -7,7 +7,7 @@ use banda_kernel::Refusal;
 /// The Thread an Agent writes from: its own. An Agent of no Thread, as
 /// one a test makes up, writes nowhere.
 pub fn own_thread(thread: Option<ThreadId>) -> Result<ThreadId, Refusal> {
-    thread.ok_or_else(|| Refusal::forbidden("An Agent writes from its own Thread."))
+    thread.ok_or_else(|| Refusal::forbidden("An Agent writes from its own Task."))
 }
 
 /// Whether the Agent of Thread `from` may write to Thread `to`, titled
@@ -23,12 +23,12 @@ pub fn may_write(
 ) -> Result<(), Refusal> {
     if to == from {
         return Err(Refusal::invalid(
-            "This is your own Thread: say it in your reply instead.",
+            "This is your own Task: say it in your reply instead.",
         ));
     }
     if waiting.contains(&to) {
         return Err(Refusal::conflict(format!(
-            "Thread \"{title}\" waits for your answer; finish your turn to answer it."
+            "Task \"{title}\" waits for your answer; finish your turn to answer it."
         )));
     }
     if asks {
@@ -80,14 +80,14 @@ mod tests {
         let own = may_write(a, a, "Plan", false, &[]).unwrap_err();
         assert_eq!(
             own.message,
-            "This is your own Thread: say it in your reply instead."
+            "This is your own Task: say it in your reply instead."
         );
         // A asked B, and B asked C: C answers both by ending its turn.
         for asked in [a, b] {
             let circle = may_write(c, asked, "Plan", false, &[b, a]).unwrap_err();
             assert_eq!(
                 circle.message,
-                "Thread \"Plan\" waits for your answer; finish your turn to answer it."
+                "Task \"Plan\" waits for your answer; finish your turn to answer it."
             );
         }
         let question = may_write(a, b, "Plan", true, &[]).unwrap_err();
@@ -97,7 +97,7 @@ mod tests {
              write to it once they have."
         );
         let nowhere = own_thread(None).unwrap_err();
-        assert_eq!(nowhere.message, "An Agent writes from its own Thread.");
+        assert_eq!(nowhere.message, "An Agent writes from its own Task.");
     }
 
     #[test]

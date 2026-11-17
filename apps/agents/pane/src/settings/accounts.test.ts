@@ -116,9 +116,9 @@ test("a card shows the account's own two windows, and a passed reset as empty", 
 })
 
 test("its Threads and its last use, in words", () => {
-  expect(threadsWords(0)).toBe("No Threads")
-  expect(threadsWords(1)).toBe("1 Thread")
-  expect(threadsWords(4)).toBe("4 Threads")
+  expect(threadsWords(0)).toBe("No Tasks")
+  expect(threadsWords(1)).toBe("1 Task")
+  expect(threadsWords(4)).toBe("4 Tasks")
   const now = new Date(2026, 10, 11, 15).getTime()
   expect(lastWords(undefined, now)).toBe("Not used yet")
   expect(lastWords(now - 10_000, now)).toBe("Used now")

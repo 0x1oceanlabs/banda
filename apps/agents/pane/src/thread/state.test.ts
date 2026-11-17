@@ -100,12 +100,12 @@ test("a message names the other Thread whose Agent wrote it, and whether it answ
     id,
     agent: id,
     harness: "fake",
-    title: `Thread ${id}`,
+    title: `Task ${id}`,
     updated_at: 1,
     asking: [],
   })
   const writers = { threads: new Map([["b", listed("b")]]), self: "a" }
-  expect(writerOf(writers, answer)).toMatchObject({ title: "Thread b" })
+  expect(writerOf(writers, answer)).toMatchObject({ title: "Task b" })
   expect(writerOf(writers, own)).toBeUndefined()
   expect(writerOf(writers, said)).toBeUndefined()
   // A Thread the list no longer has is still another Thread; before the
@@ -115,7 +115,7 @@ test("a message names the other Thread whose Agent wrote it, and whether it answ
   expect(writerOf({ threads: new Map() }, answer)).toBeUndefined()
   // A Thread is found by its own ID too, as a fork finds the Thread it was
   // forked from.
-  expect(threadOf(writers, "b")).toMatchObject({ title: "Thread b" })
+  expect(threadOf(writers, "b")).toMatchObject({ title: "Task b" })
   expect(threadOf(writers, "c")).toBe("gone")
   expect(threadOf({ threads: new Map() }, "b")).toBeUndefined()
 })

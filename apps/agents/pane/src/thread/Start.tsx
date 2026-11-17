@@ -168,7 +168,7 @@ function Recent({
             className="size-4 shrink-0 text-muted-foreground"
           />
           <span className="min-w-0 flex-1 truncate">
-            {thread.title || "New Thread"}
+            {thread.title || "New Task"}
           </span>
           <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
             {ago(thread.updated_at, now)}

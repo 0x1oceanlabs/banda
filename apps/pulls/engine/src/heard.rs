@@ -84,7 +84,7 @@ pub async fn follow_agents(mut heard: Listener, live: Arc<Live>) {
             Ok(Some(event)) => event,
             Ok(None) => return live.poke(false),
             Err(error) => {
-                tracing::warn!(%error, "pulls stopped hearing the Threads");
+                tracing::warn!(%error, "pulls stopped hearing the Tasks");
                 return;
             }
         };
@@ -99,7 +99,7 @@ pub async fn follow_agents(mut heard: Listener, live: Arc<Live>) {
                 let (a, t) = (agent.clone(), thread.clone());
                 let kept = project.write(move |tx| store::agent_in(tx.sql(), &a, &t));
                 if let Err(error) = kept.await {
-                    tracing::warn!(%error, "an Agent's Thread was not kept");
+                    tracing::warn!(%error, "an Agent's Task was not kept");
                 }
                 agents.insert(agent, thread.clone());
             }
@@ -137,7 +137,7 @@ pub async fn follow_agents(mut heard: Listener, live: Arc<Live>) {
         if let Some(through) = place(&calls, &event, linked, acked) {
             match heard.ack_through(through).await {
                 Ok(()) => acked = through,
-                Err(error) => tracing::warn!(%error, "pulls' place among the Threads was not kept"),
+                Err(error) => tracing::warn!(%error, "pulls' place among the Tasks was not kept"),
             }
         }
     }

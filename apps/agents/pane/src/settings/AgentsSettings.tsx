@@ -218,16 +218,16 @@ function StartAccounts({
   const { refused, write } = useWrite()
   const now = starts && startsOnWords(starts, on)
   return (
-    <Card size="sm" role="group" aria-label="New Threads">
+    <Card size="sm" role="group" aria-label="New Tasks">
       <CardHeader>
-        <CardTitle>New Threads</CardTitle>
+        <CardTitle>New Tasks</CardTitle>
         <CardDescription>
-          Which account a new Thread starts on. A Thread that runs stays on its
+          Which account a new Task starts on. A Task that runs stays on its
           account: when it is out, its card offers the fallback.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col divide-y border-t">
-        <Row title="Default" about="Where a new Thread starts.">
+        <Row title="Default" about="Where a new Task starts.">
           <AccountSelect
             label="Default account"
             value={chosen.default}
@@ -237,7 +237,7 @@ function StartAccounts({
         </Row>
         <Row
           title="Fallback"
-          about="Where a new Thread starts while the default is out of its limits, if it has room. It may be another Harness's."
+          about="Where a new Task starts while the default is out of its limits, if it has room. It may be another Harness's."
         >
           <AccountSelect
             label="Fallback account"
@@ -389,7 +389,7 @@ function AddEntry({
                 className="font-mono"
               />
               <FieldDescription>
-                How Threads name it. It stays: a Thread keeps the ID.
+                How Tasks name it. It stays: a Task keeps the ID.
               </FieldDescription>
             </Field>
             {!of && (

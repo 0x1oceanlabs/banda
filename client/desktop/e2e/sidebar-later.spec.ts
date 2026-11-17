@@ -134,7 +134,7 @@ test("a Thread put off Someday sleeps on as its turn ends, until a new question 
     .toBe("running")
   await page.keyboard.press("Alt+Enter")
   const box = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .getByRole("textbox", { name: "Message to Fake AI" })
   await expect(box).toBeFocused()
   await box.fill("hello c")
@@ -150,7 +150,7 @@ test("a Thread put off Someday sleeps on as its turn ends, until a new question 
   const row = sidebar.getByRole("option", { name: /pages 1/ })
   await row.click({ button: "right" })
   await page
-    .getByRole("menu", { name: "Thread menu" })
+    .getByRole("menu", { name: "Task menu" })
     .getByRole("menuitem", { name: /^Later…/ })
     .click()
   const picker = pickerOf(page)

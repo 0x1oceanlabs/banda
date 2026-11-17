@@ -141,7 +141,7 @@ export function AccountPage({
         </>
       ) : (
         <p className="text-ui text-muted-foreground">
-          Off: no new Thread starts on it.
+          Off: no new Task starts on it.
         </p>
       )}
       <Section title="Limits">
@@ -150,7 +150,7 @@ export function AccountPage({
       <Section title="In Banda">
         <Facts
           rows={[
-            ["Threads", threadsWords(props.use?.threads ?? 0)],
+            ["Tasks", threadsWords(props.use?.threads ?? 0)],
             ["Last used", lastWords(props.use?.last, props.now)],
             ["This week", `${props.use?.turns ?? 0} Turns`],
           ]}
@@ -164,13 +164,13 @@ export function AccountPage({
         />
       </Section>
       {harness.enabled && project && (
-        <Section title="New Threads on it">
+        <Section title="New Tasks on it">
           <NewThreads {...props} project={project} write={write} />
         </Section>
       )}
       <Row
         title="Remove"
-        about="Moves its Threads to the default after their current Turn. Keeps its profile signed in."
+        about="Moves its Tasks to the default after their current Turn. Keeps its profile signed in."
       >
         <Remove
           engine={props.engine}
@@ -581,7 +581,7 @@ function NewThreads({
   return (
     <Row
       title="Starts with"
-      about={`What a new Thread on it starts with.${offer.options.length > 0 ? "" : ` Its model shows once a Thread here has run on ${harness.name}.`}`}
+      about={`What a new Task on it starts with.${offer.options.length > 0 ? "" : ` Its model shows once a Task here has run on ${harness.name}.`}`}
     >
       <SettingsBar
         settings={settings}
@@ -743,7 +743,7 @@ function Remove({
             <DialogTitle>Remove {harness.name}?</DialogTitle>
             <DialogDescription>
               {canRemove
-                ? `${count === undefined ? "Its Threads move" : count === 1 ? "1 Thread moves" : `${count} Threads move`} to ${target.name} after their current Turn. History stays. Its profile stays signed in and is kept for existing sessions.`
+                ? `${count === undefined ? "Its Tasks move" : count === 1 ? "1 Task moves" : `${count} Tasks move`} to ${target.name} after their current Turn. History stays. Its profile stays signed in and is kept for existing sessions.`
                 : "Choose another enabled default Account before removing this one."}
             </DialogDescription>
           </DialogHeader>
@@ -794,7 +794,7 @@ function SignOut({
             <DialogDescription>
               This signs {harness.name} out on this computer, in your own
               terminal too. Its Agents in every Project stop until someone signs
-              in again; their Threads stay.
+              in again; their Tasks stay.
             </DialogDescription>
           </DialogHeader>
           {signing.problem && <Problem>{signing.problem}</Problem>}

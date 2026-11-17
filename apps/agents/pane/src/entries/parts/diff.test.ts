@@ -65,7 +65,7 @@ test.each(cases)(
   ({ case: name, before, after, added, removed }) => {
     expect(
       counts(lineDiff(before ?? undefined, after)),
-      `"${name}": the Thread's diff and the card (changes.rs) count it differently`
+      `"${name}": the Task's diff and the card (changes.rs) count it differently`
     ).toEqual({ added, removed })
   }
 )

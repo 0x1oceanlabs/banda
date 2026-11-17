@@ -69,7 +69,7 @@ test("the window starts fast, stays small and answers keys at once", async () =>
   const launched = Date.now()
   window = await startWindow()
   const { app, page } = window
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Task" })).toBeVisible()
   const startup = Date.now() - launched
 
   const { thread, composer } = await firstThread(page)

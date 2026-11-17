@@ -127,7 +127,7 @@ function Draft({ engine, project, item, issue, openLink }: Props) {
           </div>
         )}
         <p className="text-meta text-muted-foreground">
-          What goes is exactly this text: no paths, no Pane's args, no Thread's
+          What goes is exactly this text: no paths, no Pane's args, no Task's
           words. With gh signed in, Banda files it; else GitHub opens with it
           filled in.
         </p>

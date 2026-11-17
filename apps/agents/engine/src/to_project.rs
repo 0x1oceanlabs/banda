@@ -76,7 +76,7 @@ pub async fn move_thread(
     let author = call.participant();
     if author.agent().is_some() {
         return Err(Refusal::forbidden(
-            "Only a Person moves a Thread to another Project.",
+            "Only a Person moves a Task to another Project.",
         ));
     }
     let here = call.project();
@@ -152,7 +152,7 @@ pub(crate) struct Files {
 /// `thread` whole, if it may move.
 pub(crate) fn leaving(sql: &Connection, thread: ThreadId) -> Result<Leaving, Error> {
     let rows = ThreadRows::read(sql, thread)?
-        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        .ok_or_else(|| Refusal::not_found("There is no such Task."))?;
     may_move(stands(sql, thread)?)?;
     let images = store::thread_images(sql, thread)?;
     let now = store::evidence::<Evidence>(sql, thread)?;
@@ -238,7 +238,7 @@ pub(crate) fn apart(error: io::Error) -> Error {
     if error.kind() != io::ErrorKind::AlreadyExists {
         return Error::from(error);
     }
-    let apart = "This Thread's session went on another way in that Project, so it stays here.";
+    let apart = "This Task's session went on another way in that Project, so it stays here.";
     Refusal::conflict(apart).into()
 }
 
@@ -252,7 +252,7 @@ pub(crate) fn already(
 ) -> Result<Option<ThreadRows>, Error> {
     match ThreadRows::read(sql, thread)? {
         Some(there) if !there.came_with(rows) => {
-            Err(Refusal::conflict("This Thread is in that Project already.").into())
+            Err(Refusal::conflict("This Task is in that Project already.").into())
         }
         there => Ok(there),
     }
@@ -299,7 +299,7 @@ pub(crate) fn leave(
     (to, machine): (ProjectId, Option<String>),
 ) -> Result<(), Error> {
     if ThreadRows::read(tx.sql(), thread)?.as_ref() != Some(rows) {
-        let changed = "The Thread changed as it moved, and stays here: move it again.";
+        let changed = "The Task changed as it moved, and stays here: move it again.";
         return Err(Refusal::conflict(changed).into());
     }
     may_move(stands(tx.sql(), thread)?)?;
@@ -326,14 +326,14 @@ async fn take_back(
     let home = here.id();
     let stayed = here.read(move |sql| Ok(ThreadRows::read(sql, thread)?.is_some()));
     if !matches!(stayed.await, Ok(true)) {
-        tracing::warn!("a Thread whose move failed is not where it was, so its copy stays");
+        tracing::warn!("a Task whose move failed is not where it was, so its copy stays");
         return;
     }
     let taken = there
         .write(move |tx| leave(tx, author, thread, &arrived, (home, None)))
         .await;
     if let Err(error) = taken {
-        tracing::warn!(%error, "a Thread that did not move is in both Projects");
+        tracing::warn!(%error, "a Task that did not move is in both Projects");
     }
 }
 

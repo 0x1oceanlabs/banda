@@ -83,7 +83,7 @@ struct Connected {
 pub async fn serve() -> Result<(), Failure> {
     let pass = Pass::from_env().ok().flatten().ok_or_else(|| {
         Failure::broken(format!(
-            "banda mcp needs {TOKEN_VARIABLE} and {ENGINE_VARIABLE}: the agents module sets them for a Thread's session."
+            "banda mcp needs {TOKEN_VARIABLE} and {ENGINE_VARIABLE}: the agents module sets them for a Task's session."
         ))
     })?;
     let mut changed = changes(Pass {

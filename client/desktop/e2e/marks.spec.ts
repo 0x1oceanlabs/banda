@@ -526,7 +526,7 @@ test("a working Mark shows what its Agent does, and stuck once it says nothing f
   // card and on its Pane's header alike. It starts from the New Thread
   // Work opened with, which the page kept.
   const composer = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .getByRole("textbox", { name: "Message to Fake AI" })
   await composer.fill("doing execute pnpm test")
   await composer.press("Enter")

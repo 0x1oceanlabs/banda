@@ -35,7 +35,7 @@ pub const MIGRATIONS: &[&str] = &[
          final INTEGER NOT NULL,
          PRIMARY KEY (host, repo, number)
      );
-     -- Each Agent's Thread, as its facts say: an Agent's tool names no
+     -- Each Agent's Task, as its facts say: an Agent's tool names no
      -- Thread.
      CREATE TABLE pulls_agents (agent TEXT PRIMARY KEY, thread TEXT NOT NULL);",
 ];

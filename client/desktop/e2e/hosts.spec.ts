@@ -584,7 +584,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(card).toHaveCount(0)
   // Its rows have no menu yet.
   await there.getByText("Bench window tests").click({ button: "right" })
-  await expect(page.getByRole("menu", { name: "Thread menu" })).toHaveCount(0)
+  await expect(page.getByRole("menu", { name: "Task menu" })).toHaveCount(0)
   await page.keyboard.press("Escape")
   // Its label's ⋯ folds it, opens the settings and stops Banda there. It
   // shows under the pointer, or as Tab reaches it: headless, nothing
@@ -1051,7 +1051,7 @@ test("another machine's Thread is seen, marked unread and archived on its engine
   await expect(
     page
       .getByRole("region", { name: "Notifications" })
-      .getByText("There is no such Thread.")
+      .getByText("There is no such Task.")
   ).toHaveCount(0)
 })
 
@@ -1088,11 +1088,11 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
   await page.reload()
   await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
   await page
-    .getByRole("region", { name: "New Thread" })
-    .getByRole("button", { name: "Close New Thread", exact: true })
+    .getByRole("region", { name: "New Task" })
+    .getByRole("button", { name: "Close New Task", exact: true })
     .click()
   const draft = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
   const menu = page.getByRole("menu")
   const choices = () => menu.getByRole("menuitemradio")
@@ -1130,7 +1130,7 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
   await expect(onArc.locator('[data-machine-icon="server"]')).toBeVisible()
   expect(await headerShows(draft)).toEqual([
     "",
-    "New Thread",
+    "New Task",
     "machine",
     "buttons",
   ])
@@ -1373,13 +1373,13 @@ test("a popped-out Pane on arc picks from the window's machines: this machine's 
   await work(window)
   await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
   await page
-    .getByRole("region", { name: "New Thread" })
-    .getByRole("button", { name: "Close New Thread", exact: true })
+    .getByRole("region", { name: "New Task" })
+    .getByRole("button", { name: "Close New Task", exact: true })
     .click()
   // A new Thread in arc's banda, picked in the window.
   await newThreadIn(page, "Work")
   const draft = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
   await draft.getByRole("button", { name: "Project: Work" }).click()
   await page
@@ -1705,13 +1705,13 @@ test("with arc away, the Banda menu's words for a new Thread on arc are refused 
   await menu.getByRole("combobox", { name: "Search" }).fill("fix the tests")
   await menu
     .getByRole("option")
-    .filter({ hasText: "New Thread: “fix the tests”" })
+    .filter({ hasText: "New Task: “fix the tests”" })
     .click()
   await expect(
     toasts.filter({ hasText: "arc is away: your message was not sent." })
   ).toBeVisible({ timeout: 2_000 })
   const draft = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
   const composer = draft.getByRole("textbox", { name: /^Message to / })
   await expect(composer).toHaveText("fix the tests")
@@ -2331,7 +2331,7 @@ test("Add Project asks where first: on arc, the path field lists arc's folders, 
   await expect.poll(() => named(arc!)).toContain("notes")
   expect(named(window)).not.toContain("notes")
   const draft = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
   await expect(
     draft.getByRole("button", { name: "Project: notes on arc" })
@@ -3168,7 +3168,7 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
   // machine's cards.
   await page.keyboard.press("Alt+Enter")
   const draft = page
-    .getByRole("region", { name: "New Thread" })
+    .getByRole("region", { name: "New Task" })
     .and(page.locator('[data-focused="true"]'))
   await draft.getByRole("button", { name: /^Project: / }).click()
   await page

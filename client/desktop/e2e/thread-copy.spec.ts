@@ -36,7 +36,7 @@ test("a reply's selection copies as Markdown, and as HTML beside it", async () =
   await expect(reply.locator("table")).toBeVisible()
   await expect(reply.getByRole("img", { name: "Mermaid chart" })).toBeVisible()
   await page.screenshot({ path: "test-results/thread-copy.png" })
-  const menu = page.getByRole("menu", { name: "Thread" })
+  const menu = page.getByRole("menu", { name: "Task" })
 
   // All of it, by the keys.
   await reply.getByText("bold").click({ button: "right" })

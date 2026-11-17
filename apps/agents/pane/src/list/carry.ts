@@ -141,7 +141,7 @@ export async function look({ from, to }: Omit<Way, "thread">): Promise<Looked> {
   if (!theirs.free)
     return {
       kind: "refused",
-      why: `${there} has changes that are not committed: commit or stash them there, then move the Thread.`,
+      why: `${there} has changes that are not committed: commit or stash them there, then move the Task.`,
     }
   const status = await read(from, "git.status", {})
   return {

@@ -53,7 +53,7 @@ const SHOWN = [
   ["column.maximize", "The column the whole screen wide"],
   ["column.wider", "The column wider"],
   ["workspace.go-1", "Go to workspace 1"],
-  ["thread.new", "New Thread"],
+  ["thread.new", "New Task"],
   ["terminal.new", "New terminal"],
   ["menu.open", "Banda menu"],
   ["pane.close", "Close the Pane"],

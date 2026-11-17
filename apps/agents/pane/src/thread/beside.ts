@@ -79,7 +79,7 @@ export function shortTitle(title: string): string {
 }
 
 /** What names a Thread with no title yet. */
-const THREAD = "Thread"
+const THREAD = "Task"
 
 /** One step of a nested sub-agent's breadcrumb: its words, and where a
  * click takes the Pane: to its Thread's own Pane, or to that level. */

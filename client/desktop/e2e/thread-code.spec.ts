@@ -54,7 +54,7 @@ test("a reply's code block wraps its lines, copies its code, and a shell's line 
   await page.screenshot({ path: "test-results/thread-code.png" })
 
   // The menu: Copy code, Wrap lines as it is, no Run where there is none.
-  const menu = page.getByRole("menu", { name: "Thread" })
+  const menu = page.getByRole("menu", { name: "Task" })
   await code.locator("code").click({ button: "right" })
   await expect(menu.getByRole("menuitem", { name: "Copy code" })).toBeVisible()
   await expect(

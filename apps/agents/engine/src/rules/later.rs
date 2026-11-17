@@ -20,19 +20,19 @@ pub fn may_put_off(
 ) -> Result<(), Refusal> {
     if asks && by.agent().is_some() {
         return Err(Refusal::conflict(
-            "Your Person has yet to answer: a Thread that asks is theirs to put off.",
+            "Your Person has yet to answer: a Task that asks is theirs to put off.",
         ));
     }
     match until {
-        Until::Someday if by.agent().is_some() => Err(Refusal::forbidden(
-            "Only a Person puts a Thread off Someday.",
-        )),
+        Until::Someday if by.agent().is_some() => {
+            Err(Refusal::forbidden("Only a Person puts a Task off Someday."))
+        }
         Until::At(at) if at <= now => Err(Refusal::invalid("That time has passed.")),
         Until::At(at) if at.saturating_sub(now) > LONGEST => {
             Err(Refusal::invalid("A Later lasts a year at most."))
         }
         Until::Done if !works => Err(Refusal::conflict(
-            "Only a Thread at work can be put off until it is done.",
+            "Only a Task at work can be put off until it is done.",
         )),
         _ => Ok(()),
     }
@@ -290,7 +290,7 @@ mod tests {
         assert_eq!(
             woken(&timed, &posted(), agent, NOW),
             None,
-            "another Thread's Agent writing to it is not its Person"
+            "another Task's Agent writing to it is not its Person"
         );
         assert_eq!(
             woken(&timed, &asked, agent, NOW + 60),

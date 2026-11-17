@@ -20,13 +20,13 @@ pub fn switch(
     harness: String,
 ) -> Result<(), Error> {
     let now = store::thread(tx.sql(), thread)?
-        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?
+        .ok_or_else(|| Refusal::not_found("There is no such Task."))?
         .harness;
     if now == harness {
         return Ok(());
     }
     if now != was {
-        return Err(Refusal::conflict("The Thread moved to another account meanwhile.").into());
+        return Err(Refusal::conflict("The Task moved to another account meanwhile.").into());
     }
     store::switch(tx.sql(), thread, &harness)?;
     let fact = Fact::ThreadSwitched {
