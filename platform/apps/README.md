@@ -19,7 +19,10 @@ this machine (ADR 0126).
   `command`, its `right`, `about` in words and `params`, a JSON Schema),
   `migrations/001.sql`, `002.sql`, … (its tables, one step a file) and its
   entry, the code a worker runs. Each method is an Agent's tool,
-  `<app>_<method>`, unless it says `"tool": false`.
+  `<app>_<method>`, unless it says `"tool": false`. A call's params are
+  held to that schema before the App's code runs (its `type`, `enum`,
+  `required`, `properties`, `additionalProperties: false` and `items`),
+  and refused `invalid` with where they do not fit.
 - **`apps.install {folder}`** reads the folder, checks it and says what is
   wrong by its file, then installs it in three steps, so the engine never
   runs a copy it did not take. It copies the folder into Banda's data, a

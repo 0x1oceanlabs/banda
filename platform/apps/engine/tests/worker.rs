@@ -246,6 +246,20 @@ async fn what_goes_wrong_in_an_app_stays_in_that_app() {
         .await
         .unwrap();
 
+    // Params that do not fit what the method declared are refused before
+    // its code runs, with where.
+    for (params, why) in [
+        (json!({}), "clients.add: params.name is required."),
+        (
+            json!({ "name": 7 }),
+            "clients.add: params.name is a number, not string.",
+        ),
+    ] {
+        let refused = call("clients.add", params).await.unwrap_err();
+        assert_eq!((refused.code, &*refused.message), (Code::Invalid, why));
+    }
+    assert_eq!(call("clients.find", json!({})).await.unwrap(), json!([]));
+
     // A write past its own tables is refused, and nothing of the command
     // is kept, the write before it too: the App's to put right.
     let strayed = call("trouble.stray", json!({ "word": "two" }))
