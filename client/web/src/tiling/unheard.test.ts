@@ -10,7 +10,7 @@ import { join } from "node:path"
 import { type CommandId, newId } from "@banda/contract"
 import type { Workspace as Kept } from "@banda/contract/workspaces"
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { keptOf, NO_VIEW } from "./arrange"
+import { keptOf, NO_VIEW, type View, viewOf } from "./arrange"
 import { apply, type Command, type Facts, NO_FACTS } from "./engine"
 import { entries, focused } from "./model"
 import {
@@ -59,6 +59,24 @@ function three(): { seen: Seen; list: Kept[] } {
 }
 
 const columnsOf = (list: Kept[]) => list[0].columns
+
+/** The view of `seen` with the focus on Pane `pane`, as a click on it
+ * gives. */
+function aimAt(seen: Seen, pane: string): Partial<View> {
+  const spot = seen.state.list
+    .flatMap((workspace) =>
+      workspace.columns.map((column, at) => ({ workspace, column, at }))
+    )
+    .find(({ column }) => column.entries.some((entry) => entry.id === pane))
+  if (!spot) throw new Error(`no Pane ${pane}`)
+  const { workspace, column, at } = spot
+  return {
+    focus: {
+      ...viewOf(seen.state).focus,
+      [workspace.id]: { id: column.id, at },
+    },
+  }
+}
 
 describe("a key drawn before the engine answers", () => {
   test("a burst draws each command over the one before, as the engine will run them", () => {
@@ -279,6 +297,33 @@ describe("a key drawn before the engine answers", () => {
     const looked = look(seen, { ...seen.view, want: undefined })
     expect(looked.view.want).toBeUndefined()
     expect(looked.unheard).toHaveLength(1)
+  })
+
+  test("after a close the focus goes back to the Pane that had it before, drawn at once and held as the fact comes (ADR 0135, decision 7)", () => {
+    const { seen: start, list } = three()
+    const [one, two, three_] = columnsOf(list).map((column) => column.panes[0])
+    // The Person looks at the first, then the third, then the second.
+    const at = (seen: Seen, pane: string) =>
+      look(seen, { ...viewOf(seen.state), ...aimAt(seen, pane) })
+    const looked = [one, three_, two].reduce(
+      (seen, pane) => at(seen, pane.id),
+      start
+    )
+    expect(focused(looked.state)?.id).toBe(two.id)
+    // The second closes: back to the third, on its right, where before
+    // this rule it went to the column on the left.
+    const id = newId()
+    const closing: Command = {
+      method: "workspaces.close",
+      params: { pane: two.id },
+    }
+    const { seen: drawn } = predict(looked, id, { command: closing }, NO_FACTS)
+    expect(focused(drawn.state)?.id).toBe(three_.id)
+    const heard = hear(answered(drawn, id, 4), ran(list, [id, closing]), 4)
+    expect(focused(heard.state)?.id).toBe(three_.id)
+    // And what another closes moves the focus the same way.
+    const theirs = ran(list, [id, closing])
+    expect(focused(hear(looked, theirs, 4).state)?.id).toBe(three_.id)
   })
 
   test("args a Pane asked for are drawn until the log stands where the engine kept them", () => {

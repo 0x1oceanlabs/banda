@@ -36,8 +36,8 @@ import {
   type Asked,
   NO_VIEW,
   resolve,
+  resolved,
   type View,
-  viewOf,
   type Want,
   withAsked,
 } from "./arrange"
@@ -216,7 +216,9 @@ export function hear(seen: Seen, heard: Kept[], at: number): Seen {
 /** The view alone changed: the same facts and commands, drawn as `view`
  * looks at them. */
 export function look(seen: Seen, view: View): Seen {
-  return drawn({ ...seen, view })
+  // The Panes that had the focus before stay with the view: one worked
+  // out from what is drawn names none.
+  return drawn({ ...seen, view: { trail: seen.view.trail, ...view } })
 }
 
 /** Pane `pane` asked for `args`, drawn until the log stands at `until`:
@@ -258,9 +260,10 @@ function applyOne(list: Kept[], one: Unheard) {
 function drawn(seen: Seen): Seen {
   if (!seen.predicted) return seen
   const { kept, asked } = withAsked(seen.predicted, seen.asked, seen.heardAt)
-  const state = resolve(kept, seen.view, seen.state, seen.heardAt)
+  const looked = resolved(kept, seen.view, seen.state, seen.heardAt)
+  const state = looked.state
   const want = seen.view.want
-  const next = viewOf(state)
+  const next: View = looked.view
   if (want && wanted(want, state, seen)) next.want = want
   const view = sameView(next, seen.view) ? seen.view : next
   const standing = standingOf(seen.heardState, state, seen.standing)

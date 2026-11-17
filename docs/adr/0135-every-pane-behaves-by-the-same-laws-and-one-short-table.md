@@ -217,6 +217,15 @@ Each step is a PR that names this ADR and track 3.
    _Roma tries:_ open three Panes and close them one by one: the focus
    walks back the way it came; an Agent opens a Pane while Roma types,
    and nothing moves.
+   _Built_, after the model went to the window (#1880, #1883, #1887):
+   `view::look` in `platform/tiling`, which the window runs as
+   WebAssembly. It reads a view over an arrangement and gives the view
+   to look by next; `held` and `aim` went. The view gained each
+   workspace's trail, the Panes that had the focus there, which is where
+   the focus goes back to. `want` stays the window's: it is the Person's
+   act, which the rule takes as its aim, and how long it waits for its
+   command's fact is the queue's to know. Decision 8, what part of the
+   Strip shows, stays the window's too, as it measures the page.
 5. **An App from elsewhere.** A kind that declares nothing opens by the
    first rule; one that declares `home` or `narrow` gets its line.
    _Roma tries:_ a Pane of a test App opens beside the one in front, and

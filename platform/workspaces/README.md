@@ -11,8 +11,10 @@ arranged: workspaces one under another, each a Strip of columns.
   [`platform/tiling`](../tiling/src/lib.rs) (`banda-tiling`): the
   arrangement and its rules (`model.rs`), where a Pane with no place goes
   (`placing.rs`), the commands as functions of the arrangement
-  (`commands.rs`), and the words of `tiling.toml` they read (`rule.rs`,
-  `columns.rs`). It is a leaf, with no store, file or clock, so it also
+  (`commands.rs`), the words of `tiling.toml` they read (`rule.rs`,
+  `columns.rs`), and what a device looks at with what a change does to
+  it (`view.rs`: the focus, the screen, and where the focus goes back to
+  after a close; ADR 0135, decisions 7 and 9). It is a leaf, with no store, file or clock, so it also
   builds for a client as WebAssembly (`cargo build -p banda-tiling
   --target wasm32-unknown-unknown`; ADR 0088, decision 11), and its
   `tests/leaf.rs` holds it one. The engine's part keeps the arrangement

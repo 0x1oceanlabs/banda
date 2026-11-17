@@ -2,10 +2,12 @@
 import type { JsonValue } from "../serde_json/JsonValue";
 import type { Facts } from "./Facts";
 import type { PaneId } from "./PaneId";
+import type { Shape } from "./Shape";
+import type { View } from "./View";
 import type { Workspace } from "./Workspace";
 
 /**
  * What a client asks the model, each with the arrangement it has and
  * the engine's facts as it knows them.
  */
-export type ModelAsked = { "ask": "apply", list: Array<Workspace>, method: string, params: JsonValue, facts: Facts, seed: string, } | { "ask": "refused", list: Array<Workspace>, method: string, params: JsonValue, facts: Facts, } | { "ask": "refused_to", list: Array<Workspace>, facts: Facts, pane: PaneId, whole: boolean, } | { "ask": "width", facts: Facts, kind: string, };
+export type ModelAsked = { "ask": "apply", list: Array<Workspace>, method: string, params: JsonValue, facts: Facts, seed: string, } | { "ask": "refused", list: Array<Workspace>, method: string, params: JsonValue, facts: Facts, } | { "ask": "refused_to", list: Array<Workspace>, facts: Facts, pane: PaneId, whole: boolean, } | { "ask": "width", facts: Facts, kind: string, } | { "ask": "look", list: Shape, view: View, aim?: string, };

@@ -16,6 +16,7 @@ import type {
   Facts,
   ModelAsked,
   RowRefusal,
+  View,
   Workspace,
 } from "@banda/contract/workspaces"
 import bytes from "./engine.wasm"
@@ -189,4 +190,28 @@ export function refusedTo(
  * Tiling's. */
 export function widthIn(facts: Facts, kind: string): string | undefined {
   return foreseen<string | undefined>({ ask: "width", facts, kind }, undefined)
+}
+
+/** The arrangement as the view reads it: each workspace's columns and
+ * each column's Panes, by their IDs. */
+type Shape = Extract<ModelAsked, { ask: "look" }>["list"]
+
+/**
+ * `view` over the arrangement `list` as it stands now, with the Person's
+ * act aimed at the Pane `aim`, if they did one that aims: the view to
+ * draw, each ID with the place it has now, and to look by next (ADR 0135,
+ * decisions 7 and 9). What it names nothing for is the first. A view the
+ * model cannot read, as one kept by an older Banda may be, looks as none.
+ */
+export function look(list: Shape, view: View, aim?: string): View {
+  const none: View = { focus: {}, active: {} }
+  const asked = {
+    ask: "look",
+    list,
+    ...(aim !== undefined && { aim }),
+  } as const
+  return (
+    foreseen({ ...asked, view }, undefined) ??
+    foreseen({ ...asked, view: none }, none)
+  )
 }

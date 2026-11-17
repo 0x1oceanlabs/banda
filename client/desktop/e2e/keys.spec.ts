@@ -453,7 +453,7 @@ for (const latency of [0, 150]) {
       await pressAtOnce(page, TEN_KEYS)
       await expect
         .poll(() => layoutOf(page))
-        .toEqual([[three], [two], [one], [thread]])
+        .toEqual([[three], [one], [two], [thread]])
       await expect(page.locator(`[data-tile="${three}"]`)).toHaveAttribute(
         "data-focused",
         "true"

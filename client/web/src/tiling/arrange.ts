@@ -5,6 +5,8 @@
  * their widths. The window holds the view: the workspace on screen, each
  * one's focused column and each column's shown Pane, by their IDs. The
  * two make the `Workspaces` the window draws (`model.ts`).
+ * What a change to the arrangement does to the view is the model's rule,
+ * which the window runs (`engine.ts`'s `look`; ADR 0135, decision 9).
  *
  * A key still works out a move or a named place with `model.ts`; what
  * that puts where becomes one command. A Pane opened with no place named
@@ -27,11 +29,18 @@ import type {
   Pane,
   Place,
   Via,
+  View as Looking,
   Workspace as Kept,
 } from "@banda/contract/workspaces"
 import type { PaneState } from "@banda/ui/pane"
 import type { Source } from "@banda/ui/hooks/use-live"
-import { type Command, type Facts, refusalFor, type RowRefusal } from "./engine"
+import {
+  type Command,
+  type Facts,
+  look,
+  refusalFor,
+  type RowRefusal,
+} from "./engine"
 import {
   clamp,
   type Column,
@@ -49,17 +58,14 @@ import {
   type Workspaces,
 } from "./model"
 
-/** An ID and where it stood, so a neighbour takes its place when it goes. */
-type Held = { id: string; at: number }
-
-/** What the Person looks at: the window's, never the engine's. */
-export type View = {
-  /** The workspace on screen. */
-  current?: Held
-  /** Each workspace's focused column, by the workspace's ID. */
-  focus: Record<string, Held>
-  /** Each column's shown Pane, by the column's ID. */
-  active: Record<string, Held>
+/**
+ * What the Person looks at: the window's, never the engine's. The
+ * workspace on screen, each workspace's focused column and each column's
+ * shown Pane, by their IDs, and the Panes that had the focus before, are
+ * the model's words (`platform/tiling/src/view.rs`), as what a change
+ * does to them is its rule (ADR 0135, decision 9).
+ */
+export type View = Looking & {
   /** A Pane to focus, one just opened or moved: where the change put it. */
   want?: Want
 }
@@ -85,7 +91,25 @@ export function resolve(
   before?: Workspaces,
   at = Infinity
 ): Workspaces {
-  const aimed = at >= (view.want?.after ?? 0) ? aim(kept, view) : view
+  return resolved(kept, view, before, at).state
+}
+
+/** `resolve`, with the view that says what it drew, to look by next. */
+export function resolved(
+  kept: readonly Kept[],
+  view: View,
+  before?: Workspaces,
+  at = Infinity
+): { state: Workspaces; view: Looking } {
+  const aim = at >= (view.want?.after ?? 0) ? view.want?.pane : undefined
+  const shape = kept.map(({ id, columns }) => ({
+    id,
+    columns: columns.map(({ id, panes }) => ({
+      id,
+      panes: panes.map(({ id }) => ({ id })),
+    })),
+  }))
+  const looked = look(shape, view, aim)
   const was = known(before)
   const list = kept.map((workspace) => {
     const columns = workspace.columns.map((column) => {
@@ -105,7 +129,7 @@ export function resolve(
       const next: Column = {
         id: column.id,
         entries: panes,
-        active: held(aimed.active[column.id], panes, "stay"),
+        active: looked.active[column.id]?.at ?? 0,
       }
       if (column.width !== undefined) next.width = column.width
       if (column.full) next.full = true
@@ -116,18 +140,19 @@ export function resolve(
     const next: Workspace = {
       id: workspace.id,
       columns,
-      focus: held(aimed.focus[workspace.id], columns, "before"),
+      focus: looked.focus[workspace.id]?.at ?? 0,
     }
     if (workspace.filled !== undefined) next.filled = workspace.filled
     if (workspace.project !== undefined) next.project = workspace.project
     return same(was.workspaces.get(workspace.id), next)
   })
-  const shows = held(aimed.current, list, "stay")
+  const shows = looked.current?.at ?? 0
   const unchanged =
     before?.current === shows &&
     before.list.length === list.length &&
     list.every((workspace, i) => workspace === before.list[i])
-  return unchanged ? before : { list, current: shows }
+  const state = unchanged ? before : { list, current: shows }
+  return { state, view: looked }
 }
 
 /** The view `state` shows; `want` stays until the arrangement, at `at`,
@@ -148,40 +173,6 @@ export function viewOf(state: Workspaces, want?: Want, at = Infinity): View {
   const shown = entries(state).some((entry) => entry.id === want?.pane)
   if (want && (at < (want.after ?? 0) || !shown)) view.want = want
   return view
-}
-
-/** The view looking at `want`, when the arrangement shows it. */
-function aim(kept: readonly Kept[], view: View): View {
-  const want = view.want?.pane
-  if (!want) return view
-  for (const [w, workspace] of kept.entries()) {
-    for (const [c, column] of workspace.columns.entries()) {
-      const e = column.panes.findIndex((pane) => pane.id === want)
-      if (e < 0) continue
-      return {
-        current: { id: workspace.id, at: w },
-        focus: { ...view.focus, [workspace.id]: { id: column.id, at: c } },
-        active: { ...view.active, [column.id]: { id: want, at: e } },
-      }
-    }
-  }
-  return view
-}
-
-/**
- * Where a held ID stands now. One that went leaves its place to the one
- * after it (`stay`), as a Pane closed in a stack does, or the one before
- * it (`before`), as a column closed does.
- */
-function held(
-  id: Held | undefined,
-  items: readonly { id: string }[],
-  gone: "stay" | "before"
-): number {
-  if (!id || items.length === 0) return 0
-  const at = items.findIndex((item) => item.id === id.id)
-  if (at >= 0) return at
-  return clamp(gone === "before" ? id.at - 1 : id.at, items.length)
 }
 
 function known(state: Workspaces | undefined) {

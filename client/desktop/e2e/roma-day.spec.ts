@@ -671,15 +671,16 @@ test("ten tiling keys pressed faster than the Window draws land in order, each o
   const [[thread], [one], [two], [three]] = await layoutOf(page)
 
   // A Pane opened, moved first, the focus beside it, the Group moved
-  // last, the first Pane closed, another moved twice, the focus left,
-  // that one moved first. The ten go in at once, in one task of the
+  // last, the first Pane closed, so the focus goes back to the Group
+  // (ADR 0135, decision 7), which is last and moves right no further,
+  // the focus left, that one moved first. The ten go in at once, in one task of the
   // page, as the Window's keys hear them: each lands before the one
   // before is drawn, however fast the machine.
   await pressAtOnce(page, TEN_KEYS)
 
   await expect
     .poll(() => layoutOf(page))
-    .toEqual([[three], [two], [one], [thread]])
+    .toEqual([[three], [one], [two], [thread]])
   await expect(page.locator(`[data-tile="${three}"]`)).toHaveAttribute(
     "data-focused",
     "true"

@@ -288,7 +288,8 @@ function isArgs(value: JsonValue | undefined): value is Args {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-/** Closes a Pane; its neighbour takes the focus. */
+/** Closes a Pane; the focus goes back to the Pane that had it before
+ * (`view::look`; ADR 0135, decision 7). */
 export function closing(pane: string): Plan {
   return { command: { method: "workspaces.close", params: { pane } } }
 }

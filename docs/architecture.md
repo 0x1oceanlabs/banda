@@ -83,7 +83,7 @@ the answer, the publish, the outbox.
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; how its last run went (`run.json`); the passes, hashed (`passes.sqlite3`); while the engine runs, its port and per-run secret |
-| The window's storage | the view of the workspaces: the one on screen, each one's focused column and each column's shown Pane, and Solo as this device chose it; whether the sidebar shows; which finished turn of each Thread the Person has seen; which Panes an Agent opened the Person has looked at |
+| The window's storage | the view of the workspaces: the one on screen, each one's focused column, each column's shown Pane and the Panes that had the focus before, and Solo as this device chose it; whether the sidebar shows; which finished turn of each Thread the Person has seen; which Panes an Agent opened the Person has looked at |
 | `machine/` SQLite, in the engine's state | this machine's, in no Project: the workspaces, their columns, each Pane with its Project and the widths (ADR 0025) |
 | `projects/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `projects/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
