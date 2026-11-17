@@ -97,7 +97,7 @@ test("an App's widget draws on the page's React, under the Window's", () => {
         tiled={tiled}
         run={() => undefined}
       >
-        <Widget engine={engine} projects={[]} />
+        <Widget engine={engine} projects={[]} machines={[]} />
       </Kept>
     )
   ).toBe("")

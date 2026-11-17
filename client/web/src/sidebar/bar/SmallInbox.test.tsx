@@ -113,6 +113,7 @@ async function draw(
               <countsWidget.Widget
                 engine={engine}
                 projects={[project("work")]}
+                machines={[]}
               />
             </ThreadMenus>
           </RunContext>

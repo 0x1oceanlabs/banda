@@ -4,7 +4,12 @@
  * look the Person picked. A click shows each account's limits; a right
  * click picks the look.
  *
- *   in    engine     this machine's engine: `harnesses.limits`, the
+ *   in    machines   the other machines the Window shows, each with its
+ *                    session: `harnesses.limits` of each, kept as this
+ *                    machine's is. An account on two machines, the same
+ *                    Harness and address, counts once (`onceOf`; ADR
+ *                    0120, decision 5)
+ *         engine     this machine's engine: `harnesses.limits`, the
  *                    limits as last read with harnesses.toml's
  *                    `[limits] warn` and `look`, read again on each
  *                    `limits_changed` and each minute; as the popover
@@ -22,8 +27,10 @@
  *         and another of its Harness has room; faint while the last read
  *         failed and the last good one is over half an hour old. The
  *         popover: each account by Harness, with its Emblem, its windows
- *         and their pace, and the Slot's fill beside a spent one; today's
- *         usage, when the limits were read, and Usage →
+ *         and their pace, and the Slot's fill beside a spent one; this
+ *         machine's first, then each other machine's under its name and
+ *         icon, dim "as of 14:02" while it is away; today's usage on
+ *         this machine, when the limits were read, and Usage →
  *   runs  `harnesses.limits.look` from the right click's menu;
  *         `harnesses.usage` from Usage →, which opens the Usage Pane
  */
@@ -59,14 +66,15 @@ import {
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
-import { useRun } from "@banda/core/react"
+import { clock, useRun } from "@banda/core/react"
+import { MachineMark } from "@banda/ui/components/machine-icon"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE, ago, fullDate, problem } from "@banda/ui/lib/words"
-import type { WidgetProps } from "@banda/ui/module"
+import type { WidgetMachine, WidgetProps } from "@banda/ui/module"
 import { useSlot } from "@banda/ui/slots"
 import type { Engine } from "@banda/contract"
 import { GaugeIcon } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   type Room,
   backWords,
@@ -75,6 +83,7 @@ import {
   harnessName,
   harnessOf,
   mostRoomOf,
+  onceOf,
   paceWords,
   readAtOf,
   resetWords,
@@ -95,12 +104,10 @@ function loudOf(used: number, warn: number): string | undefined {
   return used >= warn ? toneOf(used, warn) : undefined
 }
 
-/** The machine's snapshot and event log keep this current even while
- * its popover is closed. Opening requests a provider read; the engine
- * owns the one-minute bound and publishes the result on that same log. */
-export function LimitsWidget({ engine }: WidgetProps) {
-  const run = useRun()
-  const [round, setRound] = useState(0)
+/** A machine's limits as last read, kept current: its snapshot and its
+ * event log, and the snapshot again each `round`, as a change to
+ * harnesses.toml (reading off among them) produces no limits event. */
+function useLimits(engine: Engine, round: number) {
   const source = useMemo<Source<LimitsNow>>(
     () => ({
       read: () => engine.call("harnesses.limits", {}),
@@ -109,10 +116,56 @@ export function LimitsWidget({ engine }: WidgetProps) {
     }),
     [engine]
   )
-  // The cached snapshot is cheap to read. Poll it too, as a change to
-  // harnesses.toml (including reading off) produces no limits event.
+  return useMachineLive(engine, source, round)
+}
+
+/** Another machine's limits, told to the widget as they are read: it
+ * draws nothing. What it told last stands while the machine is away. */
+function Theirs({
+  machine,
+  round,
+  onLimits,
+}: {
+  machine: WidgetMachine
+  round: number
+  onLimits: (name: string, limits: readonly Limits[] | undefined) => void
+}) {
+  const live = useLimits(machine.engine, round)
+  const limits = live.state === "ready" ? live.view.limits : undefined
+  useEffect(() => {
+    if (limits) onLimits(machine.name, limits)
+  }, [machine.name, limits, onLimits])
+  // A machine the Window shows no more counts no more.
+  useEffect(
+    () => () => onLimits(machine.name, undefined),
+    [machine.name, onLimits]
+  )
+  return null
+}
+
+/** The machine's snapshot and event log keep this current even while
+ * its popover is closed. Opening requests a provider read; the engine
+ * owns the one-minute bound and publishes the result on that same log.
+ * So for each other machine the Window shows. */
+export function LimitsWidget({ engine, machines }: WidgetProps) {
+  const run = useRun()
+  const [round, setRound] = useState(0)
   const now = useNow(MINUTE)
-  const live = useMachineLive(engine, source, now + round)
+  const live = useLimits(engine, now + round)
+  const [theirs, setTheirs] = useState<ReadonlyMap<string, readonly Limits[]>>(
+    new Map()
+  )
+  const onLimits = useCallback(
+    (name: string, limits: readonly Limits[] | undefined) =>
+      setTheirs((was) => {
+        if (was.get(name) === limits) return was
+        const next = new Map(was)
+        if (limits) next.set(name, limits)
+        else next.delete(name)
+        return next
+      }),
+    []
+  )
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
   const [usage, setUsage] = useState<UsageNow>()
@@ -127,101 +180,168 @@ export function LimitsWidget({ engine }: WidgetProps) {
       }),
     []
   )
-  if (live.state !== "ready") return null
-  const { limits, warn, look } = live.view
+  // Followed from one place in the tree whatever the widget draws, so
+  // what a machine told stands while it draws nothing.
+  const followed = (
+    <>
+      {machines.map((machine) => (
+        <Theirs
+          key={machine.name}
+          machine={machine}
+          round={now + round}
+          onLimits={onLimits}
+        />
+      ))}
+    </>
+  )
+  if (live.state !== "ready") return <>{followed}</>
+  const { warn, look } = live.view
+  // This machine's accounts first, then each other machine's, an account
+  // once: the bar counts them all (ADR 0120, decision 5).
+  const [own = [], ...others] = onceOf([
+    live.view.limits,
+    ...machines.map((machine) => theirs.get(machine.name) ?? []),
+  ])
+  const limits = [own, ...others].flat()
   const share = shareOf(limits, now)
-  if (!share) return null
+  if (!share) return <>{followed}</>
   const words = tooltipOf(limits, now)
   const pick = (next: LimitsLook) =>
     run("harnesses.limits.look", { look: next })
+  const room = mostRoomOf(limits, now)
   return (
-    <ContextMenu>
-      <ContextMenuTrigger className="flex">
-        <Popover
-          open={open}
-          onOpenChange={(opening) => {
-            setOpen(opening)
-            if (!opening) return
-            setError(undefined)
-            void engine
-              .call("harnesses.limits", { read: true })
-              .then(() => setRound((round) => round + 1))
-              .catch((error) => setError(problem(error)))
-            void engine
-              .call("harnesses.usage", {})
-              .then(setUsage)
-              .catch(() => setUsage(undefined))
-          }}
-        >
-          <PopoverTrigger
-            render={
-              <button
-                type="button"
-                aria-label={`Usage limits: ${words}`}
-                title={words}
-                className={cn(
-                  "flex h-6 items-center gap-1.5 rounded-control px-2 text-meta text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground",
-                  staleOf(share.best, now) && "opacity-50"
-                )}
-              />
-            }
+    <>
+      {followed}
+      <ContextMenu>
+        <ContextMenuTrigger className="flex">
+          <Popover
+            open={open}
+            onOpenChange={(opening) => {
+              setOpen(opening)
+              if (!opening) return
+              setError(undefined)
+              void engine
+                .call("harnesses.limits", { read: true })
+                .then(() => setRound((round) => round + 1))
+                .catch((error) => setError(problem(error)))
+              // Each machine reads its own, and says so in its own log; one
+              // that is away keeps what it said.
+              for (const machine of machines)
+                if (!machine.away)
+                  void machine.engine
+                    .call("harnesses.limits", { read: true })
+                    .catch(() => undefined)
+              void engine
+                .call("harnesses.usage", {})
+                .then(setUsage)
+                .catch(() => setUsage(undefined))
+            }}
           >
-            <Look
-              look={look}
-              share={share.share}
-              rooms={roomsOf(limits, now)}
-              warn={warn}
-            />
-            {someOut(limits, now) && (
-              <span
-                className="-ml-0.5 size-[5px] shrink-0 rounded-full bg-warning"
-                aria-hidden="true"
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`Usage limits: ${words}`}
+                  title={words}
+                  className={cn(
+                    "flex h-6 items-center gap-1.5 rounded-control px-2 text-meta text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground",
+                    staleOf(share.best, now) && "opacity-50"
+                  )}
+                />
+              }
+            >
+              <Look
+                look={look}
+                share={share.share}
+                rooms={roomsOf(limits, now)}
+                warn={warn}
               />
-            )}
-          </PopoverTrigger>
-          <PopoverContent className="max-h-[min(36rem,80vh)] w-[min(340px,calc(100vw-2rem))] gap-0 overflow-y-auto p-0">
-            <PopoverTitle className="sr-only">Usage limits</PopoverTitle>
-            <Accounts engine={engine} limits={limits} now={now} warn={warn} />
-            {error && (
-              <p
-                role="alert"
-                className="border-t border-border px-4 py-2 text-meta text-muted-foreground"
-              >
-                {error}
-              </p>
-            )}
-            <Foot
-              limits={limits}
-              usage={usage}
-              now={now}
-              onUsage={() => {
-                setOpen(false)
-                run("harnesses.usage")
-              }}
-            />
-          </PopoverContent>
-        </Popover>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="min-w-48">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Show the limits as</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={look}
-            onValueChange={(next: LimitsLook) => pick(next)}
-          >
-            {LOOKS.map((one) => (
-              <DropdownMenuRadioItem
-                key={one.look}
-                value={one.look}
-                closeOnClick
-              >
-                {one.words}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-      </ContextMenuContent>
-    </ContextMenu>
+              {someOut(limits, now) && (
+                <span
+                  className="-ml-0.5 size-[5px] shrink-0 rounded-full bg-warning"
+                  aria-hidden="true"
+                />
+              )}
+            </PopoverTrigger>
+            <PopoverContent className="max-h-[min(36rem,80vh)] w-[min(340px,calc(100vw-2rem))] gap-0 overflow-y-auto p-0">
+              <PopoverTitle className="sr-only">Usage limits</PopoverTitle>
+              <Accounts
+                engine={engine}
+                limits={own}
+                room={room}
+                now={now}
+                warn={warn}
+                spent
+              />
+              {machines.map((machine, i) =>
+                others[i]?.length ? (
+                  <section
+                    key={machine.name}
+                    aria-label={machine.named.name}
+                    className={cn(
+                      "border-t border-border first-of-type:border-t-0",
+                      machine.away && "opacity-60"
+                    )}
+                  >
+                    <h3 className="flex items-center gap-2 px-4 pt-3 text-meta text-muted-foreground">
+                      <MachineMark named={machine.named} form="full" />
+                      {machine.away && machine.asOf !== undefined && (
+                        <span className="text-muted-foreground/70">
+                          as of {clock(machine.asOf, now)}
+                        </span>
+                      )}
+                    </h3>
+                    <Accounts
+                      engine={machine.engine}
+                      limits={others[i]}
+                      room={room}
+                      now={now}
+                      warn={warn}
+                    />
+                  </section>
+                ) : null
+              )}
+              {error && (
+                <p
+                  role="alert"
+                  className="border-t border-border px-4 py-2 text-meta text-muted-foreground"
+                >
+                  {error}
+                </p>
+              )}
+              <Foot
+                limits={limits}
+                usage={usage}
+                now={now}
+                onUsage={() => {
+                  setOpen(false)
+                  run("harnesses.usage")
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="min-w-48">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Show the limits as</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={look}
+              onValueChange={(next: LimitsLook) => pick(next)}
+            >
+              {LOOKS.map((one) => (
+                <DropdownMenuRadioItem
+                  key={one.look}
+                  value={one.look}
+                  closeOnClick
+                >
+                  {one.words}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
+        </ContextMenuContent>
+      </ContextMenu>
+    </>
   )
 }
 
@@ -277,19 +397,26 @@ export function Look({
   }
 }
 
-/** Every account, by Harness (ADR 0055, decision 3). */
+/** A machine's accounts, by Harness (ADR 0055, decision 3), on its
+ * `engine`. */
 function Accounts({
   engine,
   limits,
+  room,
   now,
   warn,
+  spent = false,
 }: {
   engine: Engine
   limits: readonly Limits[]
+  /** The accounts with the most room, over every machine. */
+  room: ReadonlySet<Limits>
   now: number
   warn: number
+  /** Beside a spent account goes what the modules say waits on it: on
+   * this machine's alone, whose Threads it would move. */
+  spent?: boolean
 }) {
-  const room = mostRoomOf(limits, now)
   const views = useHarnesses(engine)
   const harnesses = [...new Set(limits.map(harnessOf))]
   return harnesses.flatMap((harness) =>
@@ -302,9 +429,10 @@ function Accounts({
           all={limits}
           limits={each}
           emblem={emblemOf(views, each.harness, each.name)}
-          mostRoom={room.has(each.harness)}
+          mostRoom={room.has(each)}
           now={now}
           warn={warn}
+          spent={spent}
         />
       ))
   )
@@ -318,6 +446,7 @@ function Account({
   mostRoom,
   now,
   warn,
+  spent,
 }: {
   engine: Engine
   /** Every account's limits, for what fills a spent one's Slot. */
@@ -329,11 +458,12 @@ function Account({
   mostRoom: boolean
   now: number
   warn: number
+  spent: boolean
 }) {
   const out = limits.windows.length > 0 && fullestOf(limits, now) >= 100
   // Beside a spent account, what the modules say waits on it: Threads'
   // "Move all" (ADR 0078, decision 7).
-  const spent = useSlot("limits.account")
+  const fills = useSlot("limits.account")
   const pace = limits.windows
     .map((w) => paceWords(w, now))
     .find((words) => words !== undefined)
@@ -385,7 +515,8 @@ function Account({
         </p>
       )}
       {out &&
-        spent.map(({ id, Fill }) => (
+        spent &&
+        fills.map(({ id, Fill }) => (
           <Fill
             key={id}
             engine={engine}

@@ -499,32 +499,43 @@ test("what arc's Agent opens shows beside its Thread in this window, marked and 
   await expect(tabs).toHaveCount(2)
 })
 
-test("Usage opened from arc's Thread counts arc, by the switch under its header; This Mac's is this machine's; while arc is away its pill says so (ADR 0120, decision 5)", async () => {
-  test.setTimeout(180_000)
-  // arc has a Codex account with limits; this machine has none.
-  const { page, composer } = await onArc([TITLE], (on) => {
-    const cli = join(on.dir, "limits-codex")
-    writeFileSync(
-      cli,
-      `#!/usr/bin/env node
+/** A Codex CLI at `path` that answers only its account and limits, by
+ * its entry's `TEST_EMAIL` and `TEST_LIMIT_USED`. */
+function limitsCli(path: string): string {
+  writeFileSync(
+    path,
+    `#!/usr/bin/env node
 const lines = require("readline").createInterface({ input: process.stdin })
 lines.on("line", line => {
   const { id, method } = JSON.parse(line)
   if (id === undefined) return
   const result = method === "initialize" ? {} : method === "account/read" ? {
-    account: { type: "chatgpt", email: "arc@example.com", planType: "pro" }
+    account: { type: "chatgpt", email: process.env.TEST_EMAIL, planType: "pro" }
   } : {
-    rateLimits: { planType: "pro", primary: { usedPercent: 85, windowDurationMins: 10080, resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400 } }
+    rateLimits: { planType: "pro", primary: { usedPercent: Number(process.env.TEST_LIMIT_USED), windowDurationMins: 10080, resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400 } }
   }
   process.stdout.write(JSON.stringify({ id, result }) + "\\n")
 })
 `,
-      { mode: 0o755 }
-    )
+    { mode: 0o755 }
+  )
+  return path
+}
+
+/** A Codex entry of harnesses.toml on `cli`, signed in as `email` with
+ * `used` of its week spent; a second account of it by another `id`. */
+const codexEntry = (cli: string, email: string, used: number, id = "codex") =>
+  `\n[[harness]]\nid = "${id}"\n${id === "codex" ? "" : `name = "Shared"\ncommand = "acp"\n`}cli = { program = ${JSON.stringify(cli)}, variable = "CODEX_PATH" }\nenv = { TEST_EMAIL = "${email}", TEST_LIMIT_USED = "${used}" }\n`
+
+test("Usage opened from arc's Thread counts arc, by the switch under its header; This Mac's is this machine's; while arc is away its pill says so (ADR 0120, decision 5)", async () => {
+  test.setTimeout(180_000)
+  // arc has a Codex account with limits; this machine has none.
+  const { page, composer } = await onArc([TITLE], (on) => {
     const list = join(on.dir, "config/harnesses.toml")
+    const cli = limitsCli(join(on.dir, "limits-codex"))
     writeFileSync(
       list,
-      `${readFileSync(list, "utf8")}\n[[harness]]\nid = "codex"\ncli = { program = ${JSON.stringify(cli)}, variable = "CODEX_PATH" }\n`
+      readFileSync(list, "utf8") + codexEntry(cli, "arc@example.com", 85)
     )
   })
   arc!.banda("call", "harnesses.limits", "--params", '{"read":true}')
@@ -564,4 +575,71 @@ lines.on("line", line => {
   ).toBeVisible({ timeout: 60_000 })
   await expect(weekly).toHaveAttribute("aria-valuenow", "85")
   await shot(page, "usage-for-arc-away")
+})
+
+test("the bar's Limits count arc's accounts too: listed under arc, dim as of when arc is away, and an account on both machines once (ADR 0120, decision 5)", async () => {
+  test.setTimeout(180_000)
+  // arc has a Codex account, 85% of its week spent; this machine none.
+  const { page } = await onArc([TITLE], (on) => {
+    const list = join(on.dir, "config/harnesses.toml")
+    const cli = limitsCli(join(on.dir, "limits-codex"))
+    writeFileSync(
+      list,
+      readFileSync(list, "utf8") + codexEntry(cli, "arc@example.com", 85)
+    )
+  })
+  arc!.banda("call", "harnesses.limits", "--params", '{"read":true}')
+  const widget = page.getByRole("button", { name: /^Usage limits:/ })
+  await expect(widget).toHaveAttribute("title", "Codex: Weekly 85%")
+  await widget.click()
+  const popup = page.getByRole("dialog", { name: "Usage limits" })
+  const arcs = popup.getByRole("region", { name: "arc", exact: true })
+  await expect(
+    arcs.getByRole("meter", { name: "Weekly used" })
+  ).toHaveAttribute("aria-valuenow", "85")
+  await page.keyboard.press("Escape")
+
+  // Another account here, with more room: the bar says the best of the
+  // Harness over both machines, this machine's listed first.
+  const mine = join(window!.dir, "config/harnesses.toml")
+  const before = readFileSync(mine, "utf8")
+  const cli = limitsCli(join(window!.dir, "limits-codex"))
+  writeFileSync(mine, before + codexEntry(cli, "mac@example.com", 40))
+  window!.banda("call", "harnesses.limits", "--params", '{"read":true}')
+  await expect(widget).toHaveAttribute(
+    "title",
+    "Codex: Weekly 40% · Weekly 85%"
+  )
+  await widget.click()
+  const meters = popup.getByRole("meter", { name: "Weekly used" })
+  await expect(meters).toHaveCount(2)
+  await expect(meters.first()).toHaveAttribute("aria-valuenow", "40")
+  await expect(popup.getByText("most room")).toHaveCount(1)
+  await shot(page, "limits-with-arc")
+
+  // arc away: what it said stands, dim, as of when it was last heard.
+  arc!.blackhole(true)
+  await expect(arcs.getByText(/^as of /)).toBeVisible({ timeout: 60_000 })
+  await expect(
+    arcs.getByRole("meter", { name: "Weekly used" })
+  ).toHaveAttribute("aria-valuenow", "85")
+  await shot(page, "limits-with-arc-away")
+  await page.keyboard.press("Escape")
+
+  // The account arc has, signed in here too: one account, counted once,
+  // with this machine.
+  writeFileSync(
+    mine,
+    before +
+      codexEntry(cli, "mac@example.com", 40) +
+      codexEntry(cli, "arc@example.com", 85, "codex-shared")
+  )
+  window!.banda("call", "harnesses.limits", "--params", '{"read":true}')
+  await expect(widget).toHaveAttribute(
+    "title",
+    "Codex: Weekly 40% · Shared Weekly 85%"
+  )
+  await widget.click()
+  await expect(meters).toHaveCount(2)
+  await expect(arcs).toHaveCount(0)
 })
