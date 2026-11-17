@@ -117,9 +117,10 @@ function sleep(ms: number) {
   vi.setSystemTime(Date.now() + ms)
 }
 
-/** Whether Banda restarted into the version ready. */
+/** Whether Banda restarted into the version ready, a moment after it
+ * said so. */
 async function restarted(): Promise<boolean> {
-  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(200)
   return updater.quitAndInstall.mock.calls.length > 0
 }
 
@@ -218,6 +219,9 @@ it("restarts at once into a version the last look offered, and stops no engine",
   const leaving = vi.fn()
   const update = ready(leaving)
   update.restart()
+  // It says so before the install holds main.
+  expect(update.current()).toMatchObject({ doing: "restarting" })
+  expect(updater.quitAndInstall).not.toHaveBeenCalled()
   expect(await restarted()).toBe(true)
   expect(leaving).toHaveBeenCalledTimes(1)
   expect(engine.check).not.toHaveBeenCalled()
@@ -228,12 +232,29 @@ it("after a sleep, asks the engine to look, and restarts once the look offers th
   const update = ready()
   sleep(3 * HOUR)
   update.restart()
+  expect(update.current()).toMatchObject({ doing: "installing" })
   expect(await restarted()).toBe(false)
   expect(engine.check).toHaveBeenCalledTimes(1)
   // The engine's answer is read: the release it found newest.
   expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
   events.emit("update-available", offer("0.1.0-dev.421"))
   expect(await restarted()).toBe(true)
+})
+
+it("after a sleep, a Restart whose engine made no new look waits for the Person again", async () => {
+  const state = looked()
+  engine.check.mockResolvedValue(state)
+  const update = updates(mine, engine, vi.fn())
+  update.heard(state)
+  events.emit("update-available", offer("0.1.0-dev.421"))
+  events.emit("update-downloaded", offer("0.1.0-dev.421"))
+  sleep(3 * HOUR)
+  update.restart()
+  expect(update.current()).toMatchObject({ doing: "installing" })
+  expect(await restarted()).toBe(false)
+  // Its row has its Update again, not a word that never ends.
+  expect(update.current()).toMatchObject({ state: "ready" })
+  expect(update.current()).not.toHaveProperty("doing")
 })
 
 it("after a sleep, drops a version withdrawn since instead of restarting into it", async () => {
@@ -344,7 +365,7 @@ it("takes nothing where the engine takes nothing, and says why when asked", asyn
   })
 })
 
-it("ignores looks while it restarts, so nothing deletes the version it installs", () => {
+it("ignores looks while it restarts, so nothing deletes the version it installs", async () => {
   const update = ready()
   updater.quitAndInstall.mockImplementationOnce(() => {
     // The engine's next look comes as the app quits.
@@ -354,6 +375,7 @@ it("ignores looks while it restarts, so nothing deletes the version it installs"
     events.emit("update-not-available", { version: "0.1.0-dev.420" })
   })
   update.restart()
+  expect(await restarted()).toBe(true)
   expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
   expect(updater.downloadUpdate).toHaveBeenCalledTimes(1)
   expect(update.current()).toMatchObject({
@@ -432,7 +454,7 @@ it("reads again a minute later while the release lacks this system's files, as W
   expect(update.current()).toMatchObject({ state: "none" })
 })
 
-it("on Windows, installs as an AppImage does, and the installer starts the new Banda (ADR 0090, step 6)", async () => {
+it("on Windows, installs as an AppImage does, and the installer shows its window and starts the new Banda (ADR 0090, step 6)", async () => {
   vi.stubEnv("APPIMAGE", "")
   const platform = Object.getOwnPropertyDescriptor(process, "platform")!
   Object.defineProperty(process, "platform", { value: "win32" })
@@ -443,7 +465,8 @@ it("on Windows, installs as an AppImage does, and the installer starts the new B
     expect(quitInstalls()).toBe(true)
     update.restart()
     expect(await restarted()).toBe(true)
-    expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true)
+    // Not silent: Banda has no window while the installer works.
+    expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true)
     expect(leaving).toHaveBeenCalled()
   } finally {
     Object.defineProperty(process, "platform", platform)

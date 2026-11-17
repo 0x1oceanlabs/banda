@@ -64,4 +64,10 @@ updated?: Updated,
 /**
  * What `machine.toml`'s `updates` says: `when-idle`, `ask` or `off`.
  */
-takes?: TakeUpdates, };
+takes?: TakeUpdates, 
+/**
+ * This engine stops and starts with Banda's app, and its Agents with
+ * it: the window's child, and Windows' (`restart::Moves::Never`). An
+ * update of the app there asks first while Agents work.
+ */
+with_app?: boolean, };

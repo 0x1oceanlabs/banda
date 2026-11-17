@@ -82,7 +82,15 @@ PR.
   app update file, naming only this app's files, and the notes since the
   running version (`releases.ts`). It downloads at once and installs on
   Restart, or at the quit while a look at most an hour old still offered
-  it. "Check now" is the engine's `updates.check`. Where the engine
+  it. From the Person's Update to the new window, its machine's row
+  says what it does, with no button: Installing, then Restarting (the
+  `Update`'s `doing`; the row says so from the click, before main
+  answers). Windows' installer shows its own window while it works, as
+  Banda has none then. Where the engine stops with the app, as the
+  window's child does and Windows' (`updates.state`'s `with_app`), the
+  app's restart is what stops the Agents: Update asks first while they
+  work, and "Update when they finish" restarts once they are done.
+  "Check now" is the engine's `updates.check`. Where the engine
   takes nothing (`off`), the app takes nothing. The restart stops no
   engine: the engine and its Agents go on, as when the window closes,
   and a window's packed copy put in place beside the running engine

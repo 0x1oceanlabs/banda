@@ -163,6 +163,55 @@ describe("this machine's row holds this window's app", () => {
   })
 })
 
+describe("since the Person said Update, the row says what it does", () => {
+  const here = devbox({ host: undefined, name: "M1PRO", icon: "laptop" })
+  const copy = said({ ready: "0.1.0-dev.642", waits })
+
+  it("Installing, then Restarting, with no button", () => {
+    for (const [doing, word] of [
+      ["installing", "Installing"],
+      ["restarting", "Restarting"],
+    ] as const) {
+      const row = rowOf({ ...here, said: copy }, now, { ...ready, doing })
+      expect(row).toEqual({
+        kind: "updating",
+        from: "dev.640",
+        to: "dev.642",
+        status: word,
+        why: "Banda restarts by itself in a moment.",
+      })
+    }
+  })
+
+  it("the bar turns, and the title names the version", () => {
+    const row = rowOf({ ...here, said: copy }, now, {
+      ...ready,
+      doing: "installing",
+    })
+    const rows = [{ machine: here, row }]
+    expect(worstOf(ready, rows)).toEqual({
+      kind: "updating",
+      version: "dev.642",
+    })
+    expect(titleOf(rows, undefined).title).toBe("Updating to dev.642")
+  })
+
+  it("an engine that stops with the app is asked nothing: the app's restart takes it", () => {
+    const restart = { ...waits, restart: "it restarts with Banda" }
+    const there = said({
+      ready: "0.1.0-dev.642",
+      waits: restart,
+      with_app: true,
+    })
+    expect(rowOf({ ...here, said: there }, now, ready)).toMatchObject({
+      kind: "ready",
+      act: "update",
+      app: true,
+      engine: false,
+    })
+  })
+})
+
 describe("what a copy in place waits for", () => {
   it("counts the Agents, the terminals and the keys", () => {
     expect(waitWords({ ...waits, turns: 1 }, now)).toBe(

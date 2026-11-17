@@ -59,7 +59,8 @@ export function UpdatesRow({
   const [problem, setProblem] = useState<string>()
   const restart = useUpdateThere(
     () => engine,
-    (_machine, why) => setProblem(why)
+    (_machine, acted) =>
+      setProblem(acted && "trouble" in acted ? acted.trouble : undefined)
   )
   const [busy, setBusy] = useState(false)
   const set = (value: TakeUpdates) => {

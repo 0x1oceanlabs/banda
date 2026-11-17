@@ -468,6 +468,8 @@ it("a quit meanwhile goes as asked: brew installs it, and the next start says so
   events.emit("update-available", { version: "0.1.0-dev.164" })
   await answered()
   updates.restart()
+  // The window stays while brew installs, and says so.
+  expect(updates.current()).toMatchObject({ doing: "installing" })
   quits = true
   installed(true)
   await answered()

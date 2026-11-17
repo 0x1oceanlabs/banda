@@ -35,6 +35,8 @@ export type RowKind =
   | "taking"
   /** A new version is in place, and one Update takes it. */
   | "ready"
+  /** The Person said Update: it installs, then restarts. */
+  | "updating"
   /** A new version is in place, and the machine takes it by itself once
    * nothing runs. */
   | "waits"
@@ -80,7 +82,7 @@ export type Row = {
  * machine's. */
 export function rowOf(machine: MachineUpdates, now: number, app?: Update): Row {
   const engine = engineRow(machine, now)
-  return app ? withApp(engine, app) : engine
+  return app ? withApp(engine, app, machine.said?.with_app) : engine
 }
 
 function engineRow(machine: MachineUpdates, now: number): Row {
@@ -141,9 +143,38 @@ function engineRow(machine: MachineUpdates, now: number): Row {
   return { kind: "ok", from, status: "Up to date" }
 }
 
+/** The words of a row that updates since the Person said so. */
+const DOING = { installing: "Installing", restarting: "Restarting" } as const
+
+/** `row` since the Person said Update: the one word says what it does,
+ * and it has no button until it is done or failed. */
+export function updatingRow(
+  row: Row,
+  doing: keyof typeof DOING = "installing"
+): Row {
+  return {
+    kind: "updating",
+    from: row.from,
+    to: row.to,
+    status: DOING[doing],
+    why: "Banda restarts by itself in a moment.",
+  }
+}
+
+/** `row` once the Person said to update when the Agents there finish. */
+export function heldRow(row: Row, turns: number): Row {
+  return {
+    kind: "waits",
+    from: row.from,
+    to: row.to,
+    status: waitingWord({ turns, terminals: 0, person: false }, 0),
+    why: waitWords({ turns, terminals: 0, person: false }, 0),
+  }
+}
+
 /** This machine's row with this window's app in it: one Update takes
  * both, the app at once and the engine once nothing runs. */
-function withApp(engine: Row, app: Update): Row {
+function withApp(engine: Row, app: Update, stops = false): Row {
   const have = shortOf(app.have)
   switch (app.state) {
     case "failed":
@@ -179,18 +210,20 @@ function withApp(engine: Row, app: Update): Row {
             size: app.size ? sizeOf(app.down ?? 0, app.size) : undefined,
             status: app.size ? sizeOf(app.down ?? 0, app.size) : "Updating",
           }
-    case "ready":
-      return engine.kind === "failed" || engine.kind === "taking"
-        ? engine
-        : {
-            kind: "ready",
-            from: have,
-            to: shortOf(app.version),
-            act: "update",
-            app: true,
-            // The engine goes too where it is ready and may move now.
-            engine: engine.kind === "ready" || engine.kind === "waits",
-          }
+    case "ready": {
+      if (engine.kind === "failed" || engine.kind === "taking") return engine
+      const ready: Row = {
+        kind: "ready",
+        from: have,
+        to: shortOf(app.version),
+        act: "update",
+        app: true,
+        // The engine goes too where it is ready and moves by itself: one
+        // that restarts with the app is asked nothing.
+        engine: (engine.kind === "ready" || engine.kind === "waits") && !stops,
+      }
+      return app.doing ? updatingRow(ready, app.doing) : ready
+    }
     case "out":
       return {
         kind: "ready",
@@ -293,6 +326,8 @@ export type Worst =
   | { kind: "updated"; version: string }
   | { kind: "ready"; version?: string }
   | { kind: "downloading"; share: number; version?: string }
+  /** The Person said Update, and it installs or restarts. */
+  | { kind: "updating"; version?: string }
   | { kind: "looking" }
   | { kind: "quiet" }
 
@@ -306,6 +341,8 @@ export function worstOf(
   if (app?.state === "failed") return { kind: "failed", name: "this window" }
   if (app?.state === "updated")
     return { kind: "updated", version: shortOf(app.have) }
+  const updating = rows.find(({ row }) => row.kind === "updating")
+  if (updating) return { kind: "updating", version: updating.row.to }
   const ready = rows.find(
     ({ row }) => row.kind === "ready" || row.kind === "waits"
   )
@@ -341,8 +378,10 @@ export function titleOf(
 ): { title: string; say?: string } {
   const failed = rows.find(({ row }) => row.kind === "failed")
   if (failed) return { title: `Couldn't update ${failed.machine.name}` }
+  const updating = rows.find(({ row }) => row.kind === "updating")
+  if (updating?.row.to) return { title: `Updating to ${updating.row.to}` }
   const taking = rows.find(({ row }) => row.kind === "taking")
-  if (taking?.row.to) return { title: `Updating to ${taking.row.to}` }
+  if (taking?.row.to) return { title: `Downloading ${taking.row.to}` }
   const ready = rows.find(
     ({ row }) => row.kind === "ready" || row.kind === "waits"
   )

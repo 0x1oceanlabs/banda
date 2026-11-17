@@ -115,6 +115,11 @@ pub struct UpdateState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub takes: Option<TakeUpdates>,
+    /// This engine stops and starts with Banda's app, and its Agents with
+    /// it: the window's child, and Windows' (`restart::Moves::Never`). An
+    /// update of the app there asks first while Agents work.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub with_app: bool,
 }
 
 /// An engine that moved onto the version it runs.
@@ -286,6 +291,8 @@ impl Updates {
         hands: watch::Receiver<InHand>,
     ) -> Updates {
         let held = Arc::into_inner(self.0).expect("set before it is shared");
+        let with_app = matches!(restart.moves(), restart::Moves::Never(_));
+        held.state.send_modify(|state| state.with_app = with_app);
         Updates(Arc::new(Held {
             restarting: Some(Restarting {
                 restart,
@@ -1360,6 +1367,7 @@ mod tests {
         tokio::spawn(machine.updates.clone().drive());
         let waits = waits_until(&mut state, Option::is_some).await.unwrap();
         assert_eq!(waits.restart.as_deref(), Some("it restarts with Banda"));
+        assert!(machine.updates.watch().borrow().with_app);
         let refused = machine.updates.restart_now(true).unwrap_err();
         assert_eq!(refused.message, "it restarts with Banda");
     }
