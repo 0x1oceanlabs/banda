@@ -165,18 +165,39 @@ export function someOut(limits: readonly Limits[], now: number): boolean {
   )
 }
 
-/** The entry IDs of the account with the most room of each Harness that
- * has two or more and room left: the popover's "most room". */
+/** The account with the most room of each Harness that has two or more
+ * and room left: the popover's "most room". The accounts themselves, as
+ * two machines may give two entries one ID. */
 export function mostRoomOf(
   limits: readonly Limits[],
   now: number
-): Set<string> {
+): Set<Limits> {
   return new Set(
     byHarness(limits)
       .filter((group) => group.length > 1)
       .flatMap((group) => roomsOf(group, now))
       .filter((room) => room.share < 100)
-      .map((room) => room.best.harness)
+      .map((room) => room.best)
+  )
+}
+
+/**
+ * Each machine's accounts, an account once (ADR 0120, decision 5): one
+ * signed in on two machines, the same Harness and the same address, is
+ * one account with one set of Limits, and stands with the first machine
+ * that has it, as `also` leaves one entry of an account on one machine.
+ * An account whose Harness says no address is its machine's own.
+ */
+export function onceOf(machines: readonly (readonly Limits[])[]): Limits[][] {
+  const seen = new Set<string>()
+  return machines.map((limits) =>
+    limits.filter((each) => {
+      if (each.email === undefined) return true
+      const account = `${harnessOf(each)} ${each.email.toLowerCase()}`
+      if (seen.has(account)) return false
+      seen.add(account)
+      return true
+    })
   )
 }
 

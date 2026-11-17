@@ -5,6 +5,7 @@ import {
   backWords,
   elapsedOf,
   mostRoomOf,
+  onceOf,
   readAtOf,
   roomsOf,
   shareOf,
@@ -130,9 +131,28 @@ test("an account out while another of its Harness has room is marked", () => {
 })
 
 test("most room is said only among two or more accounts with room", () => {
-  expect(mostRoomOf([personal, work, codex], now)).toEqual(new Set(["claude"]))
+  expect(mostRoomOf([personal, work, codex], now)).toEqual(new Set([personal]))
   expect(mostRoomOf([work, { ...work, harness: "w2" }], now).size).toBe(0)
   expect(mostRoomOf([personal, codex], now).size).toBe(0)
+})
+
+test("an account on two machines counts once, with the first that has it", () => {
+  const mine = { ...personal, email: "p@example.com" }
+  const theirs = { ...personal, harness: "claude-arc", email: "P@example.com" }
+  const other = { ...work, email: "w@example.com" }
+  const unnamed = { ...codex }
+  expect(
+    onceOf([
+      [mine, unnamed],
+      [theirs, other, unnamed],
+    ])
+  ).toEqual([
+    [mine, unnamed],
+    [other, unnamed],
+  ])
+  // The same address with another Harness is another account.
+  const codexToo = { ...codex, email: "p@example.com" }
+  expect(onceOf([[mine], [codexToo]])).toEqual([[mine], [codexToo]])
 })
 
 test("the hover line names each account under its Harness", () => {

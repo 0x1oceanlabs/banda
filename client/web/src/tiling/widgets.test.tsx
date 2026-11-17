@@ -54,7 +54,7 @@ function drawn(state: Workspaces, projects: ProjectSummary[] = []) {
   const store = new Store(state)
   const markup = renderToStaticMarkup(
     <TilingContext value={store}>
-      <Widget engine={{} as Engine} projects={projects} />
+      <Widget engine={{} as Engine} projects={projects} machines={[]} />
     </TilingContext>
   )
   return {

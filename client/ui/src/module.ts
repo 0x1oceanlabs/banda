@@ -10,6 +10,7 @@ import type { Args, HereStore, Machine, Queue, Readable } from "@banda/core"
 import type { Key } from "./lib/keys"
 import { ZOOM_KEYS, zoomId } from "./lib/zoom"
 import type { Notify } from "@banda/contract/look"
+import type { Named } from "@banda/contract/machines"
 import type { Listed, Lists, PaneKind, PaneState, Watch } from "./pane"
 import type { SoundSettings } from "./sound/settings"
 import type { Section } from "./settings"
@@ -507,6 +508,25 @@ export type Source = {
 export type WidgetProps = {
   engine: Engine
   projects: readonly ProjectSummary[]
+  /** The other machines the Window shows, live or away, each with its
+   * session, as a Pane of one of its Projects has it (ADR 0106, decision
+   * 1; ADR 0120, decision 5). */
+  machines: readonly WidgetMachine[]
+}
+
+/** Another machine, as a widget is given it. */
+export type WidgetMachine = {
+  /** Its key in `hosts.toml`. */
+  name: string
+  /** Its name and icon (ADR 0095). */
+  named: Named
+  /** Its session: what the widget asks of it goes to its engine. */
+  engine: Engine
+  /** The Window does not reach it now: what it said stands as it was. */
+  away: boolean
+  /** When the Window last heard it, in ms since the epoch, while it is
+   * away: what it said is as of then. */
+  asOf?: number
 }
 
 /**

@@ -1,6 +1,8 @@
 import type { Problem } from "@banda/contract/look"
-import type { WidgetProps } from "@banda/ui/module"
-import { type ReactNode, useMemo } from "react"
+import { sameData, type Shown } from "@banda/core"
+import { HostsContext, useHostsBy } from "@banda/core/react"
+import type { WidgetMachine, WidgetProps } from "@banda/ui/module"
+import { type ReactNode, useContext, useMemo } from "react"
 import { useLookBar, useLookSettings } from "../../look"
 import { runs, widgets } from "../../registry"
 import type { Layout } from "./arrange"
@@ -9,17 +11,34 @@ import { type Known, PARTS, type Part, placed } from "./placed"
 /** A widget the bar draws, by its id. */
 export type Drawn = { id: string; node: ReactNode }
 
+/** The other machines the Window shows, live or away, as a widget is
+ * given them but for their sessions. */
+const shownOf = (hosts: readonly Shown[]): Omit<WidgetMachine, "engine">[] =>
+  hosts.flatMap(({ name, named, state: { state }, asOf }) =>
+    state === "live" || state === "away"
+      ? [
+          {
+            name,
+            named,
+            away: state === "away",
+            ...(state === "away" && asOf !== undefined && { asOf }),
+          },
+        ]
+      : []
+  )
+
 /**
  * The widgets of each part of the bar, drawn, as the look's `[bar]` lists
  * them, and a Problem for each id the window has no widget for. A
  * module's widget shows only while the engine runs its module (ADR 0022,
  * decision 5); the window's own, the counts and the Tiling's, always.
- * Each is given the same, and reads where the Person is from Here. With
+ * Each is given the same, the other machines with their sessions too
+ * (ADR 0120, decision 5), and reads where the Person is from Here. With
  * them, `[bar]`'s lists, for a widget moved with Alt to write (ADR 0064).
  */
 export function useWidgets(
   running: readonly string[],
-  { engine, projects }: WidgetProps
+  { engine, projects }: Omit<WidgetProps, "machines">
 ): { parts: Record<Part, Drawn[]>; listed: Layout } {
   const bar = useLookBar()
   const settings = useLookSettings()["look.toml"]
@@ -31,11 +50,22 @@ export function useWidgets(
     }
     return placed(bar, known, settings)
   }, [bar, running, settings])
+  const hosts = useContext(HostsContext)
+  const shown = useHostsBy(shownOf, sameData)
+  const machines = useMemo(
+    () => shown.map((one) => ({ ...one, engine: hosts.engine(one.name) })),
+    [shown, hosts]
+  )
   const drawn = {} as Record<Part, Drawn[]>
   for (const part of PARTS) {
     drawn[part] = parts[part].map((id) => {
       const { Widget } = widgets.get(id)!.widget
-      return { id, node: <Widget engine={engine} projects={projects} /> }
+      return {
+        id,
+        node: (
+          <Widget engine={engine} projects={projects} machines={machines} />
+        ),
+      }
     })
   }
   const listed = useMemo(

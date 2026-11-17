@@ -22,7 +22,7 @@ function drawn(flow: Flow, key?: Key): string {
           byScope: new Map(),
         }}
       >
-        <Widget engine={{} as Engine} projects={[]} />
+        <Widget engine={{} as Engine} projects={[]} machines={[]} />
       </KeysInForce>
     </FlowContext>
   )

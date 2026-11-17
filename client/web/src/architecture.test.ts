@@ -861,12 +861,14 @@ test("the Tiling's widgets make no context of their own and name no change of th
 
 /**
  * Every widget on the Bar is given the same, the window's own as a
- * module's (ADR 0087, B4f): the engine and the Projects. Where the Person
+ * module's (ADR 0087, B4f): the engine and the Projects, and the other
+ * machines with their sessions, as a Pane has its machine's (ADR 0120,
+ * decision 5). Where the Person
  * is it reads from Here, and it acts by an action's id (`useRun`), so no
  * widget is handed the Window's run or its state as props, and none takes
  * a type of props of the window's own beside them.
  */
-test("every widget on the Bar is given the engine and the Projects, and no more", () => {
+test("every widget on the Bar is given the engine, the Projects and the other machines, and no more", () => {
   const props = readFileSync(join(app, "ui/src/module.ts"), "utf8").match(
     /export type WidgetProps = \{\n([\s\S]*?)\n\}/
   )
@@ -874,7 +876,7 @@ test("every widget on the Bar is given the engine and the Projects, and no more"
   const fields = [...props![1].matchAll(/^ {2}(\w+)\??:/gm)].map(
     (found) => found[1]
   )
-  expect(fields).toEqual(["engine", "projects"])
+  expect(fields).toEqual(["engine", "projects", "machines"])
   const naming = pageCode
     .flatMap((folder) => sources(folder, { tests: false }))
     .filter((file) => /\bOwnProps\b/.test(readFileSync(file, "utf8")))

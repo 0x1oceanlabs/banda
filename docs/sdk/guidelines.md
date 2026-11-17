@@ -121,8 +121,9 @@ What Apps give never talk to each other.
   and #861. *Check:* the architecture test finds no global of a Thread's
   details card in `@banda/ui` (B4d made it Threads' action
   `agents.thread.details`), counts the Apps that write the title field's
-  store, and holds every widget's props to the engine and the Projects,
-  the window's own as a module's (B4f); the rest planned.
+  store, and holds every widget's props to the engine, the Projects and
+  the other machines (ADR 0120, decision 5), the window's own as a
+  module's (B4f); the rest planned.
 - **borders.7 Work in one Project at a time.** App code is walled to the
   Project it runs for; only the platform listens across Projects (ADR
   0082 d6). Anything that spans Projects reads `item@1` and `call@1`.
@@ -173,7 +174,7 @@ What Apps give never talk to each other.
   only if it has a form that stays in a narrow Bar and a phone's header.
   Where it stands is the Person's `look.toml [bar]`, never yours (ADR
   0064). *Check:* review; the architecture test holds its props to
-  `{engine, projects}` and lists the widgets marked `compact`.
+  `{engine, projects, machines}` and lists the widgets marked `compact`.
 - **give.4 To be listed or to call the Person, publish `item@1` or
   `call@1`,** in the same transaction as the change behind it (ADR 0082
   d9). Don't ask for a place in the Sidebar: the sidebar list shows
