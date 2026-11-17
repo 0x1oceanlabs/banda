@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events"
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { UpdateState } from "@banda/contract/updates"
@@ -11,6 +11,7 @@ const updater = vi.hoisted(() => ({
   setFeedURL: vi.fn(),
   quitAndInstall: vi.fn(),
   autoInstallOnAppQuit: false,
+  on: (() => {}) as (event: string, listener: () => void) => void,
 }))
 const electron = vi.hoisted(() => ({
   isPackaged: true,
@@ -23,6 +24,36 @@ vi.mock("electron-updater", () => ({
   Provider: class {},
 }))
 vi.mock("electron", () => ({ app: electron }))
+/** The AppImage's installer, in place of the real one (appimage.test.ts
+ * holds that): the file it would swap is none of the machine's. It hears
+ * electron-updater as the real one does. */
+const installer = vi.hoisted(() => ({
+  relaunch: vi.fn(),
+  cannot: (): string | undefined => undefined,
+  /** What the last quit was told: whether it installs. */
+  quit: undefined as boolean | undefined,
+}))
+vi.mock("./appimage", () => ({
+  appImageInstaller: () => {
+    let taking: { done: (down: boolean) => void } | undefined
+    updater.on("update-downloaded", () => taking?.done(true))
+    return {
+      name: "Banda",
+      downloads: true,
+      unseen: false,
+      cannot: () => installer.cannot(),
+      take: (_info: unknown, on: { done: (down: boolean) => void }) => {
+        taking = on
+        void updater.downloadUpdate()
+      },
+      install: async () => true,
+      relaunch: installer.relaunch,
+      quitting: (installs: boolean) => {
+        installer.quit = installs
+      },
+    }
+  },
+}))
 // A restart starts the new AppImage after this one: not in a test.
 vi.mock("node:child_process", () => ({
   spawn: () => ({ unref() {} }),
@@ -59,6 +90,8 @@ const looked = (newest = "0.1.0-dev.421", at = Date.now()): UpdateState => ({
 })
 
 beforeEach(() => {
+  installer.quit = undefined
+  installer.cannot = () => undefined
   vi.useFakeTimers()
   vi.spyOn(console, "warn").mockImplementation(() => {})
   events = new EventEmitter()
@@ -70,6 +103,7 @@ beforeEach(() => {
     updater.downloadUpdate,
     updater.setFeedURL,
     updater.quitAndInstall,
+    installer.relaunch,
   ])
     fn.mockClear()
   folder = mkdtempSync(join(tmpdir(), "banda-update-"))
@@ -121,10 +155,13 @@ function ready(leaving = vi.fn()) {
   return update
 }
 
-/** Whether the quit now would install the version ready. */
+/** Whether the quit now would install the version ready, as its
+ * installer is told. */
 function quitInstalls(): boolean {
   quits.emit("will-quit")
-  return updater.autoInstallOnAppQuit
+  return process.platform === "win32"
+    ? updater.autoInstallOnAppQuit
+    : installer.quit === true
 }
 
 /** The machine sleeps for `ms`: the clock moves on, the timers do not. */
@@ -136,7 +173,11 @@ function sleep(ms: number) {
  * said so. */
 async function restarted(): Promise<boolean> {
   await vi.advanceTimersByTimeAsync(200)
-  return updater.quitAndInstall.mock.calls.length > 0
+  return (
+    installer.relaunch.mock.calls.length +
+      updater.quitAndInstall.mock.calls.length >
+    0
+  )
 }
 
 it("reads the release its engine found newest, once for each look the engine made", () => {
@@ -234,10 +275,8 @@ it("restarts at once into a version the last look offered, and stops no engine",
   const update = ready(leaving)
   want(update)
   expect(update.current()).toMatchObject({ doing: "installing" })
-  // It says it restarts before the install holds main.
   await vi.advanceTimersByTimeAsync(0)
   expect(update.current()).toMatchObject({ doing: "restarting" })
-  expect(updater.quitAndInstall).not.toHaveBeenCalled()
   expect(await restarted()).toBe(true)
   expect(leaving).toHaveBeenCalledTimes(1)
   expect(engine.check).not.toHaveBeenCalled()
@@ -442,7 +481,7 @@ it("takes nothing where the engine takes nothing", () => {
 
 it("ignores looks while it restarts, so nothing deletes the version it installs", async () => {
   const update = ready()
-  updater.quitAndInstall.mockImplementationOnce(() => {
+  installer.relaunch.mockImplementationOnce(() => {
     // The engine's next look comes as the app quits.
     update.heard(looked("0.1.0-dev.425"))
     events.emit("update-available", offer("0.1.0-dev.425"))
@@ -456,28 +495,21 @@ it("ignores looks while it restarts, so nothing deletes the version it installs"
     state: "ready",
     version: "0.1.0-dev.421",
   })
-  expect(updater.quitAndInstall).toHaveBeenCalledTimes(1)
+  expect(installer.relaunch).toHaveBeenCalledTimes(1)
 })
 
-// Root writes anywhere, and Windows has no such modes.
-it.skipIf(process.getuid?.() === 0 || process.platform === "win32")(
-  "downloads nothing into an AppImage it cannot replace",
-  () => {
-    chmodSync(folder, 0o555)
-    try {
-      const update = updates(mine, engine)
-      update.heard(looked())
-      events.emit("update-available", offer("0.1.0-dev.421"))
-      expect(updater.downloadUpdate).not.toHaveBeenCalled()
-      expect(update.current()).toMatchObject({
-        state: "failed",
-        reason: `Banda cannot write ${folder}, so 0.1.0-dev.421 cannot install`,
-      })
-    } finally {
-      chmodSync(folder, 0o755)
-    }
-  }
-)
+it("downloads nothing its installer cannot take, and says why", () => {
+  installer.cannot = () =>
+    "Banda cannot write /opt, so 0.1.0-dev.421 cannot install"
+  const update = updates(mine, engine)
+  update.heard(looked())
+  events.emit("update-available", offer("0.1.0-dev.421"))
+  expect(updater.downloadUpdate).not.toHaveBeenCalled()
+  expect(update.current()).toMatchObject({
+    state: "failed",
+    reason: "Banda cannot write /opt, so 0.1.0-dev.421 cannot install",
+  })
+})
 
 it("installs nothing at the quit at or below the version the launcher's entry starts", () => {
   ready()
