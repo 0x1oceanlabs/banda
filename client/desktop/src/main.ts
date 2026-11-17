@@ -21,9 +21,10 @@
  * what the system says of itself for the theme (os-window/system.ts), and
  * opens its windows (os-window/windows.ts), made of what the look says
  * (os-window/material.ts), a Pane's own over them (os-window/popped.ts).
- * Whether it quits, its icon in the Dock and what the app is asked from
- * outside its windows are parts too (os-window/quitting.ts, dock.ts,
- * asked.ts).
+ * Whether it quits, its icon in the Dock, what the app is asked from
+ * outside its windows, and its menus there with the door `banda menu`
+ * knocks at are parts too (os-window/quitting.ts, dock.ts, asked.ts,
+ * menus.ts).
  * It reaches the engines of the machines in `hosts.toml` over ssh, and
  * hands the page their addresses too; it adds, takes out, tests and stops
  * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
@@ -31,13 +32,12 @@
 import { existsSync } from "node:fs"
 import { userInfo } from "node:os"
 import { join, resolve } from "node:path"
-import { app, Menu, nativeTheme, type WebContents } from "electron"
+import { app, nativeTheme, type WebContents } from "electron"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import { Engine, none, serve, tellPage, text } from "@banda/desktop-kit"
-import { actsAnswers, runOwn } from "./acts"
+import { actsAnswers } from "./acts"
 import { BRIDGE } from "./bridge"
-import { openDoor } from "./door"
 import { engineLayer, OwnEngine, Stop } from "./engine"
 import { windowKey } from "./key"
 import { loginPath } from "./login"
@@ -53,8 +53,7 @@ import {
 } from "./channel"
 import { listApp, listedImage, listShortcut } from "./entry"
 import { hasMenuBar } from "./menubar"
-import { Status, statusLayer } from "./status"
-import { menuBar } from "./tray"
+import { statusLayer } from "./status"
 import { forwardAnswer, reaching, signedHello } from "./forward"
 import { Hosts, terminalArgs } from "./hosts"
 import { problemsAnswers, startLog, watchProblems } from "./problems"
@@ -70,6 +69,7 @@ import { Popped, poppedAnswers } from "./os-window/popped"
 import { Windows } from "./os-window/windows"
 import { askedLayer } from "./os-window/asked"
 import { Dock, thisDock } from "./os-window/dock"
+import { menuAnswers, menusLayer, thisMenus } from "./os-window/menus"
 import { quitAnswer, Quitting, thisApp } from "./os-window/quitting"
 import { appScheme, DEV_PAGE, fromPage, pageLayer } from "./os-window/page"
 import { systemLayer, thisSystem } from "./os-window/system"
@@ -208,6 +208,8 @@ const runtime = ManagedRuntime.make(
     (services) => Popped.layer.pipe(Layer.provideMerge(services)),
     // What the app is asked from outside its windows (os-window/asked.ts).
     (services) => askedLayer(thisApp()).pipe(Layer.provideMerge(services)),
+    // Its menus outside the page, and `banda menu`'s door (os-window/menus.ts).
+    (services) => menusLayer(thisMenus()).pipe(Layer.provideMerge(services)),
     // Over them all, what answers `app://`: the page, and the hosts beside
     // it, the modules' too (os-window/page.ts).
     (services) =>
@@ -404,9 +406,7 @@ async function ready(): Promise<void> {
     files: filesAnswers,
     edit: clipboardAnswers,
     folder: pickAnswers,
-    menu: {
-      open: [text, ([route]) => Effect.sync(() => openMenu(route))],
-    },
+    menu: menuAnswers,
     // Quit Banda (ADR 0086, decision 3): the page asked first when Agents
     // are working.
     quit: quitAnswer,
@@ -433,95 +433,15 @@ async function ready(): Promise<void> {
   popped = runtime.runSync(Popped.use(Effect.succeed))
   quitting = runtime.runSync(Quitting.use(Effect.succeed))
   dock = runtime.runSync(Dock.use(Effect.succeed))
-  Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
-  if (hasMenuBar(process.platform)) showMenuBar()
   // A launch the engine made, as it found no app, shows no window and no
   // Dock icon: only the menu bar's (closing.ts).
   runtime.runSync(built.open(!dock.startsHidden))
-  // `banda menu [route]` opens the Banda menu here, or the settings at a
-  // route of their own (ADR 0017): the page tells them apart.
-  void runtime.runPromise(Engine.use((engine) => engine.door)).then((path) => {
-    shutDoor = openDoor(path, { menu: openMenu })
-  })
-}
-
-/** Shuts the door `banda menu` knocks at. */
-let shutDoor: (() => void) | null = null
-
-/**
- * Banda's icon in macOS's menu bar and its menu (ADR 0086, decision 4),
- * drawn from `banda status --follow` alone (status.ts): a row opens its
- * Thread in the window, Open Banda the window, and Quit Banda is ⌘Q's.
- */
-function showMenuBar(): void {
-  const bar = menuBar(channel.name, app.getVersion(), {
-    open: () => void openBanda(),
-    // The Thread's Pane where a workspace shows it, or opened (the page's
-    // `pane.pick`, as a call's notice goes there); the Thread Pane's
-    // kind is the agents module's (ThreadPane.tsx).
-    openThread: (project, thread, title) => {
-      openBanda()
-      runtime.runFork(
-        runOwn("pane.pick", {
-          project,
-          pane: { kind: "agents.thread", args: { thread, harness: "", title } },
-        })
-      )
-    },
-    // As ⌘Q: Quit Banda, asking first while Agents work (closing.ts).
-    quit: () => app.quit(),
-  })
-  runtime.runFork(
-    Status.use((status) =>
-      status.changes.pipe(
-        Stream.runForEach((now) => Effect.sync(() => bar.show(now)))
-      )
-    )
-  )
-}
-
-/** The window brought to the front, or opened where there is none. */
-function openBanda(): void {
-  if (windows) runtime.runSync(windows.openBanda)
-}
-
-/** Opens the menu at `route` in the window, brought to the front; the
- * page tells the routes apart, the settings' too. */
-function openMenu(route: unknown): string {
-  if (typeof route !== "string") return "the route is not a string"
-  const shown = windows?.inFront()
-  if (!shown) return "no window"
-  tellPage(shown.webContents, BRIDGE.menu.listen, route)
-  return "ok"
-}
-
-/** The app menu, with its Quit (⌘Q); File's Close Window (⌘W); Edit; and
- * Window, whose Banda shows the main window, as the menu bar's Open Banda
- * does. */
-function macMenu(): Menu {
-  return Menu.buildFromTemplate([
-    { role: "appMenu" },
-    { role: "fileMenu" },
-    { role: "editMenu" },
-    {
-      role: "windowMenu",
-      submenu: [
-        { role: "minimize" },
-        { role: "zoom" },
-        { type: "separator" },
-        { label: "Banda", click: () => windows?.inFront() },
-        { type: "separator" },
-        { role: "front" },
-      ],
-    },
-  ])
 }
 
 let stopped = false
 app.on("will-quit", (event) => {
   if (stopped) return
   event.preventDefault()
-  shutDoor?.()
   void runtime.dispose().then(() => {
     stopped = true
     app.quit()
