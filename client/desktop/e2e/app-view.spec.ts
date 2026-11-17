@@ -158,19 +158,26 @@ test("an App's screen of every node: numbers, tabs, a table found and ordered, a
   // One that sends at once, and one that asks first.
   await boris.getByRole("button", { name: "Won" }).click()
   await expect(rows).toHaveCount(2)
-  await rows
-    .filter({ hasText: "Anna Weber" })
-    .getByRole("button", { name: "Delete" })
-    .click()
+  // Of more than three, the first two are buttons and the rest are
+  // under the row's menu, what cannot be undone last.
+  const anna = rows.filter({ hasText: "Anna Weber" })
+  await expect(anna.getByRole("button")).toHaveText(["Edit", "Won", ""])
+  await anna.getByRole("button", { name: "More" }).click()
+  const more = page.getByRole("menu")
+  await expect(more.getByRole("menuitem")).toHaveText([
+    "Lost",
+    "Paid",
+    "Delete",
+  ])
+  await shot("app-deals-more")
+  await more.getByRole("menuitem", { name: "Delete" }).click()
   const asks = page.getByRole("alertdialog")
   await expect(asks).toContainText("Delete this deal?")
   await shot("app-deals-asks")
   await asks.getByRole("button", { name: "Cancel" }).click()
   await expect(rows).toHaveCount(2)
-  await rows
-    .filter({ hasText: "Anna Weber" })
-    .getByRole("button", { name: "Delete" })
-    .click()
+  await anna.getByRole("button", { name: "More" }).click()
+  await more.getByRole("menuitem", { name: "Delete" }).click()
   await asks.getByRole("button", { name: "Delete" }).click()
   await expect(pane.getByText("No deals here yet")).toBeVisible()
   expect(call(window, "deals.list", {})).toHaveLength(3)

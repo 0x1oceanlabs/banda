@@ -268,3 +268,51 @@ test("a Link, and an item that opens a view, are drawn as what is pressed", () =
   const alone = renderToStaticMarkup(<TreeView tree={tree} send={send} />)
   expect(alone.match(/<button/g)).toHaveLength(1)
 })
+
+test("a row's actions past three go under a menu, after the first two", () => {
+  const action = (label: string) => ({
+    label,
+    command: label.toLowerCase(),
+    params: {},
+    take: { id: "id" },
+    confirm: null,
+    form: null,
+    tone: label === "Delete" ? "bad" : "plain",
+  })
+  const table = (labels: string[]) =>
+    ({
+      at: 1,
+      title: "Deals",
+      about: null,
+      children: [
+        {
+          node: "Table",
+          empty: null,
+          search: false,
+          open: null,
+          columns: [{ key: "name", title: "Deal", as: "text", tones: {} }],
+          rows: [{ id: 1, name: "Atlas" }],
+          actions: labels.map(action),
+        },
+      ],
+    }) as Tree
+  const buttons = (labels: string[]) => {
+    const html = renderToStaticMarkup(
+      <TreeView tree={table(labels)} send={send} />
+    )
+    // The head's buttons sort; a row's are in the body.
+    const body = html.slice(html.indexOf("<tbody"))
+    const drawn = [...body.matchAll(/<button[^>]*>(.*?)<\/button>/g)]
+    return drawn.map(([button, inside]) =>
+      button.includes('aria-label="More"') ? "More" : inside
+    )
+  }
+  // Up to three, each is a button, as before.
+  expect(buttons(["Edit", "Won", "Delete"])).toEqual(["Edit", "Won", "Delete"])
+  // Of more, the first two, and one button for the rest.
+  expect(buttons(["Edit", "Won", "Lost", "Note", "Delete"])).toEqual([
+    "Edit",
+    "Won",
+    "More",
+  ])
+})
