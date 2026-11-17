@@ -209,6 +209,8 @@ export const DOES = {
   "updates.check": "act",
   "updates.state": "read",
   "updates.restart": "act",
+  "updates.app": "act",
+  "updates.later": "act",
   "updates.take": "act",
   "workspaces.list": "read",
   "workspaces.open": "act",

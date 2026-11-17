@@ -120,6 +120,93 @@ pub struct UpdateState {
     /// update of the app there asks first while Agents work.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub with_app: bool,
+    /// What the app on this machine does with its own update, as its
+    /// window's main last said it (ADR 0137, decision 2); none where no
+    /// app said anything.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub app: Option<AppUpdate>,
+    /// The Person's Update waits until no Turn runs, as it would stop
+    /// them (ADR 0137, decision 4); `updates.later` drops it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub held: bool,
+    /// Until when the app is asked to restart into a version it has
+    /// ready, in ms since the epoch: the Person said Update (ADR 0137,
+    /// decision 3). None once the app said it installs, restarted or
+    /// could not; past, it is asked no more.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub wants_app: Option<i64>,
+}
+
+/// What an app does with its own update.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "updates/")]
+pub enum AppPhase {
+    /// Nothing new, as its last look found.
+    #[default]
+    None,
+    /// It looks, as the Person asked.
+    Looking,
+    /// It takes `version`.
+    Downloading,
+    /// `version` is down: an Update installs it, or its quit.
+    Ready,
+    /// The Person said Update: it installs `version`.
+    Installing,
+    /// And restarts into it.
+    Restarting,
+    /// `version` is out, and nothing here installs it: `command` does.
+    Out,
+    /// It could not, and `why`.
+    Failed,
+    /// It restarted into the version it runs, from `from`.
+    Updated,
+}
+
+/// What the app on a machine does with its own update, as its window's
+/// main says it with `updates.app` (ADR 0137, decision 2).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "updates/")]
+pub struct AppUpdate {
+    /// Its name, `Banda Dev`.
+    pub name: String,
+    /// The version it runs.
+    pub running: String,
+    /// Its widget stays on the bar with nothing to say, as Banda Dev's
+    /// (ADR 0045).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub always: bool,
+    pub phase: AppPhase,
+    /// The version it takes, has ready, installs, or that is out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub version: Option<String>,
+    /// How far a download is, 0 to 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub share: Option<f64>,
+    /// Its bytes down, and of how many, when it knows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub down: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub size: Option<i64>,
+    /// The command that installs the version out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub command: Option<String>,
+    /// Why it could not, or why the look the Person asked for found
+    /// nothing, as the program said it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub why: Option<String>,
+    /// The version it restarted from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub from: Option<String>,
 }
 
 /// An engine that moved onto the version it runs.
@@ -226,14 +313,28 @@ struct Restarting {
 /// The file in `engine/` that keeps the version the Person chose.
 const CHOSEN: &str = "chosen";
 
+/// How long after the Person said Update the app is still asked to
+/// restart: it says its version ready within moments, or it has none.
+const WANTS_APP_MS: i64 = 2 * 60 * 1000;
+
 impl Updates {
     pub fn new(banda: Banda, take: watch::Receiver<TakeUpdates>) -> Updates {
+        let updated = moved(&banda.engine, &banda.version);
+        let chosen = chosen(&banda.engine);
+        // An engine that moved here as the Person said Update: its app
+        // follows, once it has its version ready. Not onto a version the
+        // Person chose: the app's newest is another.
+        let wants_app = (updated.as_ref())
+            .filter(|moved| !moved.idle && chosen.is_none())
+            .map(|moved| moved.at + WANTS_APP_MS)
+            .filter(|until| *until > banda_kernel::now_ms());
         let state = UpdateState {
             running: banda.version.clone(),
             ready: in_place(&banda),
-            chosen: chosen(&banda.engine),
-            updated: moved(&banda.engine, &banda.version),
+            chosen,
+            updated,
             takes: Some(*take.borrow()),
+            wants_app,
             ..UpdateState::default()
         };
         Updates(Arc::new(Held {
@@ -772,10 +873,21 @@ banda_kernel::methods! {
         /// change: what it runs, the newest found, what it takes, what is
         /// ready, what that waits for, and why not.
         stream state(Nothing) -> UpdateState, Read;
-        /// Restart now: the engine moves onto the copy ready at once,
-        /// which ends its Turns and terminals. It refuses while Turns run,
-        /// unless `force`: the Person said so after Quit's warning.
+        /// Update this machine now (ADR 0137, decision 3): the engine
+        /// moves onto the copy ready at once, which ends its Turns and
+        /// terminals, and the app is asked to restart into its version
+        /// ready (`wants_app`). While Turns run that this would end, it
+        /// refuses; unless `force`, as the Person said so after Quit's
+        /// warning, or `wait`, which holds it until none runs.
         call restart(RestartNow) -> Moving, Manage;
+        /// What the app on this machine does with its own update, as its
+        /// window's main says each change of it: the module keeps it in
+        /// `updates.state`'s `app` (ADR 0137, decision 2), and answers
+        /// the state.
+        call app(AppUpdate) -> UpdateState, Manage;
+        /// Drops an Update that waits for the Agents (`held`), and what
+        /// it asked of the app; answers the state.
+        call later(Nothing) -> UpdateState, Manage;
         /// Puts `version` in place, an older one too, and keeps it as
         /// chosen: the engine moves onto it as it moves onto any copy
         /// ready, and the looks take nothing above it. `newest` drops the
@@ -792,6 +904,11 @@ struct RestartNow {
     #[serde(default)]
     #[ts(optional)]
     force: Option<bool>,
+    /// While Turns run that it would end, holds the Update until none
+    /// does, in place of refusing.
+    #[serde(default)]
+    #[ts(optional)]
+    wait: Option<bool>,
 }
 
 /// What `take` asks.
@@ -808,6 +925,9 @@ struct TakeVersion {
 pub struct Moving {
     pub from: String,
     pub to: String,
+    /// Not yet: it waits until no Turn runs.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub held: bool,
 }
 
 /// What `take` takes `newest` as: the choice dropped.
@@ -822,8 +942,33 @@ impl Updates {
         Ok(follow(self.watch()))
     }
 
-    async fn restart(&self, _: Call, RestartNow { force }: RestartNow) -> Result<Moving, Refusal> {
-        self.restart_now(force.unwrap_or(false))
+    async fn restart(
+        &self,
+        _: Call,
+        RestartNow { force, wait }: RestartNow,
+    ) -> Result<Moving, Refusal> {
+        self.update_now(force.unwrap_or(false), wait.unwrap_or(false))
+    }
+
+    async fn app(&self, _: Call, said: AppUpdate) -> Result<UpdateState, Refusal> {
+        self.app_said(said);
+        Ok(self.0.state.borrow().clone())
+    }
+
+    async fn later(&self, _: Call, _: Nothing) -> Result<UpdateState, Refusal> {
+        Ok(self.later_now())
+    }
+
+    /// Drops an Update that waits for the Agents, and what it asked of
+    /// the app; the state after.
+    pub fn later_now(&self) -> UpdateState {
+        self.0.state.send_if_modified(|state| {
+            let changed = state.held || state.wants_app.is_some();
+            state.held = false;
+            state.wants_app = None;
+            changed
+        });
+        self.0.state.borrow().clone()
     }
 
     async fn take(
@@ -834,16 +979,29 @@ impl Updates {
         self.choose(&version).await
     }
 
-    /// Restart now: moves onto the copy ready, unless Turns run and not
-    /// `force`.
-    pub fn restart_now(&self, force: bool) -> Result<Moving, Refusal> {
+    /// Updates this machine now (ADR 0137, decision 3), by
+    /// [`restart::now`]: what moves, and what is held until no Turn runs.
+    pub fn update_now(&self, force: bool, wait: bool) -> Result<Moving, Refusal> {
+        self.update(force, wait).map(|(moving, _)| moving)
+    }
+
+    /// [`Self::update_now`], and what it did.
+    fn update(&self, force: bool, wait: bool) -> Result<(Moving, restart::Does), Refusal> {
         let Some(restarting) = &self.0.restarting else {
             return Err(Refusal::invalid("This engine does not restart itself."));
         };
         let facts = self.facts(restarting);
         let running = &self.0.banda.version;
-        match restart::now(&facts, force) {
-            Ok(()) => {}
+        let (ready, app) = {
+            let state = self.0.state.borrow();
+            // The app follows the newest, not a version the Person chose.
+            let app = (state.app.as_ref())
+                .filter(|app| app.phase == AppPhase::Ready && state.chosen.is_none())
+                .and_then(|app| Some((app.running.clone(), app.version.clone()?)));
+            (state.ready.clone(), app)
+        };
+        let does = match restart::now(&facts, app.is_some(), force, wait) {
+            Ok(does) => does,
             Err(Refused::Nothing) => {
                 return Err(Refusal::conflict(format!(
                     "No other copy is ready: {running} is the newest in place. banda update \
@@ -861,9 +1019,50 @@ impl Updates {
                      restarted: force restarts anyway."
                 )));
             }
+        };
+        // What the caller hears: the engine's move, now or held, or the
+        // app's alone.
+        let itself = matches!(facts.moves, restart::Moves::Itself);
+        let (from, to) = match (ready.filter(|_| itself), app) {
+            (Some(to), _) => (running.clone(), to),
+            (None, Some(app)) => app,
+            (None, None) => unreachable!("restart::now moves the engine or the app"),
+        };
+        let moving = Moving {
+            from,
+            to,
+            held: does.held,
+        };
+        // The engine first: one that cannot move after all did nothing.
+        if does.engine && self.move_now(restarting, false).is_none() {
+            return Err(Refusal::conflict("The copy ready is gone from its folder."));
         }
-        self.move_now(restarting, false)
-            .ok_or_else(|| Refusal::conflict("The copy ready is gone from its folder."))
+        let wants_app = does.app.then(|| banda_kernel::now_ms() + WANTS_APP_MS);
+        self.0.state.send_if_modified(|state| {
+            let changed = state.held != does.held || wants_app.is_some();
+            state.held = does.held;
+            if let Some(until) = wants_app {
+                state.wants_app = Some(until);
+            }
+            changed
+        });
+        Ok((moving, does))
+    }
+
+    /// Keeps what the app said of its update. One that installs,
+    /// restarted or could not is asked to restart no more.
+    pub fn app_said(&self, said: AppUpdate) {
+        let done = matches!(
+            said.phase,
+            AppPhase::Installing | AppPhase::Restarting | AppPhase::Updated | AppPhase::Failed
+        );
+        self.0.state.send_if_modified(|state| {
+            let asked = state.wants_app.filter(|_| !done);
+            let changed = state.app.as_ref() != Some(&said) || state.wants_app != asked;
+            state.app = Some(said);
+            state.wants_app = asked;
+            changed
+        });
     }
 
     /// Puts `version` in place and keeps it as chosen; `newest` drops the
@@ -990,6 +1189,15 @@ impl Updates {
             return None;
         }
         let from = self.0.banda.version.clone();
+        // Asked already, as the Person said or by itself: how it moved is
+        // kept as the first said it.
+        if restarting.restart.moving() {
+            return Some(Moving {
+                from,
+                to,
+                held: false,
+            });
+        }
         tracing::info!(%from, %to, "the engine moves onto the copy ready");
         let said = serde_json::json!({
             "to": to,
@@ -1001,7 +1209,11 @@ impl Updates {
             tracing::warn!(%e, "how the engine moved is not kept");
         }
         restarting.restart.ask(program);
-        Some(Moving { from, to })
+        Some(Moving {
+            from,
+            to,
+            held: false,
+        })
     }
 
     /// Moves onto a copy ready once [`restart::next`] says, and says what
@@ -1019,6 +1231,24 @@ impl Updates {
             turns.borrow_and_update();
             hands.borrow_and_update();
             take.borrow_and_update();
+            // The Update that waited for the Agents: none works now. One
+            // that starts meanwhile holds it again; with nothing left to
+            // update it is over, unless the app takes a newer version now.
+            if self.0.state.borrow().held && *restarting.turns.borrow() == 0 {
+                match self.update(false, true) {
+                    // The engine moves: nothing is left to decide.
+                    Ok((_, does)) if does.engine => return,
+                    Ok(_) => {}
+                    Err(refusal) => {
+                        let taking = (self.0.state.borrow().app.as_ref())
+                            .is_some_and(|app| app.phase == AppPhase::Downloading);
+                        if !taking {
+                            tracing::info!(why = %refusal.message, "the Update held is over");
+                            self.0.state.send_modify(|state| state.held = false);
+                        }
+                    }
+                }
+            }
             let waits = match restart::next(&self.facts(restarting)) {
                 Next::Move if self.move_now(restarting, true).is_some() => return,
                 Next::Move | Next::Nothing => None,
@@ -1260,9 +1490,9 @@ mod tests {
         assert!(waits.person, "{waits:?}");
 
         machine.turns.send_replace(1);
-        let refused = machine.updates.restart_now(false).unwrap_err();
+        let refused = machine.updates.update_now(false, false).unwrap_err();
         assert!(refused.message.contains("An Agent works"), "{refused:?}");
-        let moving = machine.updates.restart_now(true).unwrap();
+        let moving = machine.updates.update_now(true, false).unwrap();
         assert_eq!(
             (moving.from.as_str(), moving.to.as_str()),
             ("0.1.0-dev.10", "0.1.0-dev.11")
@@ -1368,8 +1598,162 @@ mod tests {
         let waits = waits_until(&mut state, Option::is_some).await.unwrap();
         assert_eq!(waits.restart.as_deref(), Some("it restarts with Banda"));
         assert!(machine.updates.watch().borrow().with_app);
-        let refused = machine.updates.restart_now(true).unwrap_err();
+        let refused = machine.updates.update_now(true, false).unwrap_err();
         assert_eq!(refused.message, "it restarts with Banda");
+    }
+
+    /// The app on this machine with dev.11 in `phase`.
+    fn app(phase: AppPhase) -> AppUpdate {
+        AppUpdate {
+            name: "Banda Dev".to_owned(),
+            running: "0.1.0-dev.10".to_owned(),
+            phase,
+            version: Some("0.1.0-dev.11".to_owned()),
+            ..AppUpdate::default()
+        }
+    }
+
+    /// Waits until the state is as `until` says.
+    async fn state_until(machine: &Machine, until: impl Fn(&UpdateState) -> bool) -> UpdateState {
+        let mut state = machine.updates.watch();
+        let said = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let now = state.borrow_and_update().clone();
+                if until(&now) {
+                    return now;
+                }
+                state.changed().await.unwrap();
+            }
+        });
+        said.await.expect("the state said it")
+    }
+
+    #[tokio::test]
+    async fn one_update_moves_the_engine_and_asks_the_app_to_restart() {
+        let machine = machine(Moves::Itself);
+        machine.updates.app_said(app(AppPhase::Ready));
+        assert_eq!(machine.updates.watch().borrow().wants_app, None);
+
+        let moving = machine.updates.update_now(false, false).unwrap();
+        assert_eq!((moving.to.as_str(), moving.held), ("0.1.0-dev.11", false));
+        assert!(machine.updates.watch().borrow().wants_app.is_some());
+        assert_eq!(
+            machine.restart.asked().await,
+            machine.engine.join("0.1.0-dev.11").join(PROGRAM)
+        );
+        // The app says it installs: it is asked no more, a later ready
+        // one neither.
+        machine.updates.app_said(app(AppPhase::Installing));
+        machine.updates.app_said(app(AppPhase::Ready));
+        assert_eq!(machine.updates.watch().borrow().wants_app, None);
+    }
+
+    #[tokio::test]
+    async fn an_engine_that_moved_as_the_person_said_asks_its_app_once_it_is_ready() {
+        let machine = machine(Moves::Itself);
+        let at = banda_kernel::now_ms();
+        std::fs::write(
+            machine.engine.join(MOVED),
+            format!(r#"{{"to":"0.1.0-dev.10","from":"0.1.0-dev.9","at":{at},"idle":false}}"#),
+        )
+        .unwrap();
+        let banda = Banda {
+            channel: "dev",
+            folder: "banda-dev",
+            version: "0.1.0-dev.10".to_owned(),
+            program: None,
+            engine: machine.engine.clone(),
+        };
+        let (_take, taken) = watch::channel(TakeUpdates::WhenIdle);
+        let moved = Updates::new(banda, taken);
+        // Asked from its start, whatever its app says it takes meanwhile.
+        moved.app_said(app(AppPhase::Downloading));
+        moved.app_said(app(AppPhase::Ready));
+        let asked = moved.watch().borrow().wants_app.expect("its app is asked");
+        assert!(asked > at && asked <= at + WANTS_APP_MS);
+    }
+
+    #[tokio::test]
+    async fn an_update_that_would_stop_agents_waits_for_them_when_asked_to() {
+        // The window's child, and Windows': the app's restart stops it.
+        let machine = machine(Moves::Never("it restarts with Banda".to_owned()));
+        tokio::spawn(machine.updates.clone().drive());
+        machine.updates.app_said(app(AppPhase::Ready));
+        machine.turns.send_replace(2);
+
+        let refused = machine.updates.update_now(false, false).unwrap_err();
+        assert!(refused.message.contains("2 Agents work"), "{refused:?}");
+        let moving = machine.updates.update_now(false, true).unwrap();
+        assert!(moving.held);
+        let state = state_until(&machine, |state| state.held).await;
+        assert_eq!(state.wants_app, None, "nothing restarts while they work");
+
+        // They are done: the app is asked, and nothing is held.
+        machine.turns.send_replace(0);
+        let state = state_until(&machine, |state| !state.held).await;
+        assert!(state.wants_app.is_some());
+    }
+
+    #[tokio::test]
+    async fn later_drops_an_update_held() {
+        let machine = machine(Moves::Never("it restarts with Banda".to_owned()));
+        tokio::spawn(machine.updates.clone().drive());
+        machine.updates.app_said(app(AppPhase::Ready));
+        machine.turns.send_replace(1);
+        machine.updates.update_now(false, true).unwrap();
+        state_until(&machine, |state| state.held).await;
+
+        assert!(!machine.updates.later_now().held);
+        machine.turns.send_replace(0);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(machine.updates.watch().borrow().wants_app, None);
+    }
+
+    #[tokio::test]
+    async fn an_update_held_moves_the_engine_as_the_person_said_and_its_app_restarts_at_once() {
+        let machine = machine(Moves::Itself);
+        tokio::spawn(machine.updates.clone().drive());
+        machine.updates.app_said(app(AppPhase::Ready));
+        machine.turns.send_replace(1);
+        let moving = machine.updates.update_now(false, true).unwrap();
+        assert!(moving.held, "the engine waits for its Agent");
+        let state = machine.updates.watch().borrow().clone();
+        assert!(state.held);
+        assert!(state.wants_app.is_some(), "the app's restart stops nobody");
+
+        machine.turns.send_replace(0);
+        let program = tokio::time::timeout(Duration::from_secs(5), machine.restart.asked());
+        program.await.expect("it moved once the Agent was done");
+        let updated = moved(&machine.engine, "0.1.0-dev.11").unwrap();
+        // Not as one that moved by itself once idle, though nothing held
+        // that either: its app follows only the Person's Update.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let updated_still = moved(&machine.engine, "0.1.0-dev.11").unwrap();
+        assert!(!updated.idle && !updated_still.idle, "as the Person said");
+    }
+
+    #[tokio::test]
+    async fn a_version_the_person_chose_does_not_take_the_app_along() {
+        let machine = machine(Moves::Itself);
+        std::fs::write(machine.engine.join(CHOSEN), "0.1.0-dev.11").unwrap();
+        machine
+            .updates
+            .0
+            .state
+            .send_modify(|state| state.chosen = Some("0.1.0-dev.11".to_owned()));
+        machine.updates.app_said(app(AppPhase::Ready));
+        machine.updates.update_now(false, false).unwrap();
+        assert_eq!(machine.updates.watch().borrow().wants_app, None);
+    }
+
+    #[tokio::test]
+    async fn a_copy_gone_from_its_folder_updates_nothing() {
+        let machine = machine(Moves::Itself);
+        machine.updates.app_said(app(AppPhase::Ready));
+        std::fs::remove_dir_all(machine.engine.join("0.1.0-dev.11")).unwrap();
+        let refused = machine.updates.update_now(false, false).unwrap_err();
+        assert!(refused.message.contains("gone"), "{refused:?}");
+        assert_eq!(machine.updates.watch().borrow().wants_app, None);
     }
 
     #[tokio::test]

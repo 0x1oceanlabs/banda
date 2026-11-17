@@ -2,6 +2,7 @@
 import type { CallMethod } from "../CallMethod";
 import type { Nothing } from "../Nothing";
 import type { StreamMethod } from "../StreamMethod";
+import type { AppUpdate } from "./AppUpdate";
 import type { Moving } from "./Moving";
 import type { RestartNow } from "./RestartNow";
 import type { TakeVersion } from "./TakeVersion";
@@ -20,11 +21,26 @@ check: CallMethod<Nothing, UpdateState>,
  */
 state: StreamMethod<Nothing, UpdateState>, 
 /**
- * Restart now: the engine moves onto the copy ready at once,
- * which ends its Turns and terminals. It refuses while Turns run,
- * unless `force`: the Person said so after Quit's warning.
+ * Update this machine now (ADR 0137, decision 3): the engine
+ * moves onto the copy ready at once, which ends its Turns and
+ * terminals, and the app is asked to restart into its version
+ * ready (`wants_app`). While Turns run that this would end, it
+ * refuses; unless `force`, as the Person said so after Quit's
+ * warning, or `wait`, which holds it until none runs.
  */
 restart: CallMethod<RestartNow, Moving>, 
+/**
+ * What the app on this machine does with its own update, as its
+ * window's main says each change of it: the module keeps it in
+ * `updates.state`'s `app` (ADR 0137, decision 2), and answers
+ * the state.
+ */
+app: CallMethod<AppUpdate, UpdateState>, 
+/**
+ * Drops an Update that waits for the Agents (`held`), and what
+ * it asked of the app; answers the state.
+ */
+later: CallMethod<Nothing, UpdateState>, 
 /**
  * Puts `version` in place, an older one too, and keeps it as
  * chosen: the engine moves onto it as it moves onto any copy

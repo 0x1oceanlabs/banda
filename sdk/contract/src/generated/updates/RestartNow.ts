@@ -7,4 +7,9 @@ export type RestartNow = {
 /**
  * Moves while Turns run, which it ends.
  */
-force?: boolean, };
+force?: boolean, 
+/**
+ * While Turns run that it would end, holds the Update until none
+ * does, in place of refusing.
+ */
+wait?: boolean, };

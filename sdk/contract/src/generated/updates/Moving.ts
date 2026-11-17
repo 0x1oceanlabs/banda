@@ -3,4 +3,8 @@
 /**
  * The engine is moving: from the version it ran onto the one ready.
  */
-export type Moving = { from: string, to: string, };
+export type Moving = { from: string, to: string, 
+/**
+ * Not yet: it waits until no Turn runs.
+ */
+held?: boolean, };
