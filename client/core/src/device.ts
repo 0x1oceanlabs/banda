@@ -109,6 +109,10 @@ export type HostState = {
       build: string | null
       version: string | null
       own: { build: string | null; version: string | null }
+      /** The pipe to its door now (ADR 0124, decision 4): the tailnet,
+       * where the machine serves its door there and it answers; else the
+       * ssh tunnel. None for a browser's machines. */
+      route?: "tailnet" | "ssh"
     }
   | { state: "away"; why: string }
   | { state: "stopped" }

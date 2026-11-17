@@ -75,9 +75,11 @@ export const cspOf = (framed: readonly string[]) =>
     "img-src 'self' data: crx: app://files",
     "media-src 'self' app://files",
     "font-src 'self' data:",
-    // The engine; the page's own files, as Ghostty fetches its WebAssembly;
-    // and the byte host's ranges, as a PDF is read (ADR 0073, decision 5).
-    "connect-src 'self' ws://127.0.0.1:* app://files",
+    // The engine, and another machine's at its door on the tailnet (ADR
+    // 0124, decision 4), whose names Tailscale gives under ts.net; the
+    // page's own files, as Ghostty fetches its WebAssembly; and the byte
+    // host's ranges, as a PDF is read (ADR 0073, decision 5).
+    "connect-src 'self' ws://127.0.0.1:* wss://*.ts.net app://files",
     // The modules' pages a Pane shows in a frame, each on an origin of its
     // own, as a Thread's Visuals (ADR 0037), and a file's page, sandboxed.
     `frame-src ${framed.join(" ")}`,

@@ -411,9 +411,26 @@ repository), with an adversarial check.
   no door, a window served for development, a machine that would not
   pair and one that says another's key are reached as before, and the
   log says so. Not yet: the follower itself,
-  which still starts the engine and reads its secret in main; the tailnet
-  route and the race between routes; hosts by host key; a device removed
-  there while the window runs, which is away until its next go.
+  which still starts the engine and reads its secret in main; hosts by
+  host key; a device removed there while the window runs, which is away
+  until its next go.
+- **The tailnet route for a desktop (SE4, PR 1b).** Beside each go over
+  ssh, main asks the machine where its door is served (`banda devices
+  list`, its `doors`), and keeps the first address with the host key, the
+  device this one is there and the build that go said (`host-doors.json`
+  in the window's state). A go whose machine has such a door, and whose
+  door answers main as it will the page (a WebSocket there, whose first
+  frame is the challenge of that host key), runs no forward: the page
+  is given `wss://<door>/ws`, which its policy lets it reach under
+  `ts.net`, and the machine's bytes are asked there over HTTPS. It is
+  live while the follower runs and the door answers; silent twice in a
+  row, it is away, and the next go forwards over ssh as before. After a
+  go that was live, as when the Mac wakes, the door is asked first, with
+  no ssh at all: it starts nothing there, and says the build the last go
+  over ssh said. A host's state says its pipe (`route`: `tailnet` or
+  `ssh`). Not yet: Settings → Machines showing the route and its round
+  trip; a race that moves a live machine from one pipe to the other; a
+  tailnet whose names are not under `ts.net`.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The
