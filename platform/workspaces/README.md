@@ -17,8 +17,12 @@ arranged: workspaces one under another, each a Strip of columns.
   --target wasm32-unknown-unknown`; ADR 0088, decision 11), and its
   `tests/leaf.rs` holds it one. The engine's part keeps the arrangement
   and calls it. Its `tests/traces.rs` records the golden traces in
-  `traces/` here, which the window's copy replays until it runs the model
-  itself.
+  `traces/` here. The window loads the model as one WebAssembly file,
+  [`platform/tiling/wasm`](../tiling/wasm/src/lib.rs)
+  (`banda-tiling-wasm`): a command as JSON in, its answer as JSON out. The
+  window's build makes the file (`tilingModel` in
+  `client/web/vite.config.ts`), and its `parity.test.ts` replays the
+  traces through it and through the window's copy, until the copy goes.
 - Its settings: `~/.config/banda/tiling.toml`.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).

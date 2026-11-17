@@ -1,3 +1,6 @@
 [toolchain]
 channel = "1.99.1"
 components = ["rustfmt", "clippy"]
+# The Tiling's model, which the window runs as WebAssembly (ADR 0088,
+# decision 11).
+targets = ["wasm32-unknown-unknown"]

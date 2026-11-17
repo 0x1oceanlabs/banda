@@ -1,0 +1,26 @@
+[package]
+name = "banda-tiling-wasm"
+description = "The Tiling's model as a client loads it: one WebAssembly file, a command as JSON in and its answer as JSON out."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+banda-base = { path = "../../../kernel/base" }
+banda-tiling = { path = ".." }
+serde.workspace = true
+serde_json.workspace = true
+
+# The workspace's lints, but for `unsafe_code`, which it forbids: bytes
+# cross to WebAssembly's host by a pointer and a length, and there is no
+# other way to say an export. All of it is in `src/lib.rs`.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

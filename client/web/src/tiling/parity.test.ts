@@ -1,9 +1,11 @@
 /**
- * The client's copy of the arrangement does what the engine does (ADR
- * 0088, decision 11): every golden trace the engine's tests record
- * (`platform/tiling/tests/traces.rs`) replays through `apply`,
- * step by step. Each step starts from the arrangement the engine had
- * before it, so one step the copy gets wrong fails alone.
+ * What the window runs a command by does what the engine does (ADR 0088,
+ * decision 11): every golden trace the engine's tests record
+ * (`platform/tiling/tests/traces.rs`) replays, step by step, through the
+ * window's copy (`arrangement.ts`) and through the engine's own model as
+ * the window loads it (`engine.ts`). Each step starts from the
+ * arrangement the engine had before it, so one step gone wrong fails
+ * alone.
  *
  * The window's own reading of an arrangement is held on every one too: it
  * draws it and keeps it again as it was (`resolve`, `keptOf`).
@@ -15,6 +17,14 @@ import type { Workspace } from "@banda/contract/workspaces"
 import { describe, expect, test } from "vitest"
 import { keptOf, NO_VIEW, resolve } from "./arrange"
 import { apply, type Command, type Facts, METHODS } from "./arrangement"
+import { apply as applyInEngine } from "./engine"
+
+/** What runs a command here: the window's copy, and the engine's own
+ * model as WebAssembly, which is to take the copy's place. */
+const BY = [
+  ["the copy", apply],
+  ["the engine's model", applyInEngine],
+] as const
 
 type Step = {
   method: Command["method"]
@@ -90,21 +100,23 @@ describe.each(traces)("%s", (_, trace) => {
       ] as const
   )
 
-  test.each(steps)("%s", (_, step, before) => {
-    const given = JSON.stringify(before)
-    const command = { method: step.method, params: step.params } as Command
-    const applied = apply(before, command, step.seed, step.facts)
-    // Pure, refused or not.
-    expect(JSON.stringify(before)).toBe(given)
-    if (step.refused !== undefined) {
-      expect("refused" in applied && applied.refused).toBe(step.refused)
-      return
-    }
-    if ("refused" in applied) {
-      throw new Error(`Refused, ${applied.refused}: ${applied.message}`)
-    }
-    expect(text(applied.answer)).toBe(text(step.answer))
-    expect(text(applied.list)).toBe(text(step.after))
+  describe.each(BY)("by %s", (_, run) => {
+    test.each(steps)("%s", (_, step, before) => {
+      const given = JSON.stringify(before)
+      const command = { method: step.method, params: step.params } as Command
+      const applied = run(before, command, step.seed, step.facts)
+      // Pure, refused or not.
+      expect(JSON.stringify(before)).toBe(given)
+      if (step.refused !== undefined) {
+        expect("refused" in applied && applied.refused).toBe(step.refused)
+        return
+      }
+      if ("refused" in applied) {
+        throw new Error(`Refused, ${applied.refused}: ${applied.message}`)
+      }
+      expect(text(applied.answer)).toBe(text(step.answer))
+      expect(text(applied.list)).toBe(text(step.after))
+    })
   })
 
   test("the window draws each arrangement and keeps it again as it was", () => {

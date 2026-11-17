@@ -106,7 +106,7 @@ pub struct When {
 }
 
 /// A rule for one kind of Pane, resolved.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, TS)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize, TS)]
 #[ts(export, export_to = "workspaces/")]
 pub struct Rule {
     /// A new column's width for a Pane of this kind, a share of the screen.
@@ -119,6 +119,6 @@ pub struct Rule {
     pub opens: Option<Opens>,
     /// Its lines by how a Pane is asked for and from what, in order.
     #[ts(as = "Option<Vec<When>>", optional)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub when: Vec<When>,
 }

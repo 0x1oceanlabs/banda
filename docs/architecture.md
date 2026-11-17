@@ -196,7 +196,7 @@ banda/
   apps/               each App's module, one folder each (ADR 0062, decision 11): the table under Modules
   platform/           what the Apps stand on; it names no App (ADR 0062): its modules are in that table, and beside them
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
-    tiling/           Rust: the Tiling's model, a leaf the engine runs and a client can build (ADR 0135)
+    tiling/           Rust: the Tiling's model, a leaf the engine runs; wasm/ the file the window loads it as (ADR 0135)
     look/             Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
     settings/         Rust: Banda's settings files, each described once, and the one writer that changes them (ADR 0016)
     git-cli/          Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for

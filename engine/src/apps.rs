@@ -831,4 +831,38 @@ mod tests {
             );
         }
     }
+
+    /// The workspace forbids `unsafe` (`[workspace.lints]`), and a crate
+    /// is held to that only as it takes the workspace's lints. These do
+    /// not: each denies it and allows it where its manifest says, with
+    /// its reason.
+    const OWN_LINTS: [&str; 3] = [
+        // The launcher's calls to the system, which Rust cannot make safe.
+        "platform/fence",
+        // The system's call that keeps a Mac awake.
+        "platform/machines/engine",
+        // The Tiling's model as a client loads it: bytes cross to
+        // WebAssembly's host by a pointer and a length.
+        "platform/tiling/wasm",
+    ];
+
+    #[test]
+    fn every_crate_takes_the_workspaces_lints() {
+        let workspace = cargo("Cargo.toml");
+        for member in workspace["workspace"]["members"].as_array().unwrap() {
+            let member = member.as_str().unwrap();
+            let manifest = cargo(&format!("{member}/Cargo.toml"));
+            let takes = manifest
+                .get("lints")
+                .and_then(|lints| lints.get("workspace"))
+                .and_then(toml::Value::as_bool)
+                == Some(true);
+            assert_eq!(
+                takes,
+                !OWN_LINTS.contains(&member),
+                "{member}/Cargo.toml: a crate takes the workspace's lints, which forbid \
+                 unsafe code, and only those OWN_LINTS names do not"
+            );
+        }
+    }
 }
