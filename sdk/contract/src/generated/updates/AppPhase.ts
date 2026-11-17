@@ -3,4 +3,4 @@
 /**
  * What an app does with its own update.
  */
-export type AppPhase = "none" | "looking" | "downloading" | "ready" | "installing" | "restarting" | "out" | "failed" | "updated";
+export type AppPhase = "none" | "downloading" | "ready" | "installing" | "restarting" | "out" | "failed" | "updated";

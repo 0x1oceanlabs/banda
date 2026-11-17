@@ -147,8 +147,6 @@ pub enum AppPhase {
     /// Nothing new, as its last look found.
     #[default]
     None,
-    /// It looks, as the Person asked.
-    Looking,
     /// It takes `version`.
     Downloading,
     /// `version` is down: an Update installs it, or its quit.

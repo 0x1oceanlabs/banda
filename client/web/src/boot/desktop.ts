@@ -22,7 +22,6 @@ import {
   type HostState,
   type HostTest,
   type PoppedAsk,
-  type Update,
 } from "@banda/core"
 import type { Host } from "@banda/desktop/bridge"
 import { browser } from "./browser"
@@ -317,32 +316,6 @@ export const device = {
     /** Copies the image at a point of the page. */
     copyImageAt: (x: number, y: number): void =>
       desktop()?.edit.copyImageAt(x, y),
-  },
-  /** Banda's own update (ADR 0041). */
-  update: {
-    /** Hands `take` where this window's app's update is now, then each
-     * time it changes; returns how to stop. Nothing without the desktop. */
-    follow: (take: (update: Update) => void): (() => void) => {
-      const update = desktop()?.update
-      if (!update) return () => undefined
-      let on = true
-      update.current().then(
-        (now) => on && take(now),
-        () => undefined
-      )
-      const stop = update.listen((now) => on && take(now))
-      return () => {
-        on = false
-        stop()
-      }
-    },
-    /** The window says it showed what the update brought. */
-    seen: (): void => desktop()?.update.seen(),
-    /** Downloads the version that is out now, and restarts into it. */
-    now: (): void => desktop()?.update.now(),
-    check: (): void => desktop()?.update.check(),
-    /** Installs the version that is ready and starts it. */
-    restart: (): void => desktop()?.update.restart(),
   },
   /** Quits Banda: stops the engine and closes the window (ADR 0086,
    * decision 3). */

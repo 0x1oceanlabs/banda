@@ -29,18 +29,21 @@
  * the engine moves onto its new copy once nothing runs (ADR 0119,
  * decision 4).
  *
- * What it tells the page is one `Update`, for the bar (ADR 0041,
- * decision 4). A look or a download that fails for want of a network
- * says nothing, and the next look tries again; only what the Person has
- * to mend shows, and a Restart that could not check its version is still
- * out. A look the Person asks for says what it found, and "Update now"
- * restarts into the new version once it is down (ADR 0045).
+ * What it says is one `Update`, which it tells its machine's engine with
+ * `updates.app` at each change (ADR 0137, decision 2): the engine says
+ * it on `updates.state`, where the window, `banda update` and every
+ * other machine read it. It restarts when the engine asks (`wants_app`):
+ * the Person's Update is the engine's `updates.restart`, never a call of
+ * main's. A look or a download that fails for want of a network says
+ * nothing, and the next look tries again; only what the Person has to
+ * mend shows, and a Restart that could not check its version is still
+ * out.
  */
 import { readFileSync, rmSync, writeFileSync } from "node:fs"
 import { basename, join } from "node:path"
-import type { Note, Update } from "@banda/core"
 import type { Engine as Client } from "@banda/contract"
 import {
+  type AppUpdate,
   UPDATES_CHECK,
   UPDATES_STATE,
   type UpdateState,
@@ -61,6 +64,9 @@ const FRESH = 3_600_000 + RETRY
  * tap, which come within ten minutes or so of the release: a pack that
  * failed sends none. */
 const RETRIES = 15
+/** How long a restart that looks first waits for an engine that is away,
+ * as one that moves onto its own copy on the same Update. */
+const ENGINE_BACK = 2 * 60_000
 /** How often a Banda with a version ready looks whether a window shows:
  * two looks with none, and it restarts into it. */
 const ALONE = 30_000
@@ -86,41 +92,112 @@ export type App = {
   quits: () => boolean
 }
 
-/** What the window says of its app whatever its state. */
-type Known = { name: string; have: string; always: boolean }
+/** What the app says of itself whatever its state. */
+type Known = {
+  /** Its name, `Banda Dev`. */
+  name: string
+  /** The version that runs. */
+  have: string
+  /** Its widget stays on the bar with nothing to say, as Banda Dev's is
+   * (ADR 0045). */
+  always: boolean
+}
 
-/** What it asks of this machine's engine: a look now, as the Person
- * asked, which answers the state it found (`updates.check`). */
-export type Engine = { check: () => Promise<UpdateState> }
+/**
+ * Where this app's own update is: nothing to say, a version downloading,
+ * one ready to install on the quit or as the engine asks, one out that
+ * the Person installs with `command` (on macOS, through brew: ADR 0033,
+ * decision 6), one that cannot install until the Person mends something,
+ * or that this Banda restarted into its version.
+ */
+export type Update = Known &
+  (
+    | { state: "none" }
+    | {
+        state: "downloading"
+        version: string
+        share: number
+        /** Bytes down, and of how many, when electron-updater says. */
+        down?: number
+        size?: number
+      }
+    | {
+        state: "ready"
+        version: string
+        /** What Banda does since the Person said Update: it installs the
+         * version, then restarts into it. None while it waits for them. */
+        doing?: "installing" | "restarting"
+      }
+    | { state: "out"; version: string; command: string }
+    | { state: "failed"; reason: string }
+    | {
+        /** A Banda that restarted into a new version (ADR 0072, decision
+         * 4), until it has more to say. */
+        state: "updated"
+        from: string
+      }
+  )
+
+/** What it asks of this machine's engine: a look now, which answers the
+ * state it found (`updates.check`), and to say what this app's update is
+ * (`updates.app`). */
+export type Engine = {
+  check: () => Promise<UpdateState>
+  app: (said: AppUpdate) => Promise<unknown>
+}
 
 /** What main does with Banda's update. */
 export type Updates = {
   readonly current: () => Update
-  /** What the engine says on `updates.state`, each change. */
+  /** What the engine says on `updates.state`, each change: its looks,
+   * what it has of this app's update, and whether it asks the app to
+   * restart. */
   readonly heard: (state: UpdateState) => void
-  /** Looks for a new version now, as the Person asked; not while one
-   * downloads. */
-  readonly check: () => void
-  /** Restarts into a new version as soon as one is down, looking for it
-   * first when none downloads (ADR 0045). */
-  readonly now: () => void
-  /** Keeps the version that downloads for the quit. */
-  readonly later: () => void
-  /** Installs the version that is ready and starts it; nothing if none
-   * is. When the last look is over an hour old, only once a look offers it
-   * again. */
-  readonly restart: () => void
-  /** The Person saw that Banda updated: `none` again. */
-  readonly seen: () => void
+}
+
+/** `now`, as the engine takes it (`updates.app`). */
+export function appOf(now: Update): AppUpdate {
+  const known = {
+    name: now.name,
+    running: now.have,
+    ...(now.always && { always: true }),
+  }
+  switch (now.state) {
+    case "none":
+      return { ...known, phase: "none" }
+    case "downloading":
+      return {
+        ...known,
+        phase: "downloading",
+        version: now.version,
+        share: now.share,
+        ...(now.down !== undefined && { down: Math.round(now.down) }),
+        ...(now.size !== undefined && { size: Math.round(now.size) }),
+      }
+    case "ready":
+      return { ...known, phase: now.doing ?? "ready", version: now.version }
+    case "out":
+      return {
+        ...known,
+        phase: "out",
+        version: now.version,
+        command: now.command,
+      }
+    case "failed":
+      return { ...known, phase: "failed", why: now.reason }
+    case "updated":
+      return { ...known, phase: "updated", from: now.from }
+  }
 }
 
 /**
- * Banda's update for `mine`; `tell` hears each change, and `leaving` is
- * called as Banda quits to install it. One machine on every system: what
+ * Banda's update for `mine`, which it tells `engine` at each change;
+ * `leaving` is called as Banda quits to install it. One machine on every system: what
  * differs between them is its `Installer` (installer.ts).
  *
  * A look offers a version; the installer takes it, and it is `ready`.
- * Restart installs it and starts it, saying each step (`doing`), after a
+ * Once the engine asks, as the Person said Update, it installs it and
+ * starts it, saying each step (`doing`), after a
  * look first when the last one is over an hour old, as the version may
  * have been withdrawn since (ADR 0092, decision 10). With no window
  * shown, it restarts so by itself, unseen, and never under the Person's
@@ -130,7 +207,6 @@ export type Updates = {
 export function updates(
   mine: App,
   engine: Engine,
-  tell: (now: Update) => void,
   leaving: () => void = () => {}
 ): Updates {
   const image = process.env.APPIMAGE
@@ -156,18 +232,9 @@ export function updates(
   let now: Update = left
     ? { ...known, state: "updated", ...left }
     : { ...known, state: "none" }
-  if (!looks || !which) {
-    const nothing = () => {}
-    return {
-      current: () => now,
-      heard: nothing,
-      check: nothing,
-      now: nothing,
-      later: nothing,
-      restart: nothing,
-      seen: nothing,
-    }
-  }
+  if (!looks || !which)
+    // It says nothing, so the engine says nothing of an app.
+    return { current: () => now, heard: () => {} }
   /** The engine's last word: the release the looks read. */
   let said: UpdateState | undefined
   autoUpdater.setFeedURL(
@@ -181,7 +248,6 @@ export function updates(
   // The installer takes what a look offers: a look while a version is
   // ready offers it again, and downloading it again would start it over.
   autoUpdater.autoDownload = false
-  autoUpdater.fullChangelog = true
   autoUpdater.logger = { info() {}, debug() {}, warn: console.warn, error() {} }
   const looking = engineLooks(engine)
   /** How this system installs; none for a Mac's Banda brew did not
@@ -204,21 +270,29 @@ export function updates(
   const command = `brew update && brew upgrade --cask ${mine.folder}`
   const system = windows ? "Windows" : mac ? "macOS" : "Linux"
 
+  /** Tells the engine what this app's update is now. One older than ADR
+   * 0137 refuses it, and one away hears it as it comes back (`heard`). */
+  const say = () => void engine.app(appOf(now)).catch(() => {})
   const set = (next: DistributiveOmit<Update, keyof Known>) => {
     now = { ...known, ...next }
-    tell(now)
+    say()
   }
-  // The Person asked for the look that runs (it says what it found), and
-  // for a restart once its version is down.
-  let asked = false
+  // A restart goes on into a newer version that comes down meanwhile,
+  // once it is down.
   let restarts = false
+  /** Until when the engine asks the app to restart, as it last said, in
+   * ms since the epoch; and the one acted on, each only once. */
+  let wants = 0
+  let obeyed = 0
+  /** Set while a restart's look waits for an engine that is away: what
+   * ends the wait. */
+  let away: ReturnType<typeof setTimeout> | undefined
   // A restart waits for the look that runs to offer the version ready
   // again, as the last one is over an hour old.
   let confirms = false
   // Banda restarts into the version ready: no look or answer changes it
   // as it quits, nor deletes its file.
   let restarting = false
-  let looked: number | undefined
   let retry: ReturnType<typeof setTimeout> | undefined
   /** The reads a minute apart that wait for this system's files, and for
    * what the installer takes of `version` (brew's tap): each waits at
@@ -237,35 +311,30 @@ export function updates(
   let watch: ReturnType<typeof setInterval> | undefined
 
   const fail = (reason: string) => {
-    asked = restarts = confirms = false
+    restarts = confirms = false
     set({ state: "failed", reason })
   }
   /** Nothing new, as the last look found. */
   const rest = () => {
-    asked = restarts = confirms = false
-    set({ state: "none", looked })
+    restarts = confirms = false
+    set({ state: "none" })
   }
   /** Says `info`'s version is out, with the command that installs it. */
   const out = (info: UpdateInfo) => {
-    asked = restarts = confirms = false
-    set({
-      state: "out",
-      version: info.version,
-      notes: notesOf(info, have),
-      command,
-    })
+    restarts = confirms = false
+    set({ state: "out", version: info.version, command })
   }
   /** The version ready waits for the Person again: what it did since
    * they said Update came to nothing. */
   const waits = () => {
     if (now.state === "ready" && now.doing && !restarting)
-      set({ state: "ready", version: now.version, notes: now.notes })
+      set({ state: "ready", version: now.version })
   }
   /** A version that could not be taken: one ready stays, and waits for
    * the Person again; else the command, which still installs it by hand. */
   const drop = (info: UpdateInfo) => {
     if (now.state !== "ready") return out(info)
-    asked = restarts = false
+    restarts = false
     waits()
   }
   /** Reads the release again in a minute, as this system's files and the
@@ -305,7 +374,6 @@ export function updates(
     offered = { version: info.version, at: Date.now() }
     if (!installer) return out(info)
     if (now.state === "ready" && now.version === info.version) {
-      asked = false
       if (confirms) restart()
       else waits()
       return
@@ -321,18 +389,20 @@ export function updates(
   /** `by` takes `info`'s version: ready once it is down. */
   const take = (by: Installer, info: UpdateInfo) => {
     taking = info.version
-    const notes = notesOf(info, have)
     if (by.downloads)
       set({
         state: "downloading",
         version: info.version,
         share: 0,
-        notes,
-        restarts,
       })
     by.take(info, {
       progress(progress) {
-        if (now.state === "downloading") set({ ...now, ...progress })
+        // Said as often as its row changes: each hundredth.
+        if (
+          now.state === "downloading" &&
+          Math.round(progress.share * 100) !== Math.round(now.share * 100)
+        )
+          set({ ...now, ...progress })
       },
       done(down) {
         taking = undefined
@@ -345,10 +415,10 @@ export function updates(
           else drop(info)
           return
         }
-        asked = false
-        set({ state: "ready", version: info.version, notes })
-        // "Update now" restarts once it is down (ADR 0045).
-        if (restarts) restart()
+        set({ state: "ready", version: info.version })
+        // The Person said Update while it came down, or the engine still
+        // asks: it restarts once it is down.
+        if (restarts || wants > Date.now()) restart()
         else if (by.unseen) watchAlone()
       },
       failed(error) {
@@ -362,21 +432,20 @@ export function updates(
   // was withdrawn, and goes (ADR 0092, decision 10).
   autoUpdater.on("update-not-available", (info: UpdateInfo) => {
     if (restarting) return
-    looked = Date.now()
-    offered = { version: info.version, at: looked }
+    offered = { version: info.version, at: Date.now() }
     files.tries = 0
     if (now.state === "ready")
       console.warn(`Banda ${now.version} is no longer out: it will not install`)
+    // That Banda updated stays until it has more to say.
     if (now.state !== "updated") rest()
-    else asked = false
   })
   /** A look that came to nothing, or the download (`download`), and
-   * `why`. One that fails for want of a network says nothing unless the
-   * Person asked, and the next look tries again. */
+   * `why`. One that fails for want of a network says nothing, and the
+   * next look tries again. */
   const missed = (why: string, download = false) => {
     if (confirms && now.state === "ready") {
       // No look says the version ready is still out, so no restart into
-      // it: the Restart says why nothing happened.
+      // it: the row says why nothing happened.
       confirms = false
       fail(`Could not check that ${now.version} is still out: ${why}`)
       return
@@ -387,13 +456,7 @@ export function updates(
       restarts = false
       waits()
     }
-    const down = download && now.state === "downloading"
-    if (asked) {
-      asked = false
-      looked = Date.now()
-      if (down || now.state === "looking" || now.state === "none")
-        set({ state: "none", looked, missed: why })
-    } else if (down) set({ state: "none", looked })
+    if (download && now.state === "downloading") set({ state: "none" })
   }
   autoUpdater.on("error", (error: Error & { code?: string }) => {
     console.warn("Banda could not update itself:", error.message)
@@ -425,39 +488,58 @@ export function updates(
     // The same error comes as an "error" event.
     autoUpdater.checkForUpdates().catch(() => {})
   }
-  /** Whether `state` was of a look not yet read. */
+  /** What the engine says: what it has of this app's update, whether it
+   * asks the app to restart, and its looks; whether `state` was of a look
+   * not yet read. */
   const heard = (state: UpdateState): boolean => {
     said = state
+    // An engine that started since has nothing of this app, or what
+    // another version of it said: it hears it.
+    if (state.app?.running !== have) say()
+    wants = state.wants_app ?? 0
+    if (wants > Date.now() && wants !== obeyed) {
+      obeyed = wants
+      // The Person's Update (ADR 0137, decision 3).
+      refused = undefined
+      // One that comes down still restarts once it is down, while the
+      // engine asks.
+      if (now.state === "ready") restart()
+    }
+    // The engine is back: the look a restart waited for runs.
+    if (away !== undefined && confirms) {
+      clearTimeout(away)
+      away = undefined
+      look()
+    }
     if (!looking.anew(state)) return false
     // The engine takes nothing here, and the app neither.
     if (state.off) missed(state.off)
     else read()
     return true
   }
-  /** Asks the engine to look now, as the Person did, or as a restart
-   * after an hour with no look does; its answer is read as it comes. */
-  const look = (byPerson: boolean) => {
+  /** Asks the engine to look now, as a restart after an hour with no
+   * look does; its answer is read as it comes. */
+  const look = () => {
     if (busy()) return
-    // Banda's widget says nothing with nothing new: its look stays quiet,
-    // as ADR 0041 has it; and one ready or out stays shown while it looks.
-    if (byPerson && known.always) {
-      asked = true
-      if (now.state !== "out" && now.state !== "ready")
-        set({ state: "looking" })
-    }
-    looking.now((state) => {
-      if (heard(state)) return
-      // No look to read: the Restart that waited for one is over, and
-      // the Person's look found what the last one did.
-      if (confirms) {
-        confirms = false
-        waits()
+    looking.now(
+      (state) => {
+        // No look to read: the Restart that waited for one is over.
+        if (!heard(state) && confirms) {
+          confirms = false
+          waits()
+        }
+      },
+      (why) => {
+        // The engine is away, as one that moves on the same Update: the
+        // look runs again once it is heard, for a while.
+        if (confirms && away === undefined)
+          away = setTimeout(() => {
+            away = undefined
+            missed(why)
+          }, ENGINE_BACK)
+        else missed(why)
       }
-      if (asked) {
-        asked = false
-        if (now.state === "looking") set({ state: "none", looked })
-      }
-    }, missed)
+    )
   }
   /** With the version ready, restarts into it unseen once no window has
    * shown for two looks in a row, half a minute apart. */
@@ -496,7 +578,7 @@ export function updates(
     // have been withdrawn since (ADR 0092, decision 10).
     if (!fresh) {
       confirms = true
-      look(false)
+      look()
       return
     }
     confirms = restarts = false
@@ -508,10 +590,10 @@ export function updates(
           // installer takes the version it finds.
           restarting = false
           if (!unseen) restarts = true
-          look(false)
+          look()
           return
         }
-        leave({ from: have, to: ready.version, notes: ready.notes })
+        leave({ from: have, to: ready.version })
         if (!unseen) set({ ...ready, doing: "restarting" })
         // Quit as the Person or the system asked meanwhile: the next
         // start is the new version, and says so.
@@ -533,30 +615,7 @@ export function updates(
       }
     )
   }
-  return {
-    current: () => now,
-    heard: (state) => void heard(state),
-    check: () => look(true),
-    now() {
-      restarts = true
-      refused = undefined
-      if (now.state === "ready") restart()
-      else if (now.state === "downloading") set({ ...now, restarts })
-      else if (taking === undefined) look(true)
-    },
-    later() {
-      restarts = confirms = false
-      if (now.state === "downloading") set({ ...now, restarts })
-      waits()
-    },
-    restart() {
-      refused = undefined
-      restart()
-    },
-    seen() {
-      if (now.state === "updated") set({ state: "none", looked })
-    },
-  }
+  return { current: () => now, heard: (state) => void heard(state) }
 }
 
 /**
@@ -658,7 +717,7 @@ export function installsAtQuit(quit: {
 
 /** What a Banda that restarts into a new version leaves for it (ADR 0072,
  * decision 4). */
-type Left = { from: string; to: string; notes: Note[] }
+type Left = { from: string; to: string }
 
 /** Where it leaves it: the app's folder of data, the same for both. */
 const leftAt = () => join(app.getPath("userData"), "update.json")
@@ -695,10 +754,7 @@ export function arrivedAt(
   try {
     const left = JSON.parse(text) as Partial<Left>
     if (left.to !== have || typeof left.from !== "string") return undefined
-    return {
-      from: left.from,
-      notes: Array.isArray(left.notes) ? left.notes : [],
-    }
+    return { from: left.from }
   } catch {
     return undefined
   }
@@ -720,24 +776,4 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
  * mend themselves. */
 export function needsPerson(error: Error & { code?: string }): boolean {
   return ["EACCES", "EPERM", "EROFS", "ENOSPC"].includes(error.code ?? "")
-}
-
-/** What changed since `have`, newest first: each release's notes as
- * text (releases.ts), a line apiece, with no blank ones. */
-export function notesOf(info: UpdateInfo, have: string): Note[] {
-  const notes = Array.isArray(info.releaseNotes)
-    ? info.releaseNotes
-    : [{ version: info.version, note: info.releaseNotes ?? null }]
-  return notes
-    .map((n) => ({ version: n.version, text: linesOf(n.note ?? "") }))
-    .filter((n) => n.version !== have && n.text)
-}
-
-/** `text`'s lines, each trimmed, with no blank ones. */
-function linesOf(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .join("\n")
 }

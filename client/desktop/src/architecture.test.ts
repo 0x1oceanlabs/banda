@@ -117,7 +117,6 @@ const MAIN_ANSWERS = [
   "hostInstalling",
   "hostStop",
   "sshSuggestions",
-  "update",
 ]
 
 /** The parts `source` answers itself in its `serve(…)`: those written

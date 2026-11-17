@@ -278,9 +278,10 @@ async function ready(): Promise<void> {
     )
   )
   // The app's own update, the updates module's part here (ADR 0119,
-  // decision 2): the engine's updates module says what is newest, and
-  // this window swaps its app. Its restart leaves the engine and its
-  // Agents running: the engine moves onto its new copy once nothing runs.
+  // decision 2; ADR 0137): the engine's updates module says what is
+  // newest and when to restart, this window swaps its app, and says each
+  // step to the engine. Its restart leaves the engine and its Agents
+  // running: the engine moves onto its new copy once nothing runs.
   const engineClient = () =>
     runtime.runPromise(Engine.use((engine) => engine.client))
   const update = appUpdates.updates(
@@ -302,8 +303,11 @@ async function ready(): Promise<void> {
     {
       check: () =>
         engineClient().then((client) => client.call("updates.check", {})),
+      // The engine says it on `updates.state`, where the page reads it
+      // (ADR 0137, decision 2).
+      app: (said) =>
+        engineClient().then((client) => client.call("updates.app", said)),
     },
-    (now) => tellPage(windows?.main()?.webContents, BRIDGE.update.listen, now),
     () => quitting?.updating()
   )
   void engineClient().then((client) =>
@@ -410,15 +414,6 @@ async function ready(): Promise<void> {
     // Quit Banda (ADR 0086, decision 3): the page asked first when Agents
     // are working.
     quit: quitAnswer,
-    // Banda's own update (ADR 0041).
-    update: {
-      current: [none, () => Effect.sync(update.current)],
-      check: [none, () => Effect.sync(update.check)],
-      restart: [none, () => Effect.sync(update.restart)],
-      now: [none, () => Effect.sync(update.now)],
-      later: [none, () => Effect.sync(update.later)],
-      seen: [none, () => Effect.sync(update.seen)],
-    },
     // The page's answers to the actions it was asked to run (acts.ts).
     act: actsAnswers,
     // Panes in windows of their own (ADR 0025, decision 9): the window
