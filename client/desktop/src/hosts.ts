@@ -27,6 +27,10 @@
  * then holds no secret of that machine's owner. An engine with no door
  * yet, a main with no key and a machine that would not pair are reached
  * as before: the page gets the forward's address and the engine's secret.
+ * Where that machine serves its door on the tailnet and it answers there,
+ * no forward runs: the page reaches the door itself (`direct`), and after
+ * a go that was live that door is asked before any ssh, as when this
+ * machine wakes.
  * Either way only once that
  * ssh itself listens on the port, never another program that took it
  * first, and it loses them the moment either ssh ends. The secret goes
@@ -668,6 +672,12 @@ export const pairCommand = (
     `exec ${RUNTIME} ${b} devices add --key ${key} --name "${nameThere(name)}" --kind desktop --origin ${ORIGIN}`,
   ])
 
+/** What asks a machine where its door is served (`throughSh`): `banda
+ * devices list`, whose `doors` are its tailnet addresses, as `tailscale
+ * serve` there says them. */
+export const doorsCommand = (banda: string | undefined, own: Own = channel) =>
+  throughSh(banda, own, (b) => [`exec ${RUNTIME} ${b} devices list`])
+
 /** `name` as a command there carries it: letters, digits, spaces and
  * `.`, `_`, `-`; "This device" when nothing is left. */
 const nameThere = (name: string) =>
@@ -890,6 +900,13 @@ const Running = Schema.fromJsonString(
     host_key: Schema.optional(Schema.String),
   })
 )
+/** What `banda devices list` prints there, of which only where its door
+ * is served is read. */
+const Listed = Schema.fromJsonString(
+  Schema.Struct({
+    ok: Schema.Struct({ doors: Schema.Array(Schema.String) }),
+  })
+)
 /** What `banda devices add` prints there once this device is paired. */
 const Added = Schema.fromJsonString(
   Schema.Struct({ ok: Schema.Struct({ id: Schema.String }) })
@@ -1028,6 +1045,8 @@ export type Times = {
   signin: number
   /** For Test to answer. */
   test: number
+  /** For a door on the tailnet to answer, and between two asks of it. */
+  door: number
 }
 
 /** How long a window waits, where a test says nothing else. */
@@ -1038,6 +1057,7 @@ export const TIMES: Times = {
   answer: 60_000,
   signin: 10 * 60_000,
   test: 30_000,
+  door: 3_000,
 }
 
 /** How long Stop Banda waits for the engine there to stop: as long as
@@ -1614,13 +1634,14 @@ const keep = (
       ).pipe(Effect.andThen(Deferred.await(next)))
     if (held) yield* stoppedUntil(held)
     let wait = times.first
+    let quick = false
     while (true) {
       // Made before the go, so it is there as soon as the host shows
       // stopped or refused.
       const next = yield* Deferred.make<void>()
       yield* begin(next)
-      const ended = yield* Effect.scoped(
-        once(host, set, said, told, run).pipe(
+      const ended: Ended = yield* Effect.scoped(
+        once(host, set, said, told, run, quick).pipe(
           // Said before the scope closes, as it ends the follower; a live
           // go said it as soon as one ssh ended.
           Effect.tap((ended) => (ended.live ? Effect.void : set(linkOf(ended))))
@@ -1642,6 +1663,7 @@ const keep = (
         wait = times.first
         continue
       }
+      quick = ended.live === true
       if (ended.live) wait = times.first
       yield* Console.error(
         `banda: ${host.name} is away (${ended.why}); Banda tries again in ${wait} ms`
@@ -1658,10 +1680,17 @@ const once = (
   set: (link: Link, address?: EngineAt) => Effect.Effect<void>,
   said: ReturnType<typeof heard>,
   told: Set<string>,
-  run: Run
+  run: Run,
+  /** The go before was live: the link broke, as after a sleep, and the
+   * machine's door on the tailnet may answer before ssh is back. */
+  quick = false
 ) =>
   Effect.gen(function* () {
     const { times } = run
+    if (quick) {
+      const ended = yield* direct(host, set, run)
+      if (ended) return ended
+    }
     /** When a sign-in link showed, which gives the Person longer. */
     let signin: number | undefined
     /** The secret of this go, once known, kept out of what the log says. */
@@ -1768,6 +1797,27 @@ const once = (
         ? yield* pairedAt(host, run.key, run)
         : undefined
     const to = paired === undefined ? port : (door as number)
+    if (paired !== undefined) {
+      const now = { build: buildOf(build), version: versionNamed(version) }
+      const before = doorsKept(run)[host.ssh]
+      doorsKept(run, {
+        [host.ssh]: {
+          ...now,
+          hostKey: host_key as string,
+          device: paired,
+          door: before?.hostKey === host_key ? before.door : undefined,
+        },
+      })
+      // Where its door is served is asked beside the go, for the next.
+      yield* Effect.forkScoped(servedAt(host, run))
+      const ended = yield* direct(
+        host,
+        set,
+        run,
+        exited(follower).pipe(Effect.map((code) => endOf(host, code)))
+      )
+      if (ended) return ended
+    }
 
     for (let tries = 1; ; tries++) {
       const ended: Ended | "again" = yield* Effect.scoped(
@@ -1822,7 +1872,7 @@ const once = (
           }
           const url = `ws://127.0.0.1:${from}/ws`
           yield* set(
-            { state: "live", ...now, own: ours },
+            { state: "live", ...now, own: ours, route: "ssh" },
             paired === undefined
               ? { url, secret }
               : { url, door: { device: paired, hostKey: host_key as string } }
@@ -1858,6 +1908,137 @@ const once = (
       )
     )
   )
+
+/** What this device keeps of a machine it paired at, by its address, to
+ * reach its door on the tailnet: the host key it proved, the device this
+ * one is there, its build as its last go over ssh said it, and where its
+ * door is served, once it said. */
+type Door = {
+  hostKey: string
+  device: string
+  build: string | null
+  version: string | null
+  door?: string
+}
+
+/** Those kept for a run of main with no file. */
+let doorsHere: Record<string, Door> = {}
+
+/** The doors kept, in `host-doors.json` beside the host keys; with
+ * `more`, kept with those too. A file that does not read is none. */
+const doorsKept = (run: Run, more?: Record<string, Door>) => {
+  const file =
+    run.proved === undefined
+      ? undefined
+      : join(dirname(run.proved), "host-doors.json")
+  let kept = doorsHere
+  if (file !== undefined)
+    try {
+      kept = JSON.parse(readFileSync(file, "utf8")) as Record<string, Door>
+    } catch {
+      kept = {}
+    }
+  if (more === undefined) return kept
+  kept = { ...kept, ...more }
+  doorsHere = kept
+  if (file !== undefined)
+    try {
+      writeWhole(file, `${JSON.stringify(kept, null, 2)}\n`, 0o600)
+    } catch {
+      // Kept for this run alone.
+    }
+  return kept
+}
+
+/** Asks `host` where its door is served, over ssh, and keeps the first
+ * address for the next go; one that serves none is kept with none. */
+const servedAt = (host: Entry, run: Run) =>
+  outputOf(run, "ssh", commandArgs(host, doorsCommand(host.banda))).pipe(
+    Effect.flatMap(([said]) => Schema.decodeUnknownEffect(Listed)(said.trim())),
+    Effect.map((listed) => {
+      const kept = doorsKept(run)[host.ssh]
+      const door = listed.ok.doors.find((one) =>
+        /^https?:\/\/[^/]+\/?$/.test(one)
+      )
+      if (kept && kept.door !== door)
+        doorsKept(run, { [host.ssh]: { ...kept, door } })
+    }),
+    Effect.ignore
+  )
+
+/** Whether the door at `url` answers now as the page will ask it: a
+ * WebSocket through the same pipe, whose first frame is a door's
+ * challenge that says `hostKey`. Its signature is the page's to check,
+ * as it holds the door to it; this only says the pipe carries the door. */
+const doorAnswers = (url: string, hostKey: string, within: number) =>
+  Effect.callback<boolean>((resume) => {
+    let socket: WebSocket | undefined
+    const say = (answers: boolean) => {
+      clearTimeout(late)
+      socket?.close()
+      resume(Effect.succeed(answers))
+    }
+    const late = setTimeout(() => say(false), within)
+    try {
+      socket = new WebSocket(url)
+      socket.onerror = socket.onclose = () => say(false)
+      socket.onmessage = ({ data }) => {
+        try {
+          const frame = JSON.parse(String(data)) as Record<string, unknown>
+          say(frame.type === "challenge" && frame.host_key === hostKey)
+        } catch {
+          say(false)
+        }
+      }
+    } catch {
+      say(false)
+    }
+    return Effect.sync(() => say(false))
+  })
+
+/**
+ * A go at `host` by its door on the tailnet (ADR 0124, decision 4), with
+ * no forward: live while that door answers, with the page given its
+ * address there, the device this one is and the host key to hold it to.
+ * None where this device keeps no such door, another machine holds its
+ * key, or it does not answer now: ssh goes on. With `until`, as the
+ * follower's end, it ends so too; alone, it starts nothing there, and
+ * says the build the last go over ssh said.
+ */
+const direct = (
+  host: Entry,
+  set: (link: Link, address?: EngineAt) => Effect.Effect<void>,
+  run: Run,
+  until?: Effect.Effect<Ended>
+): Effect.Effect<Ended | undefined> =>
+  Effect.gen(function* () {
+    const kept = doorsKept(run)[host.ssh]
+    if (run.key === undefined || kept?.door === undefined) return undefined
+    const { door, hostKey, device, build, version } = kept
+    if (!(yield* provedBy(host, hostKey, run))) return undefined
+    const at = new URL("/ws", door)
+    at.protocol = at.protocol === "https:" ? "wss:" : "ws:"
+    const answers = doorAnswers(at.href, hostKey, run.times.door)
+    if (!(yield* answers)) return undefined
+    yield* set(
+      { state: "live", build, version, own: yield* run.own, route: "tailnet" },
+      { url: at.href, door: { device, hostKey } }
+    )
+    yield* Console.error(
+      `banda: ${host.name} is live, at its door on the tailnet`
+    )
+    /** Ends once the door answered nothing twice in a row. */
+    const silent = Effect.gen(function* () {
+      for (let missed = 0; missed < 2;) {
+        yield* Effect.sleep(run.times.door)
+        missed = (yield* answers) ? 0 : missed + 1
+      }
+      return away(`${host.name}'s door on the tailnet stopped answering`)
+    })
+    const end = yield* until ? Effect.raceFirst(until, silent) : silent
+    yield* set(linkOf(end))
+    return { ...end, live: true } satisfies Ended
+  })
 
 /** A host key, as an engine says it: an Ed25519 key in base64url. */
 const HOST_KEY = /^[\w-]{43}$/

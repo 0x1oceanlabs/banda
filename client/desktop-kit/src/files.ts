@@ -11,6 +11,7 @@
  * for the two hosts stay as they were.
  */
 import { type IncomingMessage, request as asking } from "node:http"
+import { request as askingSafely } from "node:https"
 import { Readable } from "node:stream"
 import type { ReadableStream as NodeWeb } from "node:stream/web"
 import type { Address } from "@banda/contract"
@@ -72,12 +73,13 @@ export function namedBy(url: string): Named | null {
   return { machine, route, token }
 }
 
-/** Where the engine listening at `address` (its API's `ws://` URL, always
- * on this machine's loopback, through its forward for another machine's)
- * serves `named`, over plain HTTP. */
+/** Where the engine listening at `address` serves `named`: over plain
+ * HTTP at its `ws://` URL, on this machine's loopback, its own or another
+ * machine's through its forward; over HTTPS at a `wss://` one, another
+ * machine's door on the tailnet. */
 export function relayedTo(named: Named, address: string): URL {
   const engine = new URL(address)
-  engine.protocol = "http:"
+  engine.protocol = engine.protocol === "wss:" ? "https:" : "http:"
   return new URL(`/${named.route}/${named.token}`, engine)
 }
 
@@ -108,7 +110,8 @@ function ask(to: URL, request: Request): Promise<Response> {
     if (value !== null) headers[name] = value
   }
   return new Promise((answered, failed) => {
-    const going = asking(to, { method: request.method, headers }, (answer) =>
+    const asks = to.protocol === "https:" ? askingSafely : asking
+    const going = asks(to, { method: request.method, headers }, (answer) =>
       answered(relayed(answer, request.method === "HEAD"))
     )
     going.on("error", failed)

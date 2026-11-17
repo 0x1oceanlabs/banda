@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process"
-import { createConnection, createServer, type Server } from "node:net"
+import { createHash } from "node:crypto"
+import {
+  type AddressInfo,
+  createConnection,
+  createServer,
+  type Server,
+} from "node:net"
 import {
   mkdirSync,
   mkdtempSync,
@@ -830,7 +836,7 @@ if (args[0] === "-G") {
 }
 const kind = args.includes("-N")
   ? "forward"
-  : / (status|stop|devices add)\\b|\\| sh -s --/.test(args.at(-1))
+  : / (status|stop|devices (add|list))\\b|\\| sh -s --/.test(args.at(-1))
     ? "command"
     : "follower"
 const runs = play[kind + "s"] ?? [[kind === "command" ? { exit: 0 } : { listen: true }]]
@@ -895,7 +901,7 @@ function fakeSsh(play: Play) {
     runs: (kind: "-G" | "-N" | "follower" | "command", ssh?: string) =>
       calls().filter(({ args }) => {
         if (ssh !== undefined && !args.includes(ssh)) return false
-        const command = / (status|stop|devices add)\b|\| sh -s --/.test(
+        const command = / (status|stop|devices (add|list))\b|\| sh -s --/.test(
           args.at(-1)!
         )
         if (kind === "command") return args[0] !== "-G" && command
@@ -939,6 +945,7 @@ const FAST: Times = {
   answer: 5_000,
   signin: 10_000,
   test: 5_000,
+  door: 300,
 }
 
 const DEVBOX_TOML = `[[hosts]]\nname = "devbox"\nssh = "devbox"\nbanda = "~/.local/bin/banda-dev"\n`
@@ -1209,6 +1216,131 @@ it.live(
   20_000
 )
 
+/** A machine's door as the tailnet serves it, here on loopback: a
+ * WebSocket whose first frame is its challenge, for `hostKey`, until
+ * closed. */
+const doorOf = (hostKey: string) =>
+  Effect.acquireRelease(
+    Effect.callback<Server>((resume) => {
+      const server = createServer((socket) => {
+        socket.once("data", (asked) => {
+          const key = /sec-websocket-key: (\S+)/i.exec(String(asked))?.[1]
+          const accept = createHash("sha1")
+            .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+            .digest("base64")
+          const frame = Buffer.from(
+            JSON.stringify({ type: "challenge", host_key: hostKey })
+          )
+          socket.write(
+            `HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-accept: ${accept}\r\n\r\n`
+          )
+          socket.write(
+            Buffer.concat([Buffer.from([0x81, frame.length]), frame])
+          )
+        })
+        socket.on("error", () => {})
+      })
+      server.listen(0, "127.0.0.1", () => resume(Effect.succeed(server)))
+    }),
+    (server) => Effect.sync(() => server.close())
+  )
+
+it.live(
+  "a machine whose door the tailnet serves is reached there with no forward; after a go that was live it is tried there first, with no ssh; its door silent, ssh goes again",
+  () =>
+    Effect.gen(function* () {
+      const key = "t".repeat(43)
+      const door = yield* doorOf(key)
+      const { port } = door.address() as AddressInfo
+      const at = `http://127.0.0.1:${port}`
+      const fake = fakeSsh({
+        followers: [
+          [
+            {
+              out: running("s3cr3t-one", 4321, 1, {
+                door: 22_633,
+                host_key: key,
+              }),
+            },
+            { until: "drop" },
+            { exit: 255 },
+          ],
+          [
+            {
+              out: running("s3cr3t-one", 4321, 1, {
+                door: 22_633,
+                host_key: key,
+              }),
+            },
+          ],
+        ],
+        commands: [
+          [{ out: JSON.stringify({ ok: { id: "device-1" } }), exit: 0 }],
+          [{ out: JSON.stringify({ ok: { doors: [at] } }), exit: 0 }],
+        ],
+      })
+      const proved = join(fake.dir, "host-keys.json")
+      // Its door, as the go before asked where it is served.
+      writeFileSync(
+        join(fake.dir, "host-doors.json"),
+        JSON.stringify({
+          devbox: {
+            hostKey: key,
+            device: "device-0",
+            build: "old",
+            version: "0.1.0-dev.1",
+            door: at,
+          },
+        })
+      )
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        const live = { url: `ws://127.0.0.1:${port}/ws` }
+        // Over ssh it says its build and pairs; the door answers, so no
+        // forward runs.
+        expect(yield* hosts.address("devbox")).toEqual({
+          ...live,
+          door: { device: "device-1", hostKey: key },
+        })
+        expect((yield* hosts.current)[0]).toMatchObject({
+          state: "live",
+          route: "tailnet",
+          build: "abc123",
+        })
+        expect(fake.runs("-N")).toHaveLength(0)
+        // The link breaks, as after a sleep: the door first, with no ssh.
+        fake.touch("drop")
+        yield* reaches((host) => host.state === "away")
+        yield* reaches(
+          (host) => host.state === "live" && host.route === "tailnet"
+        )
+        expect(fake.runs("follower")).toHaveLength(1)
+        expect(yield* hosts.signed(hello(key))).toBe(`signed:${hello(key)}`)
+        // Its door silent, ssh goes again, and forwards.
+        yield* Effect.sync(() => door.close())
+        const again = yield* reaches(
+          (host) => host.state === "live" && host.route === "ssh"
+        )
+        expect(again).toMatchObject({ build: "abc123" })
+        expect(fake.runs("follower")).toHaveLength(2)
+        expect(fake.runs("-N")).toHaveLength(1)
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          hostsOn(
+            fake,
+            { first: 50, door: 200 },
+            DEVBOX_TOML,
+            undefined,
+            KEY,
+            proved
+          )
+        )
+      )
+    }).pipe(Effect.scoped),
+  30_000
+)
+
 it("a device's name goes to the other machine with nothing a shell reads", () => {
   expect(pairCommand("banda", "K3Y", `Roma's "Mac"; rm -rf $HOME`)).toContain(
     `--name "Romas Mac rm -rf HOME" --kind`
@@ -1251,6 +1383,7 @@ it.live(
           build: "abc123",
           version: "0.1.0-dev.2",
           own: { build: "def456", version: "0.1.0-dev.1" },
+          route: "ssh",
         })
         // ssh -G first, then the follower, then the forward to the port
         // the follower was told.

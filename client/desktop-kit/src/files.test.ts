@@ -214,6 +214,11 @@ it("each host goes to its own route on the engine, over http", () => {
     "http://127.0.0.1:4321/p/ab"
   )
   expect(namedBy("app://banda/index.html")).toBeNull()
+  // Another machine's door on the tailnet, over HTTPS.
+  expect(
+    relayedTo(namedBy("app://files/arc/ab")!, "wss://arc.example.ts.net/ws")
+      .href
+  ).toBe("https://arc.example.ts.net/b/ab")
 })
 
 it("a URL names the machine that gave its token, or none for this machine's", () => {

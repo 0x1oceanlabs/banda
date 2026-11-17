@@ -1428,8 +1428,11 @@ test("a Mac there, with no banda in hosts.toml: the window finds its Banda in th
   await expect(there.getByText("Bench window tests")).toBeVisible()
   // It ran the copy a Mac keeps, as arc's uname said Darwin: to follow
   // arc's engine, and to pair this device at its door.
-  const copy = `${join(arc.dir, "home", MAC_COPY)}\n`
-  expect(readFileSync(join(arc.dir, "home/ran"), "utf8")).toBe(copy + copy)
+  // Asking where its door is served runs it once more, beside the go.
+  const copy = join(arc.dir, "home", MAC_COPY)
+  const ran = readFileSync(join(arc.dir, "home/ran"), "utf8").trim().split("\n")
+  expect(ran.length).toBeGreaterThanOrEqual(2)
+  expect(new Set(ran)).toEqual(new Set([copy]))
 })
 
 test("another machine's Thread that calls opens on its engine by Alt+U and from its toast, never on this one's", async () => {
