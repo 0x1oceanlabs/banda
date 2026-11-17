@@ -30,7 +30,9 @@ PR.
   WebAssembly (`tiling/engine.ts`;
   `tilingModel` in `vite.config.ts` runs `cargo build` for
   `platform/tiling/wasm`), so the page's tests and its build need Rust with the target `wasm32-unknown-unknown`, which `rust-toolchain.toml`
-  names. A popped-out Pane's window is the
+  names. What a change does to the view (the focus, the screen, where the
+  focus goes back to after a close) is the model's rule too, `view::look`
+  (ADR 0135, decision 9). A popped-out Pane's window is the
   Window's too (`window/Popped.tsx`). The Window routes the keys
   (`window/keys.ts`). What lies over what in the Top layer, which part
   an Esc takes away and where the keys go back as it goes is one stack,

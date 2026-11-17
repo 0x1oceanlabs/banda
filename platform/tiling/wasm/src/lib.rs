@@ -13,6 +13,7 @@ use banda_base::Refusal;
 use banda_tiling::commands;
 use banda_tiling::model::{Arrangement, PaneId, Seed, WorkspaceId};
 use banda_tiling::placing::{self, Facts, Refused};
+use banda_tiling::view::{self, Shape, View};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
@@ -55,6 +56,15 @@ enum Asked {
     /// A new column's width for a Pane of a kind, where the command names
     /// none (`Facts::width`).
     Width { facts: Facts, kind: String },
+    /// A device's view over the arrangement as it stands, with the
+    /// Person's act aimed at a Pane, if one aims (`view::look`).
+    Look {
+        list: Shape,
+        view: View,
+        #[serde(default)]
+        #[ts(optional)]
+        aim: Option<String>,
+    },
 }
 
 /// What the model answers. `apply`: the command's answer and the
@@ -79,6 +89,7 @@ enum Said {
     Refused(Option<Refused>),
     RefusedTo(Vec<WorkspaceId>),
     Width(Option<String>),
+    Looked(View),
 }
 
 fn run(asked: &[u8]) -> Said {
@@ -114,6 +125,7 @@ fn run(asked: &[u8]) -> Said {
             whole,
         } => Said::RefusedTo(placing::refused_to(&list, &facts, pane, whole)),
         Asked::Width { facts, kind } => Said::Width(facts.width(&kind)),
+        Asked::Look { list, view, aim } => Said::Looked(view::look(&list, &view, aim.as_deref())),
     }
 }
 

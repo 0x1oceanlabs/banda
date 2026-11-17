@@ -1,7 +1,8 @@
 //! The Tiling's model: the arrangement and its rules (`model`), where a
 //! Pane goes when no one named a place (`placing`), and its commands as
 //! functions of it (`commands`), with the words of `tiling.toml` they read
-//! (`rule`, `columns`).
+//! (`rule`, `columns`). And what a device looks at, with what a change
+//! does to it (`view`).
 //!
 //! It is a leaf: no store, no file, no clock, and no kernel but its IDs
 //! and its refusal (`banda-base`). So the same code runs in the
@@ -15,3 +16,4 @@ pub mod commands;
 pub mod model;
 pub mod placing;
 pub mod rule;
+pub mod view;
