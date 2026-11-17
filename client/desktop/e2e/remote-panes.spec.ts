@@ -498,3 +498,70 @@ test("what arc's Agent opens shows beside its Thread in this window, marked and 
     .getByRole("tab")
   await expect(tabs).toHaveCount(2)
 })
+
+test("Usage opened from arc's Thread counts arc, by the switch under its header; This Mac's is this machine's; while arc is away its pill says so (ADR 0120, decision 5)", async () => {
+  test.setTimeout(180_000)
+  // arc has a Codex account with limits; this machine has none.
+  const { page, composer } = await onArc([TITLE], (on) => {
+    const cli = join(on.dir, "limits-codex")
+    writeFileSync(
+      cli,
+      `#!/usr/bin/env node
+const lines = require("readline").createInterface({ input: process.stdin })
+lines.on("line", line => {
+  const { id, method } = JSON.parse(line)
+  if (id === undefined) return
+  const result = method === "initialize" ? {} : method === "account/read" ? {
+    account: { type: "chatgpt", email: "arc@example.com", planType: "pro" }
+  } : {
+    rateLimits: { planType: "pro", primary: { usedPercent: 85, windowDurationMins: 10080, resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400 } }
+  }
+  process.stdout.write(JSON.stringify({ id, result }) + "\\n")
+})
+`,
+      { mode: 0o755 }
+    )
+    const list = join(on.dir, "config/harnesses.toml")
+    writeFileSync(
+      list,
+      `${readFileSync(list, "utf8")}\n[[harness]]\nid = "codex"\ncli = { program = ${JSON.stringify(cli)}, variable = "CODEX_PATH" }\n`
+    )
+  })
+  arc!.banda("call", "harnesses.limits", "--params", '{"read":true}')
+  await composer.focus()
+  const menu = await bandaMenu(page)
+  await menu.getByRole("combobox", { name: "Search" }).fill("Usage")
+  await menu.getByRole("option", { name: "Usage", exact: true }).click()
+  const usage = page.locator("[data-sheet]")
+  await expect(usage).toHaveAttribute("aria-label", "Usage")
+
+  // Opened from arc's Thread, it is arc's: arc's account and its limits.
+  const whose = usage.getByRole("radiogroup", { name: "Usage for" })
+  const arcs = whose.getByRole("radio", { name: "arc" })
+  await expect(arcs).toHaveAttribute("aria-checked", "true")
+  await usage.getByRole("tab", { name: "Limits" }).click()
+  const weekly = usage.getByRole("meter", { name: "Weekly used" })
+  await expect(weekly).toHaveAttribute("aria-valuenow", "85")
+  await shot(page, "usage-for-arc")
+
+  // This machine's own: no account here has limits. The pick stays as
+  // the tab changes.
+  await whose.getByRole("radio").first().click()
+  await expect(usage.getByText(/^No limits to show/)).toBeVisible()
+  await usage.getByRole("tab", { name: "Cost" }).click()
+  await expect(whose.getByRole("radio").first()).toHaveAttribute(
+    "aria-checked",
+    "true"
+  )
+  await usage.getByRole("tab", { name: "Limits" }).click()
+  await arcs.click()
+  await expect(weekly).toHaveAttribute("aria-valuenow", "85")
+
+  // arc away: its pill says so under the switch, over what it showed.
+  arc!.blackhole(true)
+  await expect(
+    usage.locator("[data-machine-pill=arc]").getByText("arc is away")
+  ).toBeVisible({ timeout: 60_000 })
+  await expect(weekly).toHaveAttribute("aria-valuenow", "85")
+  await shot(page, "usage-for-arc-away")
+})

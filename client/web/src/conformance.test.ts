@@ -102,6 +102,32 @@ function filesAnswers(method: string): JsonValue | undefined {
   return undefined
 }
 
+/** What arc's engine answers Usage: no account, nothing counted. */
+function usageAnswers(method: string): JsonValue | undefined {
+  if (method === "harnesses.list") return []
+  if (method === "harnesses.limits")
+    return { at: 0, limits: [], warn: 80, look: "icon" }
+  if (method === "harnesses.usage")
+    return {
+      at: 0,
+      reading: false,
+      since: 0,
+      until: 0,
+      price_revision: "",
+      total: {
+        tokens: { input: 0, cache_read: 0, cache_write: 0, output: 0 },
+        sessions: 0,
+        prompts: 0,
+        requests: 0,
+        cost_usd: 0,
+        unpriced: 0,
+      },
+      rows: [],
+      reads: [],
+    }
+  return undefined
+}
+
 /**
  * What the kit is given of each kind, beside the kind: what its engine
  * part answers, its args, the gestures to play. By default a kind is
@@ -123,6 +149,11 @@ const GIVEN: Record<
     args: { scope: { kind: "unstaged" }, file: null },
     answers: diffAnswers,
     reads: ["Scope", "Base", "Refresh"],
+  },
+  // arc's Usage: its tabs, periods and charts only read what arc counted.
+  "harnesses.usage": {
+    answers: usageAnswers,
+    reads: ["Limits", "Cost", "Tokens", "24h", "7d", "30d", "90d"],
   },
   // A Visual arc keeps: its page's token asked of arc as its frame
   // comes near. There is nothing to do in it but look: what its page

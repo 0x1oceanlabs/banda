@@ -30,6 +30,9 @@ type Tile = {
   /** What a double click on the header does: its column the whole screen
    * wide, and back. */
   onWide?: () => void
+  /** A row of the window's under the header, as the Sheet's switch
+   * between machines. */
+  under?: ReactNode
 }
 const TileHeader = createContext<Tile>({})
 
@@ -145,14 +148,23 @@ function PaneHeader({
       </div>
     </header>
   )
-  if (!tile.menu) return header
+  if (!tile.menu)
+    return (
+      <>
+        {header}
+        {tile.under}
+      </>
+    )
   return (
-    <ContextMenu>
-      <ContextMenuTrigger render={header} />
-      <ContextMenuContent aria-label="Pane menu" className="w-72">
-        {tile.menu}
-      </ContextMenuContent>
-    </ContextMenu>
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger render={header} />
+        <ContextMenuContent aria-label="Pane menu" className="w-72">
+          {tile.menu}
+        </ContextMenuContent>
+      </ContextMenu>
+      {tile.under}
+    </>
   )
 }
 

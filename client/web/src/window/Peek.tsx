@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import { type Owner, withHost } from "@banda/core"
 import { reachWords, UNKNOWN, useReach } from "@banda/core/react"
@@ -246,6 +253,9 @@ export function FloatingPane({
 }) {
   const { runs } = usePaneHandles(owner, run, pane)
   const gate = gateOf(pane, elsewhere ? runs : undefined, useModules(engine))
+  // The window's row under a header, as the Sheet's switch between
+  // machines, shows with no Pane too: it is the way to another machine.
+  const { under } = useContext(TileHeader)
   const handle: Handle = {
     open: (next, place, other) => open(other ?? project, next, place),
     update: (args) => update({ kind: pane.kind, args }),
@@ -255,7 +265,10 @@ export function FloatingPane({
   return (
     <div className="min-h-0 flex-1 [--background:var(--popover)]">
       {"why" in gate ? (
-        <p className="p-4 text-ui text-muted-foreground">{gate.why}</p>
+        <>
+          {under}
+          <p className="p-4 text-ui text-muted-foreground">{gate.why}</p>
+        </>
       ) : (
         <PaneMount
           kind={gate.opens}

@@ -1,8 +1,9 @@
 /**
  * The Usage Pane `harnesses.usage` (ADR 0043, decision 6; ADR 0055,
  * decisions 4 and 5): each account's limits, and the cost and tokens in
- * the Harnesses' own journals on this machine, by day, account and model.
- * It is the machine's, as the module is: every Project shows the same.
+ * the Harnesses' own journals on its machine, by day, account and model.
+ * It is the machine's, as the module is: every Project shows the same,
+ * and the window's switch says which machine's (ADR 0120, decision 5).
  */
 import type {
   HarnessView,
@@ -44,6 +45,10 @@ export type UsageArgs = {
   /** Each tab's chart: Cost an area, Tokens bars, by default. */
   cost: Form
   tokens: Form
+  /** The machine it counts, by its Host scope's ID, as the window's
+   * switch "Usage for" picked it; none for the one the Person is on (ADR
+   * 0120, decision 5). The Pane's `engine` is that machine's. */
+  machine?: string
 }
 
 const START: UsageArgs = {
@@ -59,6 +64,9 @@ export const usagePane = definePane<UsageArgs>({
   title: () => "Usage",
   icon: GaugeIcon,
   sheet: true,
+  // It reaches its machine through the API alone: another machine's
+  // Usage is that machine's own journals, counted there.
+  elsewhere: true,
   start: START,
   header: false,
   // One Usage per Project: another tab or period is the same Pane.
