@@ -907,6 +907,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "banda-tiling-wasm"
+version = "0.1.0"
+dependencies = [
+ "banda-base",
+ "banda-tiling",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "banda-updates"
 version = "0.1.0"
 dependencies = [

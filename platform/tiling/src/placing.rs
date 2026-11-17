@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 /// How the Person works the Panes, as far as placement goes. Solo is each
 /// client's view of the row (ADR 0087, decision 10).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Flow {
     /// Right of the Pane in front; workspaces belong to no Project.
@@ -30,7 +30,8 @@ pub enum Flow {
 /// What an engine knows beside its arrangement, and places a Pane by (ADR
 /// 0110, decision 5). A client that draws ahead of the engine gives its
 /// copy of the rule the same.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct Facts {
     /// This machine's copy of the Flow.
     pub flow: Flow,
