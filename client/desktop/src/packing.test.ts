@@ -5,7 +5,8 @@
  * and the engine's own copy takes them from (ADR 0059; program.ts). On
  * Windows also the Node they run on there, which scripts/node.mjs
  * downloads from a pinned Node release (ADR 0090, decision 5), and the
- * engine's line tables.
+ * engine's line tables. And the icons of the menu bar and the tray, which
+ * build.mjs copies beside main.
  */
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
@@ -20,6 +21,7 @@ afterEach(() => vi.unstubAllEnvs())
 
 type Resource = { from: string; to: string }
 type Config = {
+  files: string[]
   extraResources: Resource[]
   linux: { extraResources: Resource[] }
   mac: { extraResources: Resource[] }
@@ -61,6 +63,15 @@ test("the app carries the harnesses' host package's adapters beside its engine",
   expect(carried).toContain(`pub const FOLDER: &str = "${CARRIED}";`)
   expect(carried).toContain(`pub const ELECTRON: &str = "${ELECTRON}";`)
   expect(carried).toContain(`pub const NODE_FOLDER: &str = "${NODE_FOLDER}";`)
+})
+
+test("the app carries the menu bar's icons and the tray's, beside main", async () => {
+  // Main reads them from `menu-bar/` beside itself (tray.ts): build.mjs
+  // copies the folder whole, `tray/` with it, into what is packed.
+  expect(text("client/desktop/build.mjs")).toContain(
+    'cpSync("icons/menu-bar", "out/menu-bar", {\n  recursive: true,'
+  )
+  expect((await config()).files).toEqual(["out/**"])
 })
 
 test("each system's app carries its own engine, and Windows' its updater, line tables and Node", async () => {

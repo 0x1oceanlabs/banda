@@ -52,7 +52,7 @@ import {
   stateFolder,
 } from "./channel"
 import { listApp, listedImage, listShortcut } from "./entry"
-import { hasMenuBar } from "./menubar"
+import { hasIcon } from "./tray"
 import { statusLayer } from "./status"
 import { forwardAnswer, reaching, signedHello } from "./forward"
 import { Hosts, terminalArgs } from "./hosts"
@@ -191,8 +191,8 @@ const runtime = ManagedRuntime.make(
             )
           )
         ),
-        // Who works and who waits here, for the menu bar (macOS).
-        statusLayer(hasMenuBar(process.platform)),
+        // Who works and who waits here, for the menu bar and the tray.
+        statusLayer(hasIcon()),
         // The settings open their files with `Editors.edit`.
         settingsLayer.pipe(Layer.provideMerge(Editors.layer))
       ).pipe(

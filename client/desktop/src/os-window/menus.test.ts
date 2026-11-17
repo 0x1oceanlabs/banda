@@ -31,7 +31,7 @@ const settled = Effect.yieldNow.pipe(Effect.repeat({ times: 20 }))
  * page's actions, the status, which `says` each new one, and the engine,
  * which names the door's path when told (`names`).
  */
-function on(platform: NodeJS.Platform, { open = true } = {}) {
+function on(platform: NodeJS.Platform, { open = true, headless = false } = {}) {
   const did: string[] = []
   const window = {
     webContents: {
@@ -49,6 +49,7 @@ function on(platform: NodeJS.Platform, { open = true } = {}) {
   } = {}
   const menus: Menus = {
     platform,
+    headless,
     appMenu: (banda) => {
       held.banda = banda
       did.push(banda ? "app menu" : "no app menu")
@@ -121,7 +122,7 @@ function on(platform: NodeJS.Platform, { open = true } = {}) {
 }
 
 it.effect(
-  "macOS has an app menu, whose Banda brings the window to the front; Linux and Windows have none, and no icon",
+  "macOS has an app menu, whose Banda brings the window to the front; Linux and Windows have none, and Banda's icon is on all three",
   () => {
     const mac = on("darwin")
     const linux = on("linux")
@@ -135,9 +136,15 @@ it.effect(
       yield* settled.pipe(Effect.provide(linux.layer))
       yield* settled.pipe(Effect.provide(windows.layer))
       expect([linux.did, windows.did]).toEqual([
-        ["no app menu"],
-        ["no app menu"],
+        ["no app menu", "icon", "shows nothing", "no icon"],
+        ["no app menu", "icon", "shows nothing", "no icon"],
       ])
+      // A system with neither a menu bar nor a tray has no icon, nor
+      // has a Linux window with no screen.
+      for (const none of [on("freebsd"), on("linux", { headless: true })]) {
+        yield* settled.pipe(Effect.provide(none.layer))
+        expect(none.did).toEqual(["no app menu"])
+      }
     })
   }
 )
@@ -185,17 +192,19 @@ it.effect(
     return Effect.gen(function* () {
       yield* settled
       expect(held.door).toBeUndefined()
+      // The icon is there by now, with nothing to show.
+      did.length = 0
       yield* names("/run/banda/window.sock")
       yield* settled
-      expect(did.slice(1)).toEqual(["door at /run/banda/window.sock"])
+      expect(did).toEqual(["door at /run/banda/window.sock"])
       expect(Object.keys(held.door ?? {})).toEqual(["menu"])
       expect(held.door?.menu("settings.appearance")).toBe("ok")
-      expect(did.slice(2)).toEqual([
+      expect(did.slice(1)).toEqual([
         "in front",
         `page: ${BRIDGE.menu.listen.name} settings.appearance`,
       ])
       expect(held.door?.menu(7)).toBe("the route is not a string")
-      expect(did).toHaveLength(4)
+      expect(did).toHaveLength(3)
     }).pipe(Effect.provide(layer))
   }
 )
@@ -205,8 +214,9 @@ it.effect("with no window, banda menu says so", () => {
   return Effect.gen(function* () {
     yield* names("door")
     yield* settled
+    did.length = 0
     expect(held.door?.menu("actions")).toBe("no window")
-    expect(did.slice(2)).toEqual([])
+    expect(did).toEqual([])
   }).pipe(Effect.provide(layer))
 })
 

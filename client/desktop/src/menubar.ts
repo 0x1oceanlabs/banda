@@ -9,17 +9,31 @@
  * then Open Banda, the version and Quit Banda. Only this Mac's Threads:
  * Quit stops only its engine.
  *
+ * In the tray on Linux and in Windows' notification area it is the same
+ * mark and the same menu, as far as they draw them (ADR 0136, proposed in
+ * #1871; the mock tray-linux-windows): the sign alone, in the ink of the
+ * bar it sits on, its number in the tooltip and in the menu's headings
+ * ("Your turn · 2"); and a Thread's row is one line, "title · state",
+ * with no Project.
+ *
  * All of it comes from one line of `banda status --follow` (status.ts),
  * none while no line came or the follower died. This is the part that
  * says what the icon and the menu are for a line; tray.ts draws them.
- * Linux and Windows have no menu bar icon in this step (`hasMenuBar`).
  */
 import type { EngineStatus } from "@banda/contract"
 import type { CountedAs } from "@banda/contract/agents"
 
-/** Whether Banda lives in the menu bar here: on macOS alone, for now. */
-export function hasMenuBar(platform: NodeJS.Platform): boolean {
-  return platform === "darwin"
+/** Whether Banda lives in the menu bar here, or in the tray: on macOS,
+ * Linux and Windows. Not on a Linux window that is `headless`, with no
+ * screen, as a hidden trial's and a test's: with no tray host on the bus
+ * Electron falls back to GTK's icon, and GTK ends the app where it has
+ * no display. */
+export function hasMenuBar(
+  platform: NodeJS.Platform,
+  headless: boolean
+): boolean {
+  if (platform === "linux") return !headless
+  return platform === "darwin" || platform === "win32"
 }
 
 /**
@@ -30,9 +44,10 @@ export function hasMenuBar(platform: NodeJS.Platform): boolean {
  */
 export type Sign = "rest" | "working" | "asking" | "done" | "asleep"
 
-/** What the menu bar shows: the sign, the number beside it, and the
- * same in words, for the tooltip and a screen reader, as the window's
- * logo says them: "3 your turn", "7 at work" (ADR 0098, decision 22). */
+/** What the menu bar shows: the sign, the number beside it, which only
+ * macOS draws, and the same in words, for the tooltip and a screen
+ * reader, as the window's logo says them: "3 your turn", "7 at work"
+ * (ADR 0098, decision 22). */
 export type Look = { sign: Sign; count: string; said: string }
 
 /** The icon for `status`, none when no line came or the follower died. */
@@ -58,19 +73,38 @@ export function lookOf(status: EngineStatus | null): Look {
  * macOS draws it in the menu bar's own colour, as a template. */
 export type Icon = { file: string; template: boolean }
 
-/** The icon for `sign`, in a menu bar that is `dark` or not: in colour
- * only where the mock shows it, a hat that asks. */
-export function iconOf(sign: Sign, dark: boolean): Icon {
+/** The icon for `sign`, in a bar that is `dark` or not: in colour only
+ * where the mock shows it, a hat that asks. macOS colours the rest
+ * itself, as templates; Linux and Windows have none, so there each sign
+ * is drawn for a light bar and a dark one (`tray/`), a PNG on Linux and
+ * an `.ico` on Windows. */
+export function iconOf(
+  sign: Sign,
+  dark: boolean,
+  platform: NodeJS.Platform
+): Icon {
+  const bar = dark ? "dark" : "light"
+  if (platform !== "darwin") {
+    const kind = platform === "win32" ? "ico" : "png"
+    return { file: `tray/${sign}-${bar}.${kind}`, template: false }
+  }
   return sign === "asking"
-    ? { file: `asking-${dark ? "dark" : "light"}.png`, template: false }
+    ? { file: `asking-${bar}.png`, template: false }
     : { file: `${sign}Template.png`, template: true }
 }
 
-/** A row's mark: the menu's own colour for work, colour for the rest. */
-export function rowIconOf(state: CountedAs): Icon {
-  return state === "working"
+/** A row's mark: the menu's own colour for work, colour for the rest.
+ * Off macOS nothing colours a mark as the menu is, and Banda does not
+ * know the menu's colour: a row that works has none there, its word says
+ * it. */
+export function rowIconOf(
+  state: CountedAs,
+  platform: NodeJS.Platform
+): Icon | null {
+  if (state !== "working") return { file: `row-${state}.png`, template: false }
+  return platform === "darwin"
     ? { file: "row-workingTemplate.png", template: true }
-    : { file: `row-${state}.png`, template: false }
+    : null
 }
 
 /** One item of the menu. */
@@ -79,7 +113,8 @@ export type Item =
   | {
       kind: "thread"
       label: string
-      sublabel: string
+      /** The line under the row, which only macOS draws. */
+      sublabel?: string
       state: CountedAs
       project: string
       thread: string
@@ -116,13 +151,19 @@ export function shortOf(version: string): string {
 /**
  * The menu for `status`, of the Banda named `name` (Banda, Banda Dev),
  * whose own version is `version` where the engine says none: who waits
- * and who works, then Open Banda, the version and Quit Banda.
+ * and who works, then Open Banda, the version and Quit Banda. macOS
+ * draws a heading and a second line under a row; the menus of Linux and
+ * Windows draw neither, so there a heading is a line that cannot be
+ * picked, with how many are under it, and a row says its state after its
+ * title, without its Project.
  */
 export function menuOf(
   status: EngineStatus | null,
   name: string,
-  version: string
+  version: string,
+  platform: NodeJS.Platform
 ): Item[] {
+  const mac = platform === "darwin"
   const items: Item[] = []
   const agents = status?.running ? status.agents : undefined
   if (!status?.running) {
@@ -133,12 +174,24 @@ export function menuOf(
     let heading: string | undefined
     for (const one of agents.threads) {
       const now = one.state === "working" ? "Working" : "Your turn"
-      if (now !== heading) items.push({ kind: "heading", label: now })
+      if (now !== heading) {
+        const count = now === "Working" ? agents.working : agents.waiting
+        items.push(
+          mac
+            ? { kind: "heading", label: now }
+            : { kind: "line", label: `${now} · ${count}` }
+        )
+      }
       heading = now
+      const state = STATE_WORDS[one.state]
       items.push({
         kind: "thread",
-        label: cut(one.title),
-        sublabel: `${one.project_name} · ${STATE_WORDS[one.state]}`,
+        ...(mac
+          ? {
+              label: cut(one.title),
+              sublabel: `${one.project_name} · ${state}`,
+            }
+          : { label: `${cut(one.title)} · ${state}` }),
         state: one.state,
         project: one.project,
         thread: one.thread,

@@ -80,11 +80,11 @@ page is one part of. A change to main changes this page in the same PR.
   `menubar.ts`, `tray.ts`; its icons drawn by
   `client/desktop/icons/menu-bar/draw.mjs`, which draws the five signs
   for Linux and Windows too, in `tray/`: each for a light bar and a dark
-  one, a PNG at 1x and `@2x` and an `.ico` of 16, 20, 24 and 32 px, which
-  nothing shows yet; whether a tray host is there to show one,
-  `os-window/tray-host.ts` answers, which nothing asks yet: on Linux the
-  session bus's `org.kde.StatusNotifierWatcher`, asked with `busctl`,
-  and anything but a clear yes is no; issue #1870). An engine with no app opens
+  one, a PNG at 1x and `@2x` and an `.ico` of 16, 20, 24 and 32 px;
+  whether a tray host is there to show one, `os-window/tray-host.ts`
+  answers, which nothing asks yet: on Linux the session bus's
+  `org.kde.StatusNotifierWatcher`, asked with `busctl`, and anything but
+  a clear yes is no; issue #1870). An engine with no app opens
   Banda.app hidden, by its path (`open -g -j <app> --args --hidden`),
   which then shows no window and no Dock icon, only the menu bar's; it
   never opens an app that runs, nor one the Person quit or ended with
@@ -92,8 +92,45 @@ page is one part of. A change to main changes this page in the same PR.
   than the engine's last look that saw it run (a page's or the GPU's
   dump from before is not the app's), and
   stops trying after three opens with no app that ran five minutes
-  (`engine/src/service/app.rs`). Linux and Windows have no menu bar icon
-  yet (`hasMenuBar`). In main the icon, the app's menu (macOS's: the app
+  (`engine/src/service/app.rs`).
+- **On Linux and Windows the same icon and menu are in the tray** (ADR
+  0136, proposed in #1871; the mock tray-linux-windows): a
+  StatusNotifierItem on Linux, which a tray host draws (Waybar's `tray`,
+  KDE, GNOME with the AppIndicator extension; with none, nothing shows
+  and nothing says so), and Windows' notification area. From the same
+  follower, by the same two files, with what those systems do not draw
+  left out (`hasMenuBar`, and the platform `menubar.ts`'s functions
+  take):
+  - **The sign alone,** with no number beside it: only macOS writes one.
+    The number is in the tooltip ("Banda Dev: 2 your turn") and in the
+    menu's headings, which are lines that cannot be picked ("Your
+    turn · 2", "Working · 1").
+  - **A Thread's row is one line,** "title · state", with no Project. A
+    row that waits has its mark in colour; one that works has none, as
+    nothing there colours a mark as the menu is.
+  - **The ink** is a picture's, not a template's: `tray/<sign>-dark` on
+    a dark bar, `-light` on a light one, the asking hat in orange in
+    both. Windows' taskbar says its own mode, apart from its apps'
+    (`nativeTheme.shouldUseDarkColorsForSystemIntegratedUI`). Linux has
+    no word for a bar's colour: the ink follows `nativeTheme`, which is
+    the desktop's colour scheme while the look's mode is `system`, and
+    the look's own mode otherwise (`os-window/material.ts` sets it).
+  - **A click opens the window,** as Open Banda does. On Windows that is
+    the left click, and the right one opens the menu. On Linux the host
+    decides: Electron hears only an "activation" (the item's `Activate`
+    and `SecondaryActivate`), whichever gesture the host takes for one,
+    and the host asks for the menu and draws it itself, on a click of
+    its own choosing.
+  - **No icon on a Linux window with no screen**
+    (`--ozone-platform=headless`: a hidden trial's, a test's), nor its
+    follower: with no tray host on the bus Electron falls back to GTK's
+    icon, and GTK ends the app where it has no display.
+  - **The window closes as before:** closing the last one quits the
+    app, and its icon goes with it. So the tray's Quit Banda is, until
+    closing hides (#1870, PR 5), what closing the last window is: the
+    app goes at once, with no question, and an engine that is the
+    session's service goes on.
+- **The menus in main.** In main the icon, the app's menu (macOS's: the app
   menu, File, Edit, and Window, whose Banda shows the main window) and
   the door `banda menu [route]` knocks at (`door.ts`, ADR 0017) are one
   part, `os-window/menus.ts`, over the windows: the icon follows the
