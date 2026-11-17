@@ -54,7 +54,7 @@ updates the app on every system. What is left in three places:
 3. **One Update, one call.** `updates.restart` means "update this machine
    now": the engine moves onto its copy where one is ready and it moves
    by itself, and the app is asked to restart into its version
-   (`app.wanted`). Main follows the state and restarts when it is asked.
+   (`wants_app`). Main follows the state and restarts when it is asked.
    The page calls nothing of main's to update, and `banda update --now`
    updates the app too.
 4. **The engine keeps a wait.** While Agents work on a machine whose
@@ -94,7 +94,7 @@ otherwise:
 | 1 | The row says each step; Windows' installer shows; Update asks before it stops Agents (#1891): done |
 | 2 | One machine for the app on every system, over an installer (#1893): done |
 | 3a | This ADR |
-| 3b | The engine: `app` in `updates.state`, `updates.app`, `wanted`, `wait` and `updates.later`; `banda update --follow` says the app's part |
+| 3b | The engine: `app` in `updates.state`, `updates.app`, `wants_app`, `wait` and `updates.later`; `banda update --follow` says the app's part |
 | 3c | Main tells the engine and restarts when asked; the page reads one stream; the bridge's `update.*` and core's `Update` go |
 | 4 | Linux: the new AppImage is put beside the old one by a rename, the old one is kept until the new Banda opened its window, and starts again if it does not |
 

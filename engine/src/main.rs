@@ -189,15 +189,23 @@ enum Command {
         /// above it. `newest` takes the newest again.
         #[arg(long, value_name = "VERSION")]
         version: Option<String>,
-        /// Restarts the engine on the copy in place now, which ends its
-        /// terminals; while Agents work, it asks first, as Quit does.
+        /// Updates this machine now: restarts the engine on the copy in
+        /// place, which ends its terminals, and asks Banda's app there to
+        /// restart into its version ready; while Agents work, it asks
+        /// first, as Quit does.
         #[arg(long)]
         now: bool,
         /// With --now: restarts while Agents work, without asking.
-        #[arg(long, requires = "now")]
+        #[arg(long, requires = "now", conflicts_with = "wait")]
         force: bool,
+        /// With --now: while Agents work, updates once they are done.
+        #[arg(long, requires = "now")]
+        wait: bool,
+        /// Drops an update that waits for the Agents.
+        #[arg(long, conflicts_with = "now")]
+        later: bool,
         /// Prints a line again on each change, the current one first.
-        #[arg(long, conflicts_with_all = ["check", "version", "now"])]
+        #[arg(long, conflicts_with_all = ["check", "version", "now", "later"])]
         follow: bool,
     },
     /// Prints what this machine is called and drawn by, as every window
@@ -891,6 +899,8 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             version,
             now,
             force,
+            wait,
+            later,
             follow,
         } => {
             let update = Update {
@@ -898,6 +908,8 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 version,
                 now,
                 force,
+                wait,
+                later,
                 follow,
             };
             self::update(&places, update).await
@@ -990,16 +1002,19 @@ struct Update {
     version: Option<String>,
     now: bool,
     force: bool,
+    wait: bool,
+    later: bool,
     follow: bool,
 }
 
 /// `banda update`: the updates module's state, looked at now with
 /// `check`, or each change of it with `follow`; a version put in place
-/// with `version`, and the engine restarted on the copy in place with
-/// `now`, in that order. One JSON line for each.
+/// with `version`, and the machine updated with `now` (the engine onto the
+/// copy in place, and its app asked to restart; `wait` holds it for the
+/// Agents, and `later` drops that), in that order. One JSON line for each.
 async fn update(places: &Places, asked: Update) -> Result<(), Failure> {
     let mut client = Client::connect(places).await?;
-    let acts = asked.check || asked.version.is_some() || asked.now;
+    let acts = asked.check || asked.version.is_some() || asked.now || asked.later;
     if asked.check {
         let found = client
             .call("updates.check", None, CommandId::new(), json!({}))
@@ -1017,9 +1032,15 @@ async fn update(places: &Places, asked: Update) -> Result<(), Failure> {
             .await?;
         println!("{taken}");
     }
+    if asked.later {
+        let state = client
+            .call("updates.later", None, CommandId::new(), json!({}))
+            .await?;
+        println!("{state}");
+    }
     if asked.now {
         let mut force = asked.force;
-        if !force {
+        if !force && !asked.wait {
             let working = control::working(&mut client).await?;
             if working > 0 {
                 if !control::agreed(working, control::Ending::Restart)? {
@@ -1033,7 +1054,7 @@ async fn update(places: &Places, asked: Update) -> Result<(), Failure> {
                 "updates.restart",
                 None,
                 CommandId::new(),
-                json!({ "force": force }),
+                json!({ "force": force, "wait": asked.wait }),
             )
             .await?;
         println!("{moving}");

@@ -75,6 +75,19 @@ PR.
   and the engine moves onto it by the same rule; the looks take nothing
   above a version chosen, and `--version newest` drops the choice. A copy
   older than this step neither reads `chosen` nor moves by itself.
+- **The engine says the app's part too, and one Update takes both**
+  (ADR 0137). `updates.state`'s `app` is what the app on this machine
+  does with its own update, as its window's main says each change of it
+  with `updates.app`: the module keeps it, and nothing else writes the
+  state. `updates.restart` (`banda update --now`) updates the machine:
+  the engine moves onto its copy where one is ready and it moves by
+  itself, and the app is asked to restart into its version ready
+  (`wants_app`, a time two minutes on: past it, or once the app says it
+  installs, it is asked no more), not when the Person chose a version;
+  an engine that moved as the Person said asks its app as it starts.
+  While Turns run that this would end, it refuses, restarts with
+  `force`, or with `wait` holds it (`held`) until none runs;
+  `updates.later` (`banda update --later`) drops that.
 - **The window only swaps its own app** (ADR 0119, decisions 2 and 4;
   `platform/updates/desktop`, `@banda/updates-desktop`). It follows its
   engine's `updates.state` and, at each look the engine made, reads the

@@ -1,6 +1,6 @@
 //! When the engine moves onto a copy in place (ADR 0119, decision 3): the
 //! policy, one pure function of what holds now ([`next`], and [`now`] for
-//! the Person's Restart now), apart from the mechanism, which is the
+//! the Person's Update), apart from the mechanism, which is the
 //! engine's ([`Restart`]: the module asks, the engine stops as a TERM
 //! stops it and runs the new copy in its place).
 //!
@@ -117,23 +117,54 @@ pub fn next(facts: &Facts<'_>) -> Next {
     }
 }
 
-/// Why Restart now does not move, in words, if it does not: `force` once
-/// the Person said to restart while Agents work. Open terminals and keys
-/// hold it not: the Person asks.
-pub fn now(facts: &Facts<'_>, force: bool) -> Result<(), Refused> {
-    if !facts.ready {
-        return Err(Refused::Nothing);
-    }
-    if let Moves::Never(why) = facts.moves {
-        return Err(Refused::Never(why.clone()));
-    }
-    if facts.turns > 0 && !force {
-        return Err(Refused::Working(facts.turns));
-    }
-    Ok(())
+/// What the Person's Update does at once (ADR 0137, decisions 3 and 4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Does {
+    /// The engine moves onto the copy in place.
+    pub engine: bool,
+    /// The app is asked to restart into its version ready.
+    pub app: bool,
+    /// The rest waits until no Turn runs.
+    pub held: bool,
 }
 
-/// Why Restart now did not move.
+/// What the Person's Update does now, or why nothing, in words: the
+/// engine moves where a copy is ready and it moves by itself, and the
+/// app restarts where it has a version ready (`app`). While Turns run
+/// that this would end, it refuses, unless `force`, as the Person said
+/// to stop them; or holds what ends them until none runs, with `wait`.
+/// Open terminals and keys hold it not: the Person asks.
+pub fn now(facts: &Facts<'_>, app: bool, force: bool, wait: bool) -> Result<Does, Refused> {
+    let itself = matches!(facts.moves, Moves::Itself);
+    let engine = facts.ready && itself;
+    if !engine && !app {
+        return Err(match facts.moves {
+            Moves::Never(why) if facts.ready => Refused::Never(why.clone()),
+            _ => Refused::Nothing,
+        });
+    }
+    // What ends the Turns: the engine's move, or the app's restart where
+    // the engine stops with the app.
+    let stops = engine || !itself;
+    if stops && facts.turns > 0 && !force {
+        if !wait {
+            return Err(Refused::Working(facts.turns));
+        }
+        // An app's restart beside an engine that goes on ends nothing.
+        return Ok(Does {
+            engine: false,
+            app: app && itself,
+            held: true,
+        });
+    }
+    Ok(Does {
+        engine,
+        app,
+        held: false,
+    })
+}
+
+/// Why an Update did nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Refused {
     /// No copy waits: this one is the newest in place.
@@ -178,6 +209,11 @@ impl Restart {
             }
             first
         });
+    }
+
+    /// Whether it was asked already: the engine stops, and moves.
+    pub fn moving(&self) -> bool {
+        self.0.to.borrow().is_some()
     }
 
     /// The program to run in this one's place, once asked.
@@ -326,8 +362,13 @@ mod tests {
     }
 
     #[test]
-    fn restart_now_warns_only_while_turns_run() {
+    fn an_update_warns_only_while_turns_run() {
         let itself = Moves::Itself;
+        let engine = Does {
+            engine: true,
+            app: false,
+            held: false,
+        };
         let busy = Facts {
             turns: 2,
             in_hand: InHand {
@@ -337,23 +378,81 @@ mod tests {
             take: TakeUpdates::Off,
             ..idle(&itself)
         };
-        assert_eq!(now(&busy, false), Err(Refused::Working(2)));
-        assert_eq!(now(&busy, true), Ok(()), "the Person said to");
+        assert_eq!(now(&busy, false, false, false), Err(Refused::Working(2)));
+        assert_eq!(
+            now(&busy, false, true, false),
+            Ok(engine),
+            "the Person said to"
+        );
         let no_turns = Facts { turns: 0, ..busy };
         assert_eq!(
-            now(&no_turns, false),
-            Ok(()),
+            now(&no_turns, false, false, false),
+            Ok(engine),
             "terminals and keys hold it not"
         );
         let none = Facts {
             ready: false,
             ..idle(&itself)
         };
-        assert_eq!(now(&none, true), Err(Refused::Nothing));
+        assert_eq!(now(&none, false, true, false), Err(Refused::Nothing));
         let child = Moves::Never("why".to_owned());
         assert_eq!(
-            now(&idle(&child), true),
+            now(&idle(&child), false, true, false),
             Err(Refused::Never("why".to_owned()))
+        );
+    }
+
+    #[test]
+    fn one_update_takes_the_engine_and_the_app_and_waits_only_for_what_it_would_stop() {
+        let itself = Moves::Itself;
+        let child = Moves::Never("why".to_owned());
+        let does = |engine, app, held| Ok(Does { engine, app, held });
+        // Nothing runs: both go, each where it has something ready.
+        assert_eq!(
+            now(&idle(&itself), true, false, false),
+            does(true, true, false)
+        );
+        let none = Facts {
+            ready: false,
+            ..idle(&itself)
+        };
+        assert_eq!(now(&none, true, false, false), does(false, true, false));
+        assert_eq!(
+            now(&idle(&child), true, false, false),
+            does(false, true, false)
+        );
+        // Agents work. An engine that goes on is not stopped by its app's
+        // restart; one that moves, or stops with the app, is.
+        let busy = |moves| Facts {
+            turns: 1,
+            ..idle(moves)
+        };
+        let app_only = Facts {
+            ready: false,
+            ..busy(&itself)
+        };
+        assert_eq!(now(&app_only, true, false, false), does(false, true, false));
+        assert_eq!(
+            now(&busy(&itself), true, false, false),
+            Err(Refused::Working(1))
+        );
+        assert_eq!(
+            now(&busy(&child), true, false, false),
+            Err(Refused::Working(1))
+        );
+        // Waiting: the app restarts now where that ends nothing, and the
+        // rest is held.
+        assert_eq!(
+            now(&busy(&itself), true, false, true),
+            does(false, true, true)
+        );
+        assert_eq!(
+            now(&busy(&child), true, false, true),
+            does(false, false, true)
+        );
+        assert_eq!(
+            now(&busy(&child), true, true, false),
+            does(false, true, false)
         );
     }
 
