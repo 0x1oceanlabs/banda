@@ -8,6 +8,7 @@
  * Slot.
  */
 import type { ProjectId } from "@banda/contract"
+import { Button } from "@banda/ui/components/button"
 import { MachineIcon, MachineMark } from "@banda/ui/components/machine-icon"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import { cn } from "@banda/ui/lib/utils"
@@ -26,7 +27,14 @@ import {
   useLeftFor,
   useWaitingFor,
 } from "@banda/core/react"
+import { useUpdateThere } from "../bar/update/heard"
 import { useLookSidebar } from "../look"
+
+/** A pill over the top of a Pane, and its one button. */
+const PILL =
+  "flex max-w-full min-w-0 items-center gap-1.5 rounded-full border bg-tile px-2.5 py-0.5 text-meta whitespace-nowrap text-muted-foreground"
+const PILL_BUTTON =
+  "-mx-1 -my-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-1 py-0.5 font-medium text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:bg-muted/50"
 
 function Named({ project, pane }: { project: ProjectId; pane: PaneState }) {
   const there = useNamedOf(project, paneHost(pane))
@@ -61,10 +69,7 @@ export function MachinePill({
   return (
     <p
       data-machine-pill={shown.name}
-      className={cn(
-        "flex max-w-full min-w-0 items-center gap-1.5 rounded-full border bg-tile px-2.5 py-0.5 text-meta whitespace-nowrap text-muted-foreground",
-        stopped && "pointer-events-auto"
-      )}
+      className={cn(PILL, stopped && "pointer-events-auto")}
     >
       <MachineIcon icon={shown.named.icon} />
       <span className="min-w-0 truncate">
@@ -80,11 +85,7 @@ export function MachinePill({
       {stopped && (
         <>
           <span aria-hidden>·</span>
-          <button
-            type="button"
-            className="-mx-1 -my-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-1 py-0.5 font-medium text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:bg-muted/50"
-            onClick={onStart}
-          >
+          <button type="button" className={PILL_BUTTON} onClick={onStart}>
             <PlayIcon className="size-3" />
             Start
           </button>
@@ -96,12 +97,42 @@ export function MachinePill({
 
 /** The pill of a Pane of `project` whose args name host `named`, by the
  * machine it is on as the Window shows it now, this one too (ADR 0124);
- * none before the Window knows that machine. */
+ * none before the Window knows that machine. While the Pane reaches a
+ * machine of another build that has a newer Banda in place, it says so
+ * and offers its update (ADR 0120, decision 7). */
 function Pill({ project, pane }: { project: ProjectId; pane: PaneState }) {
   const kept = useContext(HostsContext)
   const shown = useMachineOf(project, paneHost(pane))?.shown
-  return shown ? (
-    <MachinePill shown={shown} onStart={() => kept.start(shown.name)} />
+  const update = useUpdateThere(shown?.name)
+  if (!shown) return null
+  if (update)
+    return (
+      <p
+        data-machine-pill={shown.name}
+        className={cn(PILL, "pointer-events-auto")}
+      >
+        <MachineIcon icon={shown.named.icon} />
+        <span role="status" className="min-w-0 truncate">
+          {shown.named.name} runs another build
+        </span>
+        <span aria-hidden>·</span>
+        <button type="button" className={PILL_BUTTON} onClick={update}>
+          Update {shown.named.name}
+        </button>
+      </p>
+    )
+  return <MachinePill shown={shown} onStart={() => kept.start(shown.name)} />
+}
+
+/** "Update arc", under "Not on arc yet" on a Pane whose App arc's build
+ * lacks, while arc has a newer Banda in place (ADR 0120, decision 7). */
+function Update({ project, pane }: { project: ProjectId; pane: PaneState }) {
+  const shown = useMachineOf(project, paneHost(pane))?.shown
+  const update = useUpdateThere(shown?.name)
+  return shown && update ? (
+    <Button variant="outline" size="sm" onClick={update}>
+      Update {shown.named.name}
+    </Button>
   ) : null
 }
 
@@ -113,6 +144,8 @@ function MachineHeader({ at, project, pane }: HeaderProps) {
       return <Named project={project} pane={pane} />
     case "pill":
       return <Pill project={project} pane={pane} />
+    case "absent":
+      return <Update project={project} pane={pane} />
     default:
       return null
   }

@@ -9,6 +9,8 @@ import {
   type Shown,
   shownOf,
 } from "@banda/core/react"
+import type { UpdateState } from "@banda/contract/updates"
+import { Updates, useKeptUpdates, useUpdateThere } from "../bar/update/heard"
 import { MachinePill, machineHeader } from "./named"
 
 afterEach(() => {
@@ -152,6 +154,79 @@ test("the Window fills the pill of a Pane by the host its args name, as the Wind
     "Banda is stopped on arc·Start"
   )
   expect(fill({ thread: "t1" })).toBe("")
+})
+
+test("a Pane on a live machine of another build offers Update arc only while that machine has a newer Banda in place (ADR 0120, decision 7)", () => {
+  const kept = new KeptHosts(
+    {
+      follow: () => undefined,
+      engine: () => Promise.reject(new Error("not here")),
+      start: () => undefined,
+    },
+    FORGETTING
+  )
+  const live = (build: string): HostState => ({
+    name: "arc",
+    ssh: "arc",
+    state: "live",
+    build,
+    version: build === "abc123" ? "0.1.0-dev.642" : "0.1.0-dev.640",
+    own: { build: "abc123", version: "0.1.0-dev.642" },
+  })
+  const { Fill } = machineHeader
+  const opened: (string | undefined)[] = []
+  /** What arc's engine said of its updates, kept as the Window keeps it;
+   * and, pressed, where the widget was asked to open. */
+  function Said({ ready, press }: { ready: boolean; press?: boolean }) {
+    const updates = useKeptUpdates()
+    updates.heard.set(
+      new Map([
+        [
+          "arc",
+          {
+            said: {
+              running: "0.1.0-dev.640",
+              ...(ready && { ready: "0.1.0-dev.642" }),
+            } as UpdateState,
+          },
+        ],
+      ])
+    )
+    const update = useUpdateThere("arc")
+    if (press) {
+      update?.()
+      opened.push(updates.opened.get().host)
+    }
+    return null
+  }
+  const fill = (build: string, ready: boolean, press = false) => {
+    kept.take([live(build)])
+    return read(
+      renderToStaticMarkup(
+        <HostsContext value={kept}>
+          <Updates>
+            <Said ready={ready} press={press} />
+            <Fill
+              at="pill"
+              project={"r1" as ProjectId}
+              pane={{
+                kind: "agents.thread",
+                args: { thread: "t1", host: "arc" },
+              }}
+            />
+          </Updates>
+        </HostsContext>
+      )
+    )
+  }
+  expect(fill("def456", true)).toBe("arc runs another build·Update arc")
+  // Nothing in place there: the button would do nothing, so no pill.
+  expect(fill("def456", false)).toBe("")
+  // Its build is this window's: nothing to say.
+  expect(fill("abc123", true)).toBe("")
+  // Update arc opens the widget at arc's row.
+  fill("def456", true, true)
+  expect(opened).toEqual(["arc"])
 })
 
 test("the pill counts every message this device has waiting for its machine, from any Thread", () => {

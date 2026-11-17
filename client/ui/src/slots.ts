@@ -33,9 +33,12 @@ export type HeaderProps = {
        * the Pane is, at its end when it names no Project; or in the pill,
        * which is drawn over the Pane's body, not in its header, while the
        * Pane cannot reach the machine it is on: away, stopped or still
-       * connecting (ADR 0095, decision 7). A filler draws nothing at a
-       * place it does not know. */
-      at: "start" | "project" | "pill"
+       * connecting (ADR 0095, decision 7), or where the Window has
+       * something to say of a machine the Pane does reach; or under the
+       * words of a Pane whose App its machine's build lacks, "Not on arc
+       * yet" (ADR 0120, decision 7). A filler draws nothing at a place
+       * it does not know. */
+      at: "start" | "project" | "pill" | "absent"
     }
   | {
       /** On the Pane's tile in the Overview, at a size to read. */
