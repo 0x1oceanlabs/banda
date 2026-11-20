@@ -25,6 +25,15 @@ use ts_rs::TS;
 /// the Person's own browser is the device's (ADR 0101, decision 3).
 pub const SETTINGS: [banda_look::SettingsFile; 1] = [FILE];
 
+/// The kinds of Pane of this App an Agent may open: a browser, at a web
+/// address. It loads its page in the Person's own profile until an
+/// Agent's tabs have their Project's (ADR 0083, decision 4).
+pub const AGENT_PANES: [banda_tiling::agent::AgentPane; 1] = [banda_tiling::agent::AgentPane {
+    opens: at_a_web_address,
+    seen: Some(tabs_seen),
+    ..banda_tiling::agent::AgentPane::shows("browser.browser")
+}];
+
 const FILE: banda_look::SettingsFile = banda_look::SettingsFile::of::<settings::BrowserSettings>()
     .class(
         banda_look::Class::Device,
@@ -544,6 +553,41 @@ fn address(url: &str) -> Result<(), Refusal> {
     }
 }
 
+/// Refuses a browser's Pane an Agent opens anywhere but at a web address,
+/// as `browser_open` does; its tabs are the Person's to give.
+fn at_a_web_address(args: &Value) -> Result<(), Refusal> {
+    banda_tiling::agent::shows_only(args, &["url"])?;
+    match args.get("url").and_then(Value::as_str) {
+        Some(url) => address(url),
+        None => Err(Refusal::invalid(
+            "A browser opens at a web address: args {\"url\": \"https://…\"}.",
+        )),
+    }
+}
+
+/// A browser's Pane as an Agent of `project` sees its args. Its tabs are
+/// only those its Project's Agents opened, each naming that Project as
+/// `agents`, and an address alone is one an Agent opened (`open_pane`):
+/// the Person's own tabs are no Agent's to see (ADR 0083, decision 4).
+fn tabs_seen(args: &Value, project: banda_kernel::ProjectId) -> Value {
+    let Some(tabs) = args.get("tabs").and_then(Value::as_array) else {
+        return args.clone();
+    };
+    let project = project.to_string();
+    let shown = args.get("shown").and_then(Value::as_u64);
+    let (mut kept, mut now) = (Vec::new(), 0);
+    for (at, tab) in tabs.iter().enumerate() {
+        if tab.get("agents").and_then(Value::as_str) != Some(project.as_str()) {
+            continue;
+        }
+        if shown == Some(at as u64) {
+            now = kept.len();
+        }
+        kept.push(tab.clone());
+    }
+    serde_json::json!({ "tabs": kept, "shown": now })
+}
+
 /// An answer of a tool that moved a tab or acted in it: `done`, then
 /// what changed, and where the tab is when `place` or when it moved.
 fn told(done: &str, shown: &Shown, place: bool) -> String {
@@ -752,5 +796,62 @@ mod tests {
             assert!(file.person_alone(key, Some("true")).is_some(), "{key:?}");
         }
         assert_eq!(file.person_alone(&["tabs"], Some("\"rail\"")), None);
+    }
+
+    /// A browser an Agent opens is at a web address, never at the
+    /// Person's files, and its tabs are the Person's to give (ADR 0029,
+    /// decision 3).
+    #[test]
+    fn an_agent_opens_a_browsers_pane_at_a_web_address_alone() {
+        use banda_kernel::Code;
+        use serde_json::json;
+        let opens = super::AGENT_PANES[0].opens;
+        assert!(opens(&json!({ "url": "https://a.test" })).is_ok());
+        assert!(opens(&json!({ "url": "HTTP://a.test" })).is_ok());
+        for (args, code) in [
+            (json!({ "url": "file:///etc/passwd" }), Code::Invalid),
+            (json!({ "url": "a.test" }), Code::Invalid),
+            (json!({ "url": 1 }), Code::Invalid),
+            (json!({}), Code::Invalid),
+            (json!({ "tabs": [], "shown": 0 }), Code::Forbidden),
+            (
+                json!({ "url": "https://a.test", "tabs": [] }),
+                Code::Forbidden,
+            ),
+        ] {
+            assert_eq!(opens(&args).unwrap_err().code, code, "{args}");
+        }
+    }
+
+    /// Behind the wall, a browser's tabs are its Project's Agents' alone,
+    /// the one shown among them; an address alone is an Agent's own (ADR
+    /// 0083, decision 4).
+    #[test]
+    fn an_agent_sees_of_a_browser_only_the_tabs_its_projects_agents_opened() {
+        use banda_kernel::ProjectId;
+        use serde_json::json;
+        let (work, home) = (ProjectId::new(), ProjectId::new());
+        let tab = |id: &str, agents: Option<ProjectId>| {
+            let mut tab = json!({ "id": id, "url": format!("https://example.com/{id}") });
+            if let Some(project) = agents {
+                tab["agents"] = json!(project);
+            }
+            tab
+        };
+        let seen = super::AGENT_PANES[0].seen.unwrap();
+        let mixed = json!({
+            "tabs": [tab("person", None), tab("a", Some(work)), tab("home", Some(home)), tab("b", Some(work))],
+            "shown": 3,
+        });
+        let theirs = json!({ "tabs": [tab("a", Some(work)), tab("b", Some(work))], "shown": 1 });
+        assert_eq!(seen(&mixed, work), theirs);
+        // The Person's tab shown is none of theirs: the first of theirs is.
+        let persons = json!({ "tabs": [tab("a", Some(work)), tab("person", None)], "shown": 1 });
+        assert_eq!(
+            seen(&persons, work),
+            json!({ "tabs": [tab("a", Some(work))], "shown": 0 })
+        );
+        let address = json!({ "url": "https://example.com/opened" });
+        assert_eq!(seen(&address, work), address);
     }
 }

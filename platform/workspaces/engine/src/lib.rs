@@ -41,6 +41,7 @@
 
 pub mod tiling;
 
+pub use banda_tiling::agent::{AgentPane, shows_only};
 pub use banda_tiling::model;
 
 use banda_tiling::{commands, placing};
@@ -60,7 +61,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::path::{Component, Path};
 use tiling::Tiling;
 use ts_rs::TS;
 use uuid::Uuid;
@@ -90,6 +90,9 @@ pub struct Workspaces {
     /// The Pane kinds this build shows for a Project of another machine,
     /// as their window parts say (`PaneKind.elsewhere`).
     elsewhere: BTreeSet<String>,
+    /// The kinds of Pane an Agent may open, as their Apps say; an App's
+    /// screen is one beside them.
+    agent: Vec<AgentPane>,
     /// Reads this machine's copy of the Tiling's file; none, the Flow
     /// `free` and no rule.
     tiling: Option<Box<dyn Fn() -> Tiling + Send + Sync>>,
@@ -99,6 +102,45 @@ impl Workspaces {
     /// Workspaces that know no kind of Pane to open as a Group of its own.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The kinds of Pane an Agent may open, each with its App's rule,
+    /// beside an App's screen.
+    pub fn agent_panes(mut self, panes: impl IntoIterator<Item = AgentPane>) -> Self {
+        self.agent = panes.into_iter().collect();
+        self
+    }
+
+    /// The kinds of Pane an Agent may open, the platform's own first: no
+    /// App's kind stands in for it.
+    fn agents(&self) -> impl Iterator<Item = &AgentPane> {
+        [&SCREEN].into_iter().chain(&self.agent)
+    }
+
+    /// The kind of a Pane an Agent may open, as its App says it. Refuses
+    /// one no Agent may: of a kind no App says an Agent may, or with args
+    /// its kind's rule refuses.
+    fn an_agents(&self, kind: &str, args: &Value) -> Result<&AgentPane, Refusal> {
+        let Some(pane) = self.agents().find(|pane| pane.kind == kind) else {
+            let kinds: Vec<_> = self.agents().map(|pane| pane.kind).collect();
+            return Err(Refusal::forbidden(format!(
+                "An Agent opens only {}: they run nothing as your Person.",
+                kinds.join(", ")
+            )));
+        };
+        (pane.opens)(args)?;
+        Ok(pane)
+    }
+
+    /// The args of a Pane a caller behind `wall` sees whole: as its kind
+    /// says an Agent of the wall's Project sees them, and whole when it
+    /// says nothing. The Person sees every Pane's whole.
+    fn args_seen(&self, wall: Option<Wall>, shows: &Shown) -> Value {
+        let seen = self.agents().find(|pane| pane.kind == shows.kind);
+        match (wall, seen.and_then(|pane| pane.seen)) {
+            (Some(wall), Some(seen)) => seen(&shows.args, wall.project),
+            _ => shows.args.clone(),
+        }
     }
 
     /// The kinds of Pane that stand on their Project's workspace.
@@ -295,57 +337,15 @@ banda_kernel::methods! {
     }
 }
 
-/// Refuses the args an Agent may not open a kind of Pane with.
-type ArgsRule = fn(&Value) -> Result<(), Refusal>;
-
-/// The kinds of Pane an Agent may open, each with the rule its args keep.
-/// A kind is here when it shows, and runs nothing as the Person: a
-/// terminal's runs the Person's shell, and the command its `done` sends
-/// goes as the Person (ADR 0032). Only the Person's gesture acts as the
-/// Person (ADR 0083, decision 3), so a kind's rule refuses an Agent every
-/// arg that would send or start something. The Diff's args and a file's
-/// choose only what they show: staging, reverting and saving wait for the
-/// Person's click and typing. Files shows a folder of the Agent's Project
-/// (`in_its_project`): where it goes from there, and what it opens, moves
-/// or trashes, wait for the Person's too. A browser loads its page in the
-/// Person's own profile until an Agent's tabs have their Project's (ADR
-/// 0083, decision 4).
-const AGENT_KINDS: &[(&str, ArgsRule)] = &[
-    (THREAD, a_thread),
-    ("git.diff", |_| Ok(())),
-    ("files.file", |_| Ok(())),
-    (TREE, a_folder),
-    ("browser.browser", web_address),
-    ("apps.view", a_screen),
-];
+/// An App's screen, the platform's own kind: the one an Agent opens
+/// whatever Apps this engine has.
+const SCREEN: AgentPane = AgentPane {
+    opens: a_screen,
+    ..AgentPane::shows("apps.view")
+};
 
 /// A Thread's Pane.
 const THREAD: &str = "agents.thread";
-
-/// What an Agent does instead of giving a Thread's Pane words to send.
-const SEND: &str = "To start a Task or write to one, call `send`, as yourself.";
-
-/// Refuses a Thread's Pane an Agent opens on anything but one Thread, by
-/// its ID as `threads` lists it, so one Thread is one Pane. The rest of its
-/// args are the Person's: `ask`, the words a Thread not yet started sends
-/// first, the Project and Harness it starts in, and the title its header
-/// keeps. An Agent starts a Thread, or writes to one, with `send`, as
-/// itself, and the message says so (ADR 0019, decision 4). The Pane opens
-/// in the Agent's Project, which answers for its own Threads alone.
-fn a_thread(args: &Value) -> Result<(), Refusal> {
-    shows_only(args, &["thread"]).map_err(|refused| Refusal {
-        message: format!("{} {SEND}", refused.message),
-        ..refused
-    })?;
-    let id = args.get("thread").and_then(Value::as_str);
-    if id.is_some_and(|id| uuid::Uuid::parse_str(id).is_ok_and(|read| read.to_string() == id)) {
-        return Ok(());
-    }
-    Err(Refusal::invalid(format!(
-        "A Thread's Pane shows one of your Project's Threads: args \
-         {{\"thread\": \"<id>\"}}, an ID as `threads` lists it. {SEND}"
-    )))
-}
 
 /// Refuses an App's screen an Agent opens without saying which: the App
 /// and its view, by name. The screen reads; what its controls send, the
@@ -363,60 +363,22 @@ fn a_screen(args: &Value) -> Result<(), Refusal> {
     ))
 }
 
-/// Files, the Pane that shows a folder as a Finder does (ADR 0073).
-const TREE: &str = "files.tree";
-
-/// Refuses Files an Agent opens without saying on which folder, or with a
-/// row to pick that is no name in it. The rest of its args are the
-/// Person's: Recent and the Trash, which are the machine's, the Thread it
-/// follows, and how it shows. Where the folder is, `in_its_project` holds.
-fn a_folder(args: &Value) -> Result<(), Refusal> {
-    shows_only(args, &["dir", "selected"])?;
-    // A row of the folder, by its names from it: no `..`, and no root.
-    let named =
-        |row: &str| (Path::new(row).components()).all(|part| matches!(part, Component::Normal(_)));
-    let picks =
-        (args.get("selected")).is_none_or(|row| row.is_null() || row.as_str().is_some_and(named));
-    if args.get("dir").is_some_and(Value::is_string) && picks {
-        return Ok(());
-    }
-    Err(Refusal::invalid(
-        "Files shows a folder of your Project: args {\"dir\": \"<path>\"}, with \
-         \"selected\": \"<name>\" to pick a row in it.",
-    ))
-}
-
-/// Holds the folder Files shows for an Agent, and the row it picks there,
+/// Holds the folder a Pane shows for an Agent, and the row it picks there,
 /// inside the Project its pass is for, as the path guard reads them, links
 /// and `..` followed (ADR 0073, decision 14): one outside is refused. The
-/// folder is named whole, from the Project's, as the Pane takes it. Any
-/// other kind's args stay as they are.
-async fn in_its_project(call: &Call, kind: &str, args: &mut Value) -> Result<(), Refusal> {
-    if kind != TREE {
+/// folder is named whole, from the Project's, as the Pane takes it. The
+/// args of a kind that shows no folder stay as they are.
+async fn in_its_project(call: &Call, kind: &AgentPane, args: &mut Value) -> Result<(), Refusal> {
+    let Some((folder, row)) = kind.folder else {
         return Ok(());
-    }
-    let asked = args["dir"].as_str().unwrap_or_default();
+    };
+    let asked = args[folder].as_str().unwrap_or_default();
     let dir = Reach::of_machine(call, asked).await?.into_path();
-    if let Some(row) = args["selected"].as_str() {
+    if let Some(row) = args[row].as_str() {
         Reach::of_machine(call, dir.join(row)).await?;
     }
-    args["dir"] = dir.display().to_string().into();
+    args[folder] = dir.display().to_string().into();
     Ok(())
-}
-
-/// Refuses any arg but `shows`, the ones an Agent gives a kind of Pane.
-fn shows_only(args: &Value, shows: &[&str]) -> Result<(), Refusal> {
-    let mut given = args.as_object().into_iter().flat_map(|args| args.keys());
-    match given.find(|arg| !shows.contains(&arg.as_str())) {
-        None => Ok(()),
-        Some(other) => {
-            let shows: Vec<_> = shows.iter().map(|arg| format!("`{arg}`")).collect();
-            Err(Refusal::forbidden(format!(
-                "`{other}` is your Person's to give: an Agent gives this Pane only {}.",
-                shows.join(", ")
-            )))
-        }
-    }
 }
 
 /// How much of a Pane a caller sees (ADR 0032).
@@ -458,25 +420,6 @@ fn unasked(pane: &mut model::Pane) {
         && let Some(args) = pane.shows.args.as_object_mut()
     {
         args.remove("ask");
-    }
-}
-
-/// Refuses a browser an Agent opens anywhere but at a web address, as
-/// `browser_open` does: never at the Person's files (ADR 0029, decision 3).
-fn web_address(args: &Value) -> Result<(), Refusal> {
-    shows_only(args, &["url"])?;
-    let scheme = (args.get("url"))
-        .and_then(Value::as_str)
-        .and_then(|url| url.split_once("://"));
-    match scheme {
-        Some((scheme, _))
-            if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") =>
-        {
-            Ok(())
-        }
-        _ => Err(Refusal::invalid(
-            "A browser opens at a web address: args {\"url\": \"https://…\"}.",
-        )),
     }
 }
 
@@ -1011,19 +954,6 @@ impl Workspaces {
     }
 }
 
-/// Refuses a Pane no Agent may open: one of another kind than
-/// `AGENT_KINDS`, or with args its kind's rule refuses.
-fn an_agents(kind: &str, args: &Value) -> Result<(), Refusal> {
-    let Some((_, refuses)) = AGENT_KINDS.iter().find(|(agents, _)| *agents == kind) else {
-        let kinds: Vec<_> = AGENT_KINDS.iter().map(|(kind, _)| *kind).collect();
-        return Err(Refusal::forbidden(format!(
-            "An Agent opens only {}: they run nothing as your Person.",
-            kinds.join(", ")
-        )));
-    };
-    refuses(args)
-}
-
 /// A Pane an Agent opened, and what it opens by (`Workspaces::for_agent`).
 struct ForAgent {
     shows: Shown,
@@ -1109,7 +1039,7 @@ impl Workspaces {
                 id: pane.id,
                 project: pane.shows.project,
                 kind: pane.shows.kind.clone(),
-                args: (sight == Sight::Whole).then(|| args_seen(wall, &pane.shows)),
+                args: (sight == Sight::Whole).then(|| self.args_seen(wall, &pane.shows)),
                 yours: me.is_some() && pane.by == me,
             })
         };
@@ -1134,8 +1064,8 @@ impl Workspaces {
     async fn open_pane(&self, call: Call, open: OpenPane) -> Result<Opened, Refusal> {
         let (wall, me) = walled(&call)?;
         let mut args = open.args;
-        an_agents(&open.kind, &args)?;
-        in_its_project(&call, &open.kind, &mut args).await?;
+        let kind = self.an_agents(&open.kind, &args)?;
+        in_its_project(&call, kind, &mut args).await?;
         let shows = Shown {
             project: wall.project,
             kind: open.kind,
@@ -1173,7 +1103,7 @@ impl Workspaces {
     async fn place_asked(&self, call: Call, asked: PlaceAsked) -> Result<Placed, Refusal> {
         // Checked as an Agent's, though the window asks: what the other
         // machine's log says is no more than its Agent could ask here.
-        an_agents(&asked.kind, &asked.args)?;
+        self.an_agents(&asked.kind, &asked.args)?;
         if !self.elsewhere.contains(&asked.kind) {
             return Err(Refusal::invalid(format!(
                 "This Banda does not show {} for another machine's Project yet.",
@@ -1274,32 +1204,6 @@ impl Workspaces {
         })
         .await
     }
-}
-
-/// The args of a Pane a caller behind `wall` sees whole. A browser's tabs
-/// are only those its Project's Agents opened, each naming that Project as
-/// `agents`, and an address alone is one an Agent opened (`open_pane`):
-/// the Person's own tabs are no Agent's to see (ADR 0083, decision 4).
-fn args_seen(wall: Option<Wall>, shows: &Shown) -> Value {
-    let Some(wall) = wall.filter(|_| shows.kind == "browser.browser") else {
-        return shows.args.clone();
-    };
-    let Some(tabs) = shows.args.get("tabs").and_then(Value::as_array) else {
-        return shows.args.clone();
-    };
-    let project = wall.project.to_string();
-    let shown = shows.args.get("shown").and_then(Value::as_u64);
-    let (mut kept, mut now) = (Vec::new(), 0);
-    for (at, tab) in tabs.iter().enumerate() {
-        if tab.get("agents").and_then(Value::as_str) != Some(project.as_str()) {
-            continue;
-        }
-        if shown == Some(at as u64) {
-            now = kept.len();
-        }
-        kept.push(tab.clone());
-    }
-    serde_json::json!({ "tabs": kept, "shown": now })
 }
 
 /// The wall and the Agent of a call to an Agent's tool.

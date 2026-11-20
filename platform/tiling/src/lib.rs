@@ -11,6 +11,7 @@
 //! (ADR 0088, decision 11; ADR 0135, step 3): the window does
 //! (`platform/tiling/wasm`).
 
+pub mod agent;
 pub mod columns;
 pub mod commands;
 pub mod model;

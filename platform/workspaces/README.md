@@ -26,12 +26,17 @@ arranged: workspaces one under another, each a Strip of columns.
   `client/web/vite.config.ts`), the window draws ahead of the engine by
   it (`client/web/src/tiling/engine.ts`), and its `parity.test.ts`
   replays the traces through it.
-- **What an Agent may open** is `AGENT_KINDS` in `engine/src/lib.rs`, each
-  kind with the rule its args keep: its Project's Threads, the Diff, a
-  file, Files on a folder of its Project, a browser at a web address and
-  an App's screen. `open_pane` is its one door, and `banda files` in an
-  Agent's shell goes through it (ADR 0134, decision 4): `workspaces.open`
-  is refused an Agent's pass.
+- **What an Agent may open** is each App's own to say: its engine part's
+  `AGENT_PANES`, a kind with the rule its args keep, what an Agent sees of
+  it and the folder it shows (`AgentPane` in
+  `platform/tiling/src/agent.rs`). The engine hands them over as it
+  starts (`agent_panes` in `engine/src/apps.rs`), so this part names no
+  App for them: its Project's Threads, the Diff, a file, Files on a
+  folder of its Project and a browser at a web address. An App's screen
+  (`apps.view`) is the platform's own. A new kind is a line in its App,
+  and one in that list. `open_pane` is its one door, and `banda files` in
+  an Agent's shell goes through it (ADR 0134, decision 4):
+  `workspaces.open` is refused an Agent's pass.
 - Its settings: `~/.config/banda/tiling.toml`.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).

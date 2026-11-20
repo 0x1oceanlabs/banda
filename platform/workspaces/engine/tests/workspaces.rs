@@ -5,14 +5,65 @@
 use banda_kernel::{
     AgentId, Answer, Caller, Code, CommandId, Kernel, Participant, PersonId, ProjectId, Refusal,
 };
-use banda_workspaces::Workspaces;
 use banda_workspaces::model::{ColumnId, PaneId, Seed, WorkspaceId};
 use banda_workspaces::tiling::{Flow, Opens, Rule, Tiling};
+use banda_workspaces::{AgentPane, Workspaces, shows_only};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// A Thread's Pane as an Agent opens it here: on one Thread, by its ID.
+/// The agents' own rule is in its crate, with its tests.
+fn one_thread(args: &Value) -> Result<(), Refusal> {
+    shows_only(args, &["thread"]).map_err(|refused| Refusal {
+        message: format!("{} Call `send`.", refused.message),
+        ..refused
+    })?;
+    let id = args.get("thread").and_then(Value::as_str);
+    if id.is_some_and(|id| Uuid::parse_str(id).is_ok_and(|read| read.to_string() == id)) {
+        return Ok(());
+    }
+    Err(Refusal::invalid("A Thread's Pane shows one Thread."))
+}
+
+/// Files as an Agent opens it here: on a folder, with a row of it to
+/// pick. The files' own rule is in its crate; where the folder is, the
+/// workspaces hold, which these tests ask.
+fn a_folder(args: &Value) -> Result<(), Refusal> {
+    shows_only(args, &["dir", "selected"])?;
+    let named = |row: &str| {
+        let mut parts = Path::new(row).components();
+        parts.all(|part| matches!(part, std::path::Component::Normal(_)))
+    };
+    let row = args.get("selected").and_then(Value::as_str);
+    if args.get("dir").is_some_and(Value::is_string) && row.is_none_or(named) {
+        return Ok(());
+    }
+    Err(Refusal::invalid("Files shows a folder of your Project."))
+}
+
+/// A browser's Pane as an Agent opens it here: at a web address. The
+/// browser's own rule is in its crate, with its tests.
+fn a_web_address(args: &Value) -> Result<(), Refusal> {
+    shows_only(args, &["url"])?;
+    let url = args.get("url").and_then(Value::as_str);
+    if url.is_some_and(|url| url.starts_with("https://")) {
+        return Ok(());
+    }
+    Err(Refusal::invalid("A browser opens at a web address."))
+}
+
+/// A browser's Pane as an Agent of `project` sees it here: the tabs that
+/// name the Project, and an address alone whole.
+fn own_tabs(args: &Value, project: ProjectId) -> Value {
+    let Some(tabs) = args.get("tabs").and_then(Value::as_array) else {
+        return args.clone();
+    };
+    let own = tabs.iter().filter(|tab| tab["agents"] == json!(project));
+    json!({ "tabs": own.collect::<Vec<_>>() })
+}
 
 struct Machine {
     kernel: Arc<Kernel>,
@@ -68,7 +119,27 @@ impl Machine {
             .home_kinds(["agents.thread"])
             // As this build's window parts say: no browser for another
             // machine's Project yet.
-            .elsewhere_kinds(["agents.thread", "git.diff", "files.file"]);
+            .elsewhere_kinds(["agents.thread", "git.diff", "files.file"])
+            // As the engine hands them, from each App: here each kind's
+            // rule is the tests' own, as plain as it holds what they ask.
+            .agent_panes([
+                AgentPane {
+                    opens: one_thread,
+                    ..AgentPane::shows("agents.thread")
+                },
+                AgentPane::shows("git.diff"),
+                AgentPane::shows("files.file"),
+                AgentPane {
+                    opens: a_folder,
+                    folder: Some(("dir", "selected")),
+                    ..AgentPane::shows("files.tree")
+                },
+                AgentPane {
+                    opens: a_web_address,
+                    seen: Some(own_tabs),
+                    ..AgentPane::shows("browser.browser")
+                },
+            ]);
         let kernel = Kernel::builder(root.join("projects"), root.join("data"), owner)
             .machine(root.join("state/machine"))
             .module(workspaces)
@@ -578,7 +649,7 @@ async fn an_agent_opens_the_diff_and_a_file_with_the_args_that_choose_what_they_
 }
 
 #[tokio::test]
-async fn an_agent_sees_of_a_browser_only_the_tabs_its_projects_agents_opened() {
+async fn an_agent_sees_of_a_pane_what_its_kind_says_an_agent_of_its_project_sees() {
     let root = tempfile::tempdir().unwrap();
     let machine = Machine::open(root.path(), PersonId::new()).await;
     let (work, home) = (machine.project("Work").await, machine.project("Home").await);
@@ -610,11 +681,11 @@ async fn an_agent_sees_of_a_browser_only_the_tabs_its_projects_agents_opened() {
         panes.map(|pane| pane["args"].clone()).collect()
     };
 
-    // Behind the wall, a browser's tabs are its Project's Agents' alone,
-    // the one shown among them; an address alone is an Agent's own.
+    // Behind the wall, a browser's args are what its kind says an Agent
+    // of the Project sees: here its tabs alone, and an address whole.
     let seen = machine.agent(AgentId::new(), work, "workspaces.panes", json!({}));
     let seen = args(&seen.await.unwrap());
-    let theirs = json!({ "tabs": [tab("a", Some(work)), tab("b", Some(work))], "shown": 1 });
+    let theirs = json!({ "tabs": [tab("a", Some(work)), tab("b", Some(work))] });
     assert_eq!(seen.len(), 2);
     assert!(seen.contains(&theirs), "{seen:?}");
     assert!(seen.contains(&address), "{seen:?}");

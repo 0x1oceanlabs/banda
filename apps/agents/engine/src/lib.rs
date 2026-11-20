@@ -24,6 +24,7 @@
 //! `methods!` table below (ADR 0014).
 
 mod acp;
+mod agent_pane;
 mod aside;
 mod between;
 mod changes;
@@ -114,6 +115,8 @@ use visuals::{Inlined, Visuals};
 /// the Person means everywhere; the rest, as how soon a Thread counts as
 /// seen, is the device's (ADR 0101, decision 3).
 pub const SETTINGS: [banda_look::SettingsFile; 1] = [FILE];
+
+pub use agent_pane::AGENT_PANES;
 
 const FILE: banda_look::SettingsFile = banda_look::SettingsFile::of::<sending::AgentsSettings>()
     .class(
