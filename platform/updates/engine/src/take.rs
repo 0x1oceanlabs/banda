@@ -151,15 +151,32 @@ fn unpack(bundle: &Path, into: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// How long it waits before it runs again a program that was busy.
+const BUSY: Duration = Duration::from_millis(50);
+
 /// Runs the copy in `folder` with `--version`: it must say `version`. What
 /// it said goes into `version` beside it, as the window's copy keeps it.
 async fn check(folder: &Path, version: &str) -> Result<(), String> {
     let program = folder.join("banda");
-    let run = tokio::process::Command::new(&program)
-        .arg("--version")
-        .stdin(std::process::Stdio::null())
-        .kill_on_drop(true)
-        .output();
+    let run = async {
+        loop {
+            let ran = tokio::process::Command::new(&program)
+                .arg("--version")
+                .stdin(std::process::Stdio::null())
+                .kill_on_drop(true)
+                .output()
+                .await;
+            // A program just written is busy while a process that was
+            // started as it was written still holds it open, for a moment:
+            // run again, until `SAYING` is over (#1642, #1816).
+            match ran {
+                Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {
+                    tokio::time::sleep(BUSY).await;
+                }
+                ran => return ran,
+            }
+        }
+    };
     let output = (tokio::time::timeout(SAYING, run).await)
         .map_err(|_| "the new engine did not say its version in time".to_owned())?
         .map_err(|e| format!("the new engine did not run: {e}"))?;
