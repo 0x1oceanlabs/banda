@@ -57,10 +57,24 @@ fn install(dir: &Path, owner: PersonId, apps: &[&Path]) {
 /// Starts an engine's kernel over `dir`, serving what is installed there,
 /// as the engine does as it starts.
 async fn serve(dir: &Path, owner: PersonId, node: Option<Node>) -> Arc<Kernel> {
+    serve_within(dir, owner, node, PATIENT).await
+}
+
+/// How long a test waits for an App's answer: long enough for a worker's
+/// first start on a loaded machine, which on Windows is past two seconds.
+const PATIENT: Duration = Duration::from_secs(30);
+
+/// As [`serve`], for the test of a method that does not answer in `within`.
+async fn serve_within(
+    dir: &Path,
+    owner: PersonId,
+    node: Option<Node>,
+    within: Duration,
+) -> Arc<Kernel> {
     let registry = banda_kernel::Registry::new();
     let apps = Apps::new(Vec::new(), dir.join("data/apps"))
         .serving(registry.clone(), node)
-        .answering_within(Duration::from_secs(2));
+        .answering_within(within);
     let kernel = Kernel::builder(dir.join("root"), dir.join("data"), owner)
         .machine(dir.join("state/machine"))
         .environment(banda_environments::Local)
@@ -77,7 +91,13 @@ async fn host(apps: &[&str]) -> Host {
     let folders: Vec<PathBuf> = apps.iter().map(|app| folder(app)).collect();
     let folders: Vec<&Path> = folders.iter().map(|folder| &**folder).collect();
     install(dir.path(), owner, &folders);
-    let kernel = serve(dir.path(), owner, node()).await;
+    // Only `trouble` has a method that never answers: its test waits two
+    // seconds for it, not PATIENT.
+    let within = match apps.contains(&"trouble") {
+        true => Duration::from_secs(2),
+        false => PATIENT,
+    };
+    let kernel = serve_within(dir.path(), owner, node(), within).await;
     Host { kernel, owner, dir }
 }
 
