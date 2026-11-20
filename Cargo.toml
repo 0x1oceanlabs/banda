@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "kernel/base", "platform/apps/engine", "platform/bytes/engine", "platform/devices/engine", "platform/environments", "platform/fence", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/machines/engine", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/theme", "platform/tiling", "platform/tiling/wasm", "platform/updates/engine", "platform/workspaces/engine", "tools/fake-agent"]
+members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "kernel/base", "platform/apps/engine", "platform/bytes/engine", "platform/devices/engine", "platform/environments", "platform/fence", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/machines/engine", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/theme", "platform/tiling", "platform/tiling/wasm", "platform/updates/engine", "platform/updates/setup", "platform/workspaces/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,6 +10,9 @@ license = "Apache-2.0"
 publish = false
 
 [workspace.dependencies]
+# The Windows installer's card is drawn in pixels (platform/updates/setup):
+# its text, in Inter, and its shapes, in pure Rust.
+ab_glyph = "0.2.32"
 # A sub-agent's session and its updates come only behind `unstable_subagents`
 # (ADR 0103, decision 7).
 agent-client-protocol = { version = "3.6.0", features = ["unstable_session_fork", "unstable_subagents"] }
@@ -98,6 +101,7 @@ sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 tar = "0.4.46"
 tempfile = "3"
 thiserror = "2"
+tiny-skia = { version = "0.11.4", default-features = false, features = ["std", "simd", "png-format"] }
 toml = "1.1"
 toml_edit = "0.25.17"
 # The system's Trash: moved to, listed and put back where the system

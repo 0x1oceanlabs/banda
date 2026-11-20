@@ -1,0 +1,39 @@
+[package]
+name = "banda-setup"
+description = "Banda's card while its Windows installer works: the one window a Person sees from a double-click on the installer to Banda's own (ADR 0090)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "banda-setup"
+path = "src/main.rs"
+
+[dependencies]
+ab_glyph.workspace = true
+clap.workspace = true
+tiny-skia.workspace = true
+toml.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
+  "Win32_UI_HiDpi",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
+] }
+windows-registry.workspace = true
+
+# Not the workspace's lints: the card's window is made of Windows' own
+# calls, which Rust cannot make safe, in the one module that allows them
+# (`src/window.rs`). Everywhere else `unsafe` stays forbidden.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

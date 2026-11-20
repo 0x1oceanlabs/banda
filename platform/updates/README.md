@@ -103,8 +103,8 @@ PR.
   call of its own for it. One machine does this on every system
   (`app.ts`); what differs is how a version is taken and installed, its
   `Installer` (`installer.ts`): electron-updater's for an AppImage and
-  Windows, brew's for a Mac. Windows' installer shows its own window
-  while it works, as Banda has none then. With no window shown, a Banda
+  Windows, brew's for a Mac. Windows' installer shows Banda's card
+  while it works, as Banda has none then (below). With no window shown, a Banda
   with a version ready restarts into it by itself, unseen, where its
   installer can start it so (`unseen`): a Mac's today, and the others
   once Banda has a tray there (#1870). It tells the engine what its
@@ -135,6 +135,21 @@ PR.
   engine last said; "Checked" is the oldest last look of the machines
   reached, so it is true of each; and "on every machine" stands only
   while every row is up to date.
+- **Windows' installer shows Banda's card, not NSIS's windows**
+  (`platform/updates/setup`, `banda-setup.exe`; ADR 0090). The
+  installer, electron-builder's one-click NSIS, starts the card from its
+  plugins folder as it starts (`client/desktop/installer.nsh`), then
+  goes on silent: the card, a borderless layered window drawn in pixels
+  (`card.rs`: the `banda` theme's colours, Inter, a tile's corner, the
+  lift's shadow; Windows' light or dark), shows the app's icon, whose
+  hat tilts while it installs, and a bar it measures itself from the
+  bytes unpacked and copied. NSIS tells it the step and asks its
+  questions by two window messages (`window.rs`): Banda is open (close
+  it and install, or cancel), a part of it could not be stopped (try
+  again), this Windows is too old. Installed, it opens Banda and the card
+  stays until Banda's window shows. A card that does not come up leaves
+  NSIS's own windows, and a silent run shows none. `banda-setup --png`
+  draws the card into a picture on any system.
 - **A machine with no Banda is set up by `scripts/install.sh`** (ADR
   0119, decision 8), one POSIX sh script, published with each release
   and packed in the app's resources: it puts the engine bundle of a
