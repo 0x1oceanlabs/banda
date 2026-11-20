@@ -46,13 +46,36 @@ window." ADR 0120's question 3 left this for its own research.
 
 ## Decision
 
-1. **An Agent's tab runs in a Chromium of its Project's machine.**
-   - `browser_open` opens it there. Every Agent tab runs there, whichever
-     window, if any, is open (question 2).
-   - The Person's own tabs stay in the window's Chromium, the device's
-     (ADR 0062 decision 12, ADR 0101 decision 3). A tab the Person lends
-     a Thread stays theirs and stays where it is, for Agents of the
-     device's own machine, as ADR 0083 decision 4 built it.
+1. **A tab runs in one of two places, and an Agent's runs in a Chromium
+   of its Project's machine.**
+
+   | | A device's tab | A machine's tab |
+   |---|---|---|
+   | Runs in | the client's own web view | the machine's Chromium, headless |
+   | Seen | as it is, at the device's speed | as a screencast, from any client |
+   | Profile | the Person's, this device's | the Project's, on its machine |
+   | Lives while | the client is open | the engine runs |
+   | Opened by | the Person | an Agent, or the Person |
+
+   - A tab lives where the one who needs it must live. An Agent works
+     with every window closed, so `browser_open` opens its tab on the
+     machine, whichever window, if any, is open (question 2).
+   - The Person's own tabs stay on the device (ADR 0062 decision 12,
+     ADR 0101 decision 3): their sign-ins, passkeys, extensions and
+     camera are there. A tab the Person lends a Thread stays theirs and
+     stays where it is, for Agents of the device's own machine, as
+     ADR 0083 decision 4 built it.
+   - The Person opens a machine's tab too (question 11): for a page only
+     that machine reaches (its `localhost`), to sign in for the
+     Project's Agents, or to go on from another device. It is the same
+     tab an Agent opens. There is no third kind, a browser of the
+     Person's on a machine.
+   - A client says in its hello whether it holds device tabs
+     (question 13). The window does. The web page, on a phone or in
+     someone's browser, cannot put another site inside itself and does
+     not: its browser Pane shows machines' tabs alone, and a link opens
+     in the device's own browser. A native phone client will hold them
+     in the system's web view, by the same contract.
    - There is one Browser App, one Pane kind (`browser.browser`), one tab
      row and one set of tools. Where a tab runs is the tab's, and the
      Pane marks a machine's tab with its machine, as it marks any other
@@ -92,8 +115,10 @@ window." ADR 0120's question 3 left this for its own research.
      IDs and answers stay ADR 0060's.
 
 4. **A profile per Project, on the Project's machine** (question 5).
-   - The Agents of Project P use one persistent profile, under P's data on
-     its machine, as the vision's table says. It never moves with the
+   - Every machine's tab of Project P uses one persistent profile, under
+     P's data on its machine, as the vision's table says, whoever opened
+     the tab (question 12): the Person signs in once in a machine's tab,
+     and the Project's Agents go on signed in. It never moves with the
      Project: cookies are secrets.
    - A profile is a folder, so each Project with a host tab has one
      Chromium process. It starts on the first call and quits a minute
@@ -120,6 +145,10 @@ window." ADR 0120's question 3 left this for its own research.
    - A browser Pane showing a host tab streams it: `browser.watch {tab}`,
      a stream of the browser's engine part, gives JPEG frames from
      `Page.startScreencast`, at the Pane's size times the device's scale.
+   - The viewer sets what the page is laid out for: a phone gets the
+     page as a phone does (its width, a touch device), and its touches go
+     back as touches. With several viewers, the one who acted last sets
+     it.
    - The viewer paces it: the engine acks Chromium's frame only once the
      client acked it, one frame in flight, so a slow link gets fewer
      frames, never a queue. Nothing streams while no Pane shows the tab.
@@ -153,12 +182,14 @@ for Roma to try within two days.
    one's title", then "take a screenshot". The answer and the picture come
    back; the Mac can sleep meanwhile.
 2. **A Pane watches.** A browser Pane draws a host tab from its frames, on
-   any client: the Mac watches arc's Agent. The tab row marks the
-   machine. Read-only. _Mock first_, with the kit, as AGENTS.md asks.
+   any client: the Mac watches arc's Agent, and the phone's page does,
+   laid out for a phone. The tab row marks the machine. Read-only. _Mock first_, with the kit, as AGENTS.md asks.
    _Try:_ the same Thread on arc, its tab opened from the Mac and from a
    second window; close one; the frames stop when no Pane shows it.
 3. **The Person acts in it.** Pointer, wheel, keys, text, the clipboard;
-   the pill's Stop, the site gate and handoff in the Pane. _Try:_ an Agent
+   the pill's Stop, the site gate and handoff in the Pane; the Person
+   opens a machine's tab themselves ("Open on arc"). _Try:_ arc's
+   `localhost` page opened from the Mac and from the phone. An Agent
    hands over "Sign in to GitHub" on arc; Roma signs in from the Mac; the
    Agent goes on; the sign-in holds in the Project's next Thread.
 4. **One road for every Agent tab.** Agents' tabs of a Project on the
@@ -168,7 +199,11 @@ for Roma to try within two days.
 6. **Later**, each an issue: binary frames; a credential broker beyond
    the Person's own sign-in (question 9); lending a device's tab to
    another machine's Agent; a Person's own program on a host tab through a
-   CDP endpoint; `browser_close` if question 10 says so.
+   CDP endpoint; `browser_close` if question 10 says so; the list of the
+   Person's device tabs as data, so a tab open on the Mac is offered on
+   the phone and opens there in its own web view; a machine's port
+   forwarded through its door, so its `localhost` opens in a device's tab
+   too.
 
 ## Questions for Roma
 
@@ -237,8 +272,32 @@ Each with the recommended answer first.
     - B. Also when its Thread is done (settled).
     - C. Only when the engine restarts.
 
+11. **Does the Person open a machine's tab?**
+    - **A (recommended).** Yes, the same tab an Agent opens (decision 1).
+    - B. No: only Agents open them, and the Person only watches and acts.
+12. **Which profile has a machine's tab the Person opened?**
+    - **A (recommended).** The Project's, shared with its Agents: signing
+      in there is how an Agent gets a sign-in (question 9).
+    - B. One of the Person's own on that machine, apart from the Agents'.
+13. **The phone's page, before a native client: no tabs of its own?**
+    - **A (recommended).** None: machines' tabs alone, and a link opens
+      in the phone's browser.
+    - B. Wait with the phone's browser Pane for the native client.
+
+## Roma's calls (2026-11-20)
+
+- **The model of decision 1, one tab and two places, with the Person's
+  browser on the device by default: yes.**
+- **Questions 11, 12 and 13: A, as recommended.** Question 12 settles
+  question 5 (a profile per Project) and question 9 (no broker).
+- **Question 2: A**, to be looked at once more before slice 4, when the
+  screencast has been seen in slices 2 and 3.
+- Questions 1, 3, 4, 6, 7, 8 and 10 wait for Roma.
+
 ## Consequences
 
+- The phone's page and a browser on someone else's computer show
+  machines' tabs alone, so the Person's sign-ins never settle there.
 - An Agent keeps its browser with every window closed, on any machine
   where the engine runs, and devbox's Agents get one.
 - The window loses the Agents' half of the browser's desktop part once
