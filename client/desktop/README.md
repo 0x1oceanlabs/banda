@@ -171,6 +171,10 @@ page is one part of. A change to main changes this page in the same PR.
   killed, `chrome_crashpad_handler` and the network service die with
   SIGBUS as the AppImage's folder goes; `banda` does not. That is
   Electron's helper, kept apart from the engine (seen on 2026-11-07).
+- **Windows' installer shows Banda's card** (`setup/`, `banda-setup.exe`;
+  ADR 0090): `installer.nsh` starts it and goes on silent, the card
+  draws the install and asks NSIS's questions; how, in
+  [the updates' page](../../platform/updates/README.md).
 - **Only `window.banda` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
   only `app://banda` and pages on localhost. Its channels are one table,

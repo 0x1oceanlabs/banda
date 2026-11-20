@@ -136,7 +136,7 @@ PR.
   reached, so it is true of each; and "on every machine" stands only
   while every row is up to date.
 - **Windows' installer shows Banda's card, not NSIS's windows**
-  (`platform/updates/setup`, `banda-setup.exe`; ADR 0090). The
+  (`client/desktop/setup`, `banda-setup.exe`; ADR 0090). The
   installer, electron-builder's one-click NSIS, starts the card from its
   plugins folder as it starts (`client/desktop/installer.nsh`), then
   goes on silent: the card, a borderless layered window drawn in pixels
