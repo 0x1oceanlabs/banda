@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { AppUpdate, UpdateState } from "@banda/contract/updates"
 import {
+  lookedOf,
   lookedWords,
   type MachineUpdates,
   newestOf,
@@ -37,6 +38,112 @@ const ready: AppUpdate = {
   phase: "ready",
   version: "0.1.0-dev.642",
 }
+
+describe("a machine is up to date only on the newest version found", () => {
+  const on = (running: string, newest = running) =>
+    devbox({ said: said({ running, newest }) })
+
+  it("one below the newest it found says its version, and what is out", () => {
+    expect(rowOf(on("0.1.0-dev.640", "0.1.0-dev.642"), now)).toEqual({
+      kind: "behind",
+      from: "dev.640",
+      status: "dev.640",
+      why: "dev.642 is out.",
+    })
+  })
+
+  it("one that found nothing above itself is behind what another found", () => {
+    const stale = on("0.1.0-dev.640")
+    expect(rowOf(stale, now)).toMatchObject({ kind: "ok" })
+    expect(rowOf(stale, now, undefined, "0.1.0-dev.642")).toMatchObject({
+      kind: "behind",
+      why: "dev.642 is out.",
+    })
+    // What it found itself still counts where another found less.
+    expect(
+      rowOf(
+        on("0.1.0-dev.640", "0.1.0-dev.642"),
+        now,
+        undefined,
+        "0.1.0-dev.641"
+      )
+    ).toMatchObject({ kind: "behind", why: "dev.642 is out." })
+  })
+
+  it("one that said nothing yet is not said to be up to date", () => {
+    expect(rowOf(devbox(), now)).toEqual({ kind: "behind" })
+  })
+
+  it("this machine stopped says Stopped, and nothing of what it last said", () => {
+    const here = devbox({
+      host: undefined,
+      away: true,
+      stopped: true,
+      said: said({
+        running: "0.1.0-dev.640",
+        newest: "0.1.0-dev.640",
+        app: ready,
+      }),
+    })
+    expect(rowOf(here, now)).toEqual({
+      kind: "away",
+      from: "dev.640",
+      status: "Stopped",
+    })
+  })
+
+  it("the title names no version on every machine while one is behind", () => {
+    const rows = [on("0.1.0-dev.640"), on("0.1.0-dev.642")].map((machine) => ({
+      machine,
+      row: rowOf(machine, now, undefined, "0.1.0-dev.642"),
+    }))
+    expect(titleOf(rows, "0.1.0-dev.642")).toEqual({ title: "Banda dev.642" })
+  })
+
+  it("this machine out of reach is not said to be up to date, on the bar too", () => {
+    const here = devbox({
+      host: undefined,
+      away: true,
+      stopped: true,
+      said: said({ running: "0.1.0-dev.640", newest: "0.1.0-dev.640" }),
+    })
+    const rows = [here, on("0.1.0-dev.642")].map((machine) => ({
+      machine,
+      row: rowOf(machine, now, undefined, "0.1.0-dev.642"),
+    }))
+    expect(titleOf(rows, "0.1.0-dev.642")).toEqual({ title: "Banda dev.642" })
+    expect(worstOf(undefined, rows)).toEqual({
+      kind: "quiet",
+      title: "Banda is stopped on this machine",
+    })
+    // One behind, with nothing on its way: the hover says what is out.
+    const behind = [on("0.1.0-dev.640", "0.1.0-dev.642")].map((machine) => ({
+      machine: { ...machine, host: undefined },
+      row: rowOf(machine, now),
+    }))
+    expect(worstOf(undefined, behind)).toEqual({
+      kind: "quiet",
+      title: "Banda dev.642 is out",
+    })
+  })
+
+  it("Checked is when the last of the machines reached looked", () => {
+    const looked = (at: number | undefined, more = {}) =>
+      devbox({ said: said({ looked: at }), ...more })
+    const [old, fresh] = [now - 40 * MINUTE, now - MINUTE]
+    expect(lookedOf([looked(old), looked(fresh)])).toBe(old)
+    // One away, or one that looks at nothing, holds it not.
+    expect(lookedOf([looked(old, { away: true }), looked(fresh)])).toBe(fresh)
+    expect(
+      lookedOf([
+        devbox({ said: said({ off: "brew updates Banda here" }) }),
+        looked(fresh),
+      ])
+    ).toBe(fresh)
+    // One reached that has not looked yet: not checked.
+    expect(lookedOf([looked(undefined), looked(fresh)])).toBeUndefined()
+  })
+})
 
 describe("a machine's row: one word, at most one button", () => {
   it("one away says Away, and nothing more", () => {
@@ -148,7 +255,9 @@ describe("this machine's row holds this window's app, as its engine says it", ()
   })
 
   it("another machine's app is its own window's to show", () => {
-    const there = devbox({ said: said({ app: ready }) })
+    const there = devbox({
+      said: said({ running: "0.1.0-dev.642", app: ready }),
+    })
     expect(rowOf(there, now)).toMatchObject({ kind: "ok" })
   })
 
@@ -295,10 +404,16 @@ describe("the bar's icon and the title", () => {
     })
   })
 
-  it("the newest is what this machine's engine found", () => {
-    expect(newestOf(app, devbox({ host: undefined, said: said() }))).toBe(
-      "0.1.0-dev.642"
-    )
+  it("the newest is the highest any machine found, one away too", () => {
+    const here = devbox({ host: undefined, said: said() })
+    expect(newestOf(app, [here])).toBe("0.1.0-dev.642")
+    const ahead = devbox({
+      away: true,
+      said: said({ running: "0.1.0-dev.650", newest: "0.1.0-dev.650" }),
+    })
+    expect(newestOf(app, [here, ahead])).toBe("0.1.0-dev.650")
+    // Before any look: what this window's app runs.
+    expect(newestOf(app, [devbox()])).toBe("0.1.0-dev.640")
     expect(lookedWords(now - 3 * MINUTE, now)).toBe("Checked 3m ago")
   })
 

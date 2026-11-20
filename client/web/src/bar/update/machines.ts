@@ -9,7 +9,7 @@
 import type { MachineIcon } from "@banda/contract/machines"
 import type { AppUpdate, UpdateState, Waits } from "@banda/contract/updates"
 import { ago } from "@banda/ui/lib/words"
-import { shortOf } from "./updating"
+import { above, shortOf } from "./updating"
 
 /** A machine as the widget shows it. */
 export type MachineUpdates = {
@@ -19,6 +19,9 @@ export type MachineUpdates = {
   icon: MachineIcon
   /** The window does not reach it now. */
   away: boolean
+  /** Banda is stopped there, as this machine's Panes say it: the reason
+   * it is away. */
+  stopped?: boolean
   /** What its engine last said, kept while it is away; none before it
    * said anything. */
   said?: UpdateState
@@ -29,8 +32,11 @@ export type MachineUpdates = {
 
 /** What a machine's row is. */
 export type RowKind =
-  /** It runs the newest, or has not looked yet. */
+  /** It runs the newest version found. */
   | "ok"
+  /** It runs less than the newest found, or said nothing yet, and nothing
+   * is on its way. */
+  | "behind"
   /** A new version downloads. */
   | "taking"
   /** A new version is in place, and one Update takes it. */
@@ -80,13 +86,18 @@ export type Row = {
 
 /** Machine `machine`'s row at `now`. This machine's holds its app, as
  * its engine says it; `turns` Agents work there, where the window counts
- * them itself. */
+ * them itself. `found` is the newest version any machine found
+ * (`newestOf`): a machine is up to date only on that one, or on the
+ * newest it found itself where no other is given. */
 export function rowOf(
   machine: MachineUpdates,
   now: number,
-  turns?: number
+  turns?: number,
+  found?: string
 ): Row {
-  const engine = engineRow(machine, now)
+  const engine = engineRow(machine, now, found)
+  // What one away last said is not what it does now.
+  if (machine.away) return engine
   const said = machine.said
   // Another machine's app is its own window's to show.
   const app = machine.host === undefined ? said?.app : undefined
@@ -97,17 +108,19 @@ export function rowOf(
     : row
 }
 
-function engineRow(machine: MachineUpdates, now: number): Row {
+function engineRow(machine: MachineUpdates, now: number, found?: string): Row {
   const { said, name } = machine
   const from = said && shortOf(said.running)
-  if (machine.away) return { kind: "away", from, status: "Away" }
+  if (machine.away)
+    return { kind: "away", from, status: machine.stopped ? "Stopped" : "Away" }
   if (machine.refused)
     return {
       kind: "off",
       status: "Update by hand",
       why: `Banda on ${name} is too old to update itself: update it there once.`,
     }
-  if (!said) return { kind: "ok" }
+  // One that said nothing yet is not known to be up to date.
+  if (!said) return { kind: "behind" }
   if (said.taking) {
     const { version, share, size } = said.taking
     return {
@@ -152,7 +165,21 @@ function engineRow(machine: MachineUpdates, now: number): Row {
     }
   if (said.off)
     return { kind: "off", from, status: "Off", why: endWith(said.off) }
+  const newest = higher(found, said.newest)
+  if (newest && above(newest, said.running))
+    return {
+      kind: "behind",
+      from,
+      status: from,
+      why: `${shortOf(newest)} is out.`,
+    }
   return { kind: "ok", from, status: "Up to date" }
+}
+
+/** The higher of two versions, either of which may be none. */
+function higher(a: string | undefined, b: string | undefined) {
+  if (a === undefined || b === undefined) return a ?? b
+  return above(b, a) ? b : a
 }
 
 /** The words of a row that updates since the Person said so. */
@@ -240,7 +267,8 @@ function withApp(engine: Row, app: AppUpdate, stops = false): Row {
     case "updated":
       return engine.kind === "failed" ||
         engine.kind === "taking" ||
-        engine.kind === "ready"
+        engine.kind === "ready" ||
+        engine.kind === "behind"
         ? engine
         : {
             kind: "ok",
@@ -333,7 +361,9 @@ export type Worst =
   /** The Person said Update, and it installs or restarts. */
   | { kind: "updating"; version?: string }
   | { kind: "looking" }
-  | { kind: "quiet" }
+  /** Nothing is on its way; `title`, where not every machine is known to
+   * be up to date, is what the hover says in place of that. */
+  | { kind: "quiet"; title?: string }
 
 /** The bar's icon over `rows`, with this window's `app`; `checking`
  * while the look the Person asked for runs. */
@@ -360,8 +390,32 @@ export function worstOf(
       version: taking.row.to,
     }
   if (checking) return { kind: "looking" }
-  return { kind: "quiet" }
+  // Nothing is on its way, yet not every machine is known to be up to
+  // date: the hover says that much, never a bare "Banda", the logo's name.
+  const here = rows.find(({ machine }) => machine.host === undefined)
+  if (here?.row.kind === "away")
+    return {
+      kind: "quiet",
+      title: here.machine.stopped
+        ? "Banda is stopped on this machine"
+        : "Banda's updates",
+    }
+  const newest = newestOf(
+    app,
+    rows.map(({ machine }) => machine)
+  )
+  // One that said nothing yet names no version below it.
+  const below = rows.some(
+    ({ row }) => row.kind === "behind" && row.why !== undefined
+  )
+  return newest && below
+    ? { kind: "quiet", title: `Banda ${shortOf(newest)} is out` }
+    : { kind: "quiet" }
 }
+
+/** What the title and the bar's hover say once every machine runs the
+ * newest. */
+export const UP_TO_DATE = "Banda is up to date"
 
 /** Whether the bar shows the widget at all: with something to say, or
  * always for Banda Dev (ADR 0045). */
@@ -384,9 +438,14 @@ export function titleOf(
   )
   if (ready?.row.to) return { title: `Banda ${ready.row.to} is ready` }
   const reached = rows.filter(({ row }) => row.kind !== "away")
-  if (reached.every(({ row }) => row.kind === "ok"))
+  // This machine out of reach is not known to be up to date.
+  const here = rows.find(({ machine }) => machine.host === undefined)
+  if (
+    here?.row.kind !== "away" &&
+    reached.every(({ row }) => row.kind === "ok")
+  )
     return {
-      title: "Banda is up to date",
+      title: UP_TO_DATE,
       say:
         newest && reached.length === rows.length
           ? `${shortOf(newest)} on every machine.`
@@ -395,23 +454,38 @@ export function titleOf(
   return { title: newest ? `Banda ${shortOf(newest)}` : "Banda" }
 }
 
-/** The newest version, as this machine's engine found it on its channel;
- * before its first look, the version this window's app goes to, or runs. */
+/** The newest version any machine found on its channel, one away too:
+ * what it found is still out. Before any look, the version this window's
+ * app goes to, or runs. */
 export function newestOf(
   app: AppUpdate | undefined,
-  here: MachineUpdates | undefined
+  machines: readonly MachineUpdates[]
 ): string | undefined {
-  return here?.said?.newest ?? app?.version ?? app?.running
+  return (
+    machines.reduce<string | undefined>(
+      (newest, { said }) => higher(newest, said?.newest),
+      undefined
+    ) ??
+    app?.version ??
+    app?.running
+  )
 }
 
-/** The latest look of any machine reached, in ms since the epoch. */
+/** When every machine reached that looks had looked, in ms since the
+ * epoch: the oldest of their last looks, so "Checked" is true of each.
+ * None while one of them has not looked yet, or none looks. */
 export function lookedOf(
   machines: readonly MachineUpdates[]
 ): number | undefined {
-  const looks = machines.flatMap(({ said }) =>
+  const looking = machines.filter(
+    ({ away, said }) => !away && said !== undefined && said.off === undefined
+  )
+  const looks = looking.flatMap(({ said }) =>
     said?.looked ? [said.looked] : []
   )
-  return looks.length > 0 ? Math.max(...looks) : undefined
+  return looks.length > 0 && looks.length === looking.length
+    ? Math.min(...looks)
+    : undefined
 }
 
 /** "Checked 3 min ago". */

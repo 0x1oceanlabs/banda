@@ -74,6 +74,7 @@ import {
   lookedWords,
   type MachineUpdates,
   newestOf,
+  UP_TO_DATE,
   plainOf,
   type Row,
   rowOf,
@@ -124,11 +125,14 @@ function useRows(
   acted: ReadonlyMap<string, Acted>,
   turns?: number
 ) {
+  // This machine is the first, and its app is in what it says.
+  const found = newestOf(machines[0]?.said?.app, machines)
   return machines.map((machine) => {
     const said = rowOf(
       machine,
       now,
-      machine.host === undefined ? turns : undefined
+      machine.host === undefined ? turns : undefined,
+      found
     )
     return { machine, row: actedRow(said, acted.get(machine.host ?? ""), now) }
   })
@@ -293,7 +297,7 @@ export function barWords(worst: Worst): string {
     case "looking":
       return "Checking for updates…"
     case "quiet":
-      return "Banda is up to date"
+      return worst.title ?? UP_TO_DATE
   }
 }
 
@@ -318,7 +322,7 @@ function About({
   setChecking: (checking: boolean) => void
 }) {
   const engineFor = useEngineFor(engine)
-  const { title, say } = titleOf(rows, newestOf(app, machines[0]))
+  const { title, say } = titleOf(rows, newestOf(app, machines))
   const updating = useUpdateThere(engineFor, (machine, next) =>
     act(machine.host, next)
   )

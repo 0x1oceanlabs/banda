@@ -136,13 +136,16 @@ export function useUpdateThere(
 export function useMachineUpdates(): MachineUpdates[] {
   const said = useHeard()
   const here = useHereNamed()
+  // This machine as the Window reaches it: none outside a Window.
+  const reach = useStore(useContext(HostsContext).here, itself)?.state.state
   const hosts = useHosts()
   return useMemo(
     () => [
       {
         name: here?.name ?? "This machine",
         icon: here?.icon ?? "laptop",
-        away: false,
+        away: reach !== undefined && reach !== "live",
+        stopped: reach === "stopped",
         ...said.get(HERE),
       },
       ...hosts
@@ -155,7 +158,7 @@ export function useMachineUpdates(): MachineUpdates[] {
           ...said.get(host.name),
         })),
     ],
-    [said, here, hosts]
+    [said, here, reach, hosts]
   )
 }
 

@@ -128,7 +128,13 @@ PR.
   "Update when they finish" is `wait`, which the engine holds (`held`),
   so a window that loads again still shows it. "Check now" is
   `updates.check` on each machine. That Banda updated a window shows
-  once, and keeps for itself that it did.
+  once, and keeps for itself that it did. It says only what it knows
+  (`machines.ts`): a machine is "Up to date" on the newest version any
+  machine found, else its row names the version it runs and the one that
+  is out; this machine stopped says "Stopped", and nothing of what its
+  engine last said; "Checked" is the oldest last look of the machines
+  reached, so it is true of each; and "on every machine" stands only
+  while every row is up to date.
 - **A machine with no Banda is set up by `scripts/install.sh`** (ADR
   0119, decision 8), one POSIX sh script, published with each release
   and packed in the app's resources: it puts the engine bundle of a
