@@ -431,6 +431,14 @@ repository), with an adversarial check.
   `ssh`). Not yet: Settings → Machines showing the route and its round
   trip; a race that moves a live machine from one pipe to the other; a
   tailnet whose names are not under `ts.net`.
+- **Back after a sleep (SE4, PR 1c).** Tried on a Mac on 2026-11-20: after
+  ten minutes asleep its machines came back in 16 and 34 seconds, as a go
+  that ssh had failed asked no door, and the wait between two goes slept
+  on. Now every go after the first of a run asks the door first, and as
+  the machine wakes (`powerMonitor`'s `resume`) each host that is away or
+  in a go begun before the sleep is tried again at once, the door first,
+  its waits short again. The first go of a run stays by ssh, which says
+  the machine's build anew.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

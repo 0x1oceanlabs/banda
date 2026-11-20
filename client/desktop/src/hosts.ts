@@ -1134,6 +1134,10 @@ export class Hosts extends Context.Service<
     /** Starts host `name` again at once when its engine is stopped there
      * or it is refused; it fails for one not in `hosts.toml`. */
     readonly start: (name: string) => Effect.Effect<void, Refused>
+    /** This machine woke from sleep: each host that is away, or in a go
+     * begun before the sleep, is tried again at once, its door on the
+     * tailnet first. A live, stopped or refused one stays as it is. */
+    readonly woke: Effect.Effect<void>
     /** Adds `machine` to `hosts.toml`, as a `[[hosts]]` at its end, and
      * reaches it at once: its name made from `ssh` when it has none. The
      * entry written; it fails for one refused, or one whose name is
@@ -1268,7 +1272,7 @@ export class Hosts extends Context.Service<
         /** Keeps `host` reached, until the layer's scope closes or it goes
          * from `hosts.toml`; `stopped`, it first waits for the page to start
          * it, as the Person stopped its engine. */
-        const reach = (host: Entry, stopped = false) =>
+        const reach = (host: Entry, stopped = false, quick = false) =>
           Effect.gen(function* () {
             const change = (to: (one: Kept) => Kept) =>
               SubscriptionRef.update(all, (list) =>
@@ -1291,7 +1295,7 @@ export class Hosts extends Context.Service<
             const held = stopped ? yield* Deferred.make<void>() : undefined
             if (held) yield* tell.begin(held, { state: "stopped" })
             const fiber = yield* Effect.forkIn(
-              keep(host, tell, run, held),
+              keep(host, tell, run, held, quick),
               scope
             )
             reached.set(host.name, { entry: host, fiber })
@@ -1468,6 +1472,16 @@ export class Hosts extends Context.Service<
             ),
           start: (name: string) =>
             Effect.asVoid(wake(name, ["stopped", "refused"])),
+          woke: lock.withPermit(
+            Effect.gen(function* () {
+              for (const { entry, fiber } of [...reached.values()]) {
+                const state = (yield* keptOf(entry.name))?.link.state
+                if (state !== "away" && state !== "connecting") continue
+                yield* Fiber.interrupt(fiber)
+                yield* reach(entry, false, true)
+              }
+            })
+          ),
           add: (machine) => change((text) => addOf(text, machine)),
           set: (name, to) => change((text) => setOf(text, name, to)),
           remove: (name) =>
@@ -1621,7 +1635,9 @@ const keep = (
   host: Entry,
   { set, begin }: Tell,
   run: Run,
-  held?: Deferred.Deferred<void>
+  held?: Deferred.Deferred<void>,
+  /** The first go tries the door on the tailnet first (`once`). */
+  first = false
 ) =>
   Effect.gen(function* () {
     const { times } = run
@@ -1634,7 +1650,7 @@ const keep = (
       ).pipe(Effect.andThen(Deferred.await(next)))
     if (held) yield* stoppedUntil(held)
     let wait = times.first
-    let quick = false
+    let quick = first
     while (true) {
       // Made before the go, so it is there as soon as the host shows
       // stopped or refused.
@@ -1663,7 +1679,7 @@ const keep = (
         wait = times.first
         continue
       }
-      quick = ended.live === true
+      quick = true
       if (ended.live) wait = times.first
       yield* Console.error(
         `banda: ${host.name} is away (${ended.why}); Banda tries again in ${wait} ms`
@@ -1681,8 +1697,9 @@ const once = (
   said: ReturnType<typeof heard>,
   told: Set<string>,
   run: Run,
-  /** The go before was live: the link broke, as after a sleep, and the
-   * machine's door on the tailnet may answer before ssh is back. */
+  /** A go before ended, or this machine woke: the link broke, as after a
+   * sleep, and the machine's door on the tailnet may answer before ssh is
+   * back. The first go of a run is by ssh, which says its build anew. */
   quick = false
 ) =>
   Effect.gen(function* () {

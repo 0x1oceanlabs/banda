@@ -100,6 +100,7 @@ const hostsLayer = ({
     addressNow,
     addressWhenBack,
     signed: () => Effect.die("unused"),
+    woke: Effect.die("unused"),
     current: Effect.die("unused"),
     changes: Stream.die("unused"),
     start: () => Effect.die("unused"),

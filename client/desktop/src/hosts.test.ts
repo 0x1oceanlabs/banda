@@ -1341,6 +1341,62 @@ it.live(
   30_000
 )
 
+it.live(
+  "this machine woke: a machine that is away is tried again at once, at its door on the tailnet first, with no ssh",
+  () =>
+    Effect.gen(function* () {
+      const key = "t".repeat(43)
+      const door = yield* doorOf(key)
+      const { port } = door.address() as AddressInfo
+      const at = `http://127.0.0.1:${port}`
+      // ssh does not reach it, as just after a sleep.
+      const fake = fakeSsh({ followers: [[{ exit: 255 }]] })
+      const proved = join(fake.dir, "host-keys.json")
+      writeFileSync(proved, JSON.stringify({ [key]: "devbox" }))
+      writeFileSync(
+        join(fake.dir, "host-doors.json"),
+        JSON.stringify({
+          devbox: {
+            hostKey: key,
+            device: "device-0",
+            build: "old",
+            version: "0.1.0-dev.1",
+            door: at,
+          },
+        })
+      )
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        // Away, and its next go a minute off.
+        yield* reaches((host) => host.state === "away")
+        yield* hosts.woke
+        const live = yield* reaches((host) => host.state === "live")
+        expect(live).toMatchObject({ route: "tailnet", build: "old" })
+        expect(yield* hosts.address("devbox")).toEqual({
+          url: `ws://127.0.0.1:${port}/ws`,
+          door: { device: "device-0", hostKey: key },
+        })
+        expect(fake.runs("follower")).toHaveLength(1)
+        // A live one stays as it is.
+        yield* hosts.woke
+        expect((yield* hosts.current)[0]).toMatchObject({ state: "live" })
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          hostsOn(
+            fake,
+            { first: 60_000, door: 200 },
+            DEVBOX_TOML,
+            undefined,
+            KEY,
+            proved
+          )
+        )
+      )
+    }).pipe(Effect.scoped),
+  30_000
+)
+
 it("a device's name goes to the other machine with nothing a shell reads", () => {
   expect(pairCommand("banda", "K3Y", `Roma's "Mac"; rm -rf $HOME`)).toContain(
     `--name "Romas Mac rm -rf HOME" --kind`
