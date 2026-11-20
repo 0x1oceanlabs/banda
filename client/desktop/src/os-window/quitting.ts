@@ -2,20 +2,24 @@
  * Whether Banda quits (ADR 0086, decision 3): by Quit Banda, `banda stop`,
  * an update's restart, a quit that went through, or as macOS logs out,
  * restarts or shuts down. It is kept here and nowhere else, with Quit
- * Banda itself, which stops the engine and then quits; what closing and
- * quitting do with it are closing.ts's rules. The bridge's `quit` is
- * answered here.
+ * Banda itself, which stops the engine and then quits, and with where
+ * Banda's icon is, which a closing window hides by (ADR 0136, decision
+ * 2); what closing and quitting do with them are closing.ts's rules. The
+ * bridge's `quit` is answered here.
  *
  * A part of the device's window (ADR 0089, decision 9), under the windows
  * (windows.ts), whose main one hides or closes by it. What the app is
  * asked from outside its windows is over them (asked.ts).
  */
 import { type Answer, type Ask, confirm, none } from "@banda/desktop-kit"
+import { NodeServices } from "@effect/platform-node"
 import { Context, Effect, FiberSet, Layer } from "effect"
 import { app, type BrowserWindow, powerMonitor } from "electron"
 import type { BRIDGE } from "../bridge"
 import { asksOnQuit, type Closing } from "../closing"
 import { Stop } from "../engine"
+import { hasIcon, recordedTray } from "../tray"
+import { hasTrayHost } from "./tray-host"
 
 /** What the app is asked from outside its windows. */
 export type AppEvent = "before-quit" | "activate" | "window-all-closed"
@@ -24,7 +28,12 @@ export type AppEvent = "before-quit" | "activate" | "window-all-closed"
  * (`thisApp`), a fake in a test. */
 export type App = {
   readonly platform: NodeJS.Platform
-  /** Asks the app to quit, as its menu's Quit does. */
+  /** Whether Banda's icon is in the menu bar or the tray (`hasIcon`). */
+  readonly icon: boolean
+  /** Whether a tray host is there to show the icon now (tray-host.ts). */
+  readonly trayHost: Effect.Effect<boolean>
+  /** Asks the app to quit, as its menu's Quit does: `before-quit` is
+   * heard before this returns. */
   readonly quit: () => void
   /** Calls `heard` on each `event`; returns how to stop. */
   readonly listen: (
@@ -47,6 +56,15 @@ export type App = {
 /** The app Electron runs. */
 export const thisApp = (): App => ({
   platform: process.platform,
+  icon: hasIcon(),
+  trayHost: Effect.suspend(() =>
+    recordedTray
+      ? // Later, as a bus answers: never within the close that asks.
+        Effect.as(Effect.yieldNow, recordedTray.host)
+      : hasTrayHost({ platform: process.platform }).pipe(
+          Effect.provide(NodeServices.layer)
+        )
+  ),
   quit: () => app.quit(),
   listen: (event, heard) => {
     const on = app as unknown as NodeJS.EventEmitter
@@ -76,10 +94,16 @@ export class Quitting extends Context.Service<
     readonly closing: () => Closing
     /** Whether it quits now, as the Person or macOS asked. */
     readonly quits: () => boolean
+    /** Whether a tray host is there to show Banda's icon now: asked as
+     * the window closes on Linux (closing.ts). */
+    readonly trayHost: Effect.Effect<boolean>
     /** Whether a quit the app is asked for is Quit Banda, which asks
      * first while Agents work (closing.ts); one that is not goes through,
      * and Banda quits from then on. */
     readonly asksFirst: (hasWindow: boolean) => boolean
+    /** The icon's Quit Banda, in the menu bar or the tray: asks the app
+     * to quit, as Quit Banda on every system. */
+    readonly byIcon: () => void
     /** Quits Banda, asking nothing. */
     readonly leave: () => void
     /**
@@ -109,11 +133,14 @@ export class Quitting extends Context.Service<
         let quitting = false
         /** Set for a while as macOS logs out, restarts or shuts down. */
         let poweringOff = false
+        /** Set while the icon's Quit Banda asks the app to quit. */
+        let byIcon = false
 
         const closing = (): Closing => ({
           platform: app.platform,
           quitting: quitting || updating,
           poweringOff,
+          icon: app.icon,
         })
         const leave = (): void => {
           quitting = true
@@ -148,10 +175,19 @@ export class Quitting extends Context.Service<
         return {
           closing,
           quits: () => quitting || poweringOff,
+          trayHost: app.trayHost,
           asksFirst: (hasWindow) => {
-            if (asksOnQuit(closing(), hasWindow)) return true
+            if (asksOnQuit(closing(), hasWindow, byIcon)) return true
             quitting = true
             return false
+          },
+          byIcon: () => {
+            byIcon = true
+            try {
+              app.quit()
+            } finally {
+              byIcon = false
+            }
           },
           leave,
           banda: Effect.sync(() => {

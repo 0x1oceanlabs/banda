@@ -192,7 +192,7 @@ The Tiling, the sidebar, the bar, the menu, the keys, Settings, and the client.
 | [0127](0127-the-window-shows-and-asks-and-each-thing-has-one-place.md) | The window shows and asks, and each thing has one place | **standing** | six rules in docs/window.md; decision 6 intent and per-device arrangement not built yet |
 | [0134](0134-a-thread-s-group-holds-what-its-thread-opens-and-the-person-s-keys-open-beside-it.md) | A Thread's Group holds what its Thread opens, and the Person's keys open beside it | **standing** | changes 0102 decisions 3, 4 and 0065 decision 7; BANDA_PANE built, an Agent's `banda files` still refused |
 | [0135](0135-every-pane-behaves-by-the-same-laws-and-one-short-table.md) | Every Pane behaves by the same laws and one short table | **standing** | carries on 0110 and 0127 decision 4; adds the focus, the screen and what a close leaves; step 1 next |
-| [0136](0136-banda-s-icon-is-in-the-tray-on-linux-and-windows-and-a-closed-window-hides-where-a-tray-host-is-known.md) | Banda's icon is in the tray on Linux and Windows, and a closed window hides where a tray host is known | **standing** | amends 0086 decisions 3, 4; the icon and its menu, and the tray host's answer built; closing hides not built; plan in #1870 |
+| [0136](0136-banda-s-icon-is-in-the-tray-on-linux-and-windows-and-a-closed-window-hides-where-a-tray-host-is-known.md) | Banda's icon is in the tray on Linux and Windows, and a closed window hides where a tray host is known | **standing** | amends 0086 decisions 3, 4; the icon and its menu, the tray host's answer, closing hides and Windows' one notice built; untried on a real tray host and on Windows; plan in #1870 |
 
 ### One App each
 

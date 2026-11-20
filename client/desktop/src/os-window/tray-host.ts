@@ -1,8 +1,7 @@
 /**
- * Whether a tray host is there to show Banda's icon (issue #1870, Roma's
- * choice 2; ADR 0136, proposed): where one is, closing the window may
- * hide it, and where none is known it closes as today. Anything but a
- * clear yes is no.
+ * Whether a tray host is there to show Banda's icon (ADR 0136, decision
+ * 2): where one is, closing the window hides it, and where none is known
+ * it closes (closing.ts). Anything but a clear yes is no.
  *
  * On Linux the icon is a StatusNotifierItem, and Electron does not say
  * whether anything shows it. The session bus does: a host (Waybar's
@@ -16,7 +15,8 @@
  *
  * It answers for now and keeps nothing: a host comes and goes while
  * Banda runs (Waybar restarts, the extension is turned off), so it is
- * asked each time the answer is needed.
+ * asked each time the window closes (windows.ts), which waits for it:
+ * some 10 ms, as measured on a busy machine.
  *
  * A part of the device's window (ADR 0089, decision 9).
  */

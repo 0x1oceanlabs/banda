@@ -20,6 +20,7 @@ import type { Commands } from "../door"
 import { Status } from "../status"
 import type { MenuBarDoes } from "../tray"
 import { menuAnswers, type Menus, menusLayer } from "./menus"
+import { Quitting } from "./quitting"
 import { Windows } from "./windows"
 
 /** Lets what a click started, and what the layer forked, run. */
@@ -74,7 +75,6 @@ function on(platform: NodeJS.Platform, { open = true, headless = false } = {}) {
         did.push("door shut")
       }
     },
-    quit: () => void did.push("quit"),
   }
   const now = Effect.runSync(SubscriptionRef.make<EngineStatus | null>(null))
   const door = Effect.runSync(Deferred.make<string>())
@@ -92,6 +92,22 @@ function on(platform: NodeJS.Platform, { open = true, headless = false } = {}) {
         return window
       }),
       page: () => Effect.succeed(window),
+    }),
+    Layer.succeed(Quitting)({
+      closing: () => ({
+        platform,
+        quitting: false,
+        poweringOff: false,
+        icon: true,
+      }),
+      quits: () => false,
+      trayHost: Effect.succeed(true),
+      asksFirst: () => false,
+      byIcon: () => void did.push("Quit Banda, by the icon"),
+      leave: () => {},
+      banda: Effect.void,
+      updating: () => {},
+      engineStopped: () => {},
     }),
     Layer.succeed(Status)({
       current: SubscriptionRef.get(now),
@@ -150,39 +166,40 @@ it.effect(
 )
 
 it.effect(
-  "the menu bar's icon shows each status; Open Banda opens the window, a row opens it and then its Thread there, and Quit Banda asks the app to quit",
-  () => {
-    const { did, held, says, layer } = on("darwin")
-    return Effect.gen(function* () {
-      yield* settled
-      yield* says("1.0.0")
-      yield* settled
-      yield* says("1.0.1")
-      yield* settled
-      expect(did.slice(2)).toEqual([
-        "shows nothing",
-        "shows 1.0.0",
-        "shows 1.0.1",
-      ])
-      did.length = 0
-      held.bar?.open()
-      held.bar?.openThread("work", "t1", "A title")
-      yield* settled
-      held.bar?.quit()
-      expect(did).toEqual([
-        "open Banda",
-        "open Banda",
-        `page: pane.pick ${JSON.stringify({
-          project: "work",
-          pane: {
-            kind: "agents.thread",
-            args: { thread: "t1", harness: "", title: "A title" },
-          },
-        })}`,
-        "quit",
-      ])
-    }).pipe(Effect.provide(layer))
-  }
+  "the menu bar's icon shows each status; Open Banda opens the window, a row opens it and then its Thread there, and Quit Banda is the icon's, which asks first, on every system",
+  () =>
+    Effect.forEach(["darwin", "linux", "win32"] as const, (platform) => {
+      const { did, held, says, layer } = on(platform)
+      return Effect.gen(function* () {
+        yield* settled
+        yield* says("1.0.0")
+        yield* settled
+        yield* says("1.0.1")
+        yield* settled
+        expect(did.slice(2)).toEqual([
+          "shows nothing",
+          "shows 1.0.0",
+          "shows 1.0.1",
+        ])
+        did.length = 0
+        held.bar?.open()
+        held.bar?.openThread("work", "t1", "A title")
+        yield* settled
+        held.bar?.quit()
+        expect(did).toEqual([
+          "open Banda",
+          "open Banda",
+          `page: pane.pick ${JSON.stringify({
+            project: "work",
+            pane: {
+              kind: "agents.thread",
+              args: { thread: "t1", harness: "", title: "A title" },
+            },
+          })}`,
+          "Quit Banda, by the icon",
+        ])
+      }).pipe(Effect.provide(layer))
+    })
 )
 
 it.effect(

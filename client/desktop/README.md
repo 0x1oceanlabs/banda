@@ -32,8 +32,11 @@ page is one part of. A change to main changes this page in the same PR.
   anything else, as its unit stopped by hand, it ends with code 3: the
   window stays, its Panes say Banda is stopped on this machine, and
   Start starts it again (ADR 0124, decision 9). When it crashed, main
-  starts it again (waiting up to 10 s between tries). Closing the last
-  window only closes it: the engine and its Agents go on. Quit Banda
+  starts it again (waiting up to 10 s between tries). Closing the
+  window does not stop the engine: where Banda lives in the menu bar or
+  the tray the window hides, and where it closes, the last one quits the
+  app and an engine that is the session's service goes on, with its
+  Agents (the cases are the next but one point's). Quit Banda
   (`banda.quit`, Ctrl+Q, but for a terminal's program, whose key it is
   there) asks first while Agents work, then main runs `banda stop
   --force`. Quit asks in one set of words everywhere, the page, macOS's
@@ -82,7 +85,7 @@ page is one part of. A change to main changes this page in the same PR.
   for Linux and Windows too, in `tray/`: each for a light bar and a dark
   one, a PNG at 1x and `@2x` and an `.ico` of 16, 20, 24 and 32 px;
   whether a tray host is there to show one, `os-window/tray-host.ts`
-  answers, which nothing asks yet: on Linux the session bus's
+  answers, as the window closes: on Linux the session bus's
   `org.kde.StatusNotifierWatcher`, asked with `busctl`, and anything but
   a clear yes is no; issue #1870). An engine with no app opens
   Banda.app hidden, by its path (`open -g -j <app> --args --hidden`),
@@ -94,7 +97,7 @@ page is one part of. A change to main changes this page in the same PR.
   stops trying after three opens with no app that ran five minutes
   (`engine/src/service/app.rs`).
 - **On Linux and Windows the same icon and menu are in the tray** (ADR
-  0136, proposed in #1871; the mock tray-linux-windows): a
+  0136; the mock tray-linux-windows): a
   StatusNotifierItem on Linux, which a tray host draws (Waybar's `tray`,
   KDE, GNOME with the AppIndicator extension; with none, nothing shows
   and nothing says so), and Windows' notification area. From the same
@@ -125,11 +128,52 @@ page is one part of. A change to main changes this page in the same PR.
     (`--ozone-platform=headless`: a hidden trial's, a test's), nor its
     follower: with no tray host on the bus Electron falls back to GTK's
     icon, and GTK ends the app where it has no display.
-  - **The window closes as before:** closing the last one quits the
-    app, and its icon goes with it. So the tray's Quit Banda is, until
-    closing hides (#1870, PR 5), what closing the last window is: the
-    app goes at once, with no question, and an engine that is the
-    session's service goes on.
+  - **Closing the window hides it where a tray host is known**
+    (decision 2), as on macOS: the app stays in the tray, its page left
+    to call the Person and sound, and its Panes' own windows close. The
+    rules are `closing.ts`'s, which has the table of cases; the window
+    follows them in `os-window/windows.ts`:
+
+    | The main window closes | It | Then |
+    |---|---|---|
+    | macOS | hides | Banda lives in the menu bar |
+    | Windows | hides | Banda lives in the notification area |
+    | Linux, a tray host there | hides | Banda lives in the tray |
+    | Linux, no tray host known, or a window with no screen | closes | the app quits; the engine, the session's service, goes on |
+    | anywhere, as Banda quits or an update restarts it | closes | the app quits |
+
+    On Linux the close waits for the bus's answer, some 10 ms (at most
+    a second, then it is a no), since a host comes and goes: a window
+    hidden with no icon could not be found again. A host that goes
+    while the window is hidden leaves it so; `banda menu` or Banda
+    opened again shows it.
+  - **What shows a hidden window:** the icon's Open Banda or a click on
+    it, a row of its menu, `banda menu`, a click on a notice, and Banda
+    opened again. They are one function, the windows' `inFront`.
+  - **A hidden window's page is `hidden`** (`visibilitychange`), as on
+    macOS: the window is hidden, not minimized or moved away. The
+    machine reads "the Person looks at this device" there, and pushes a
+    call to the phone only when they look at none (ADR 0124, decision
+    10); `e2e/tray.spec.ts` holds it.
+  - **The icon's Quit Banda is Quit Banda:** it asks first while Agents
+    work, in the page when the window shows and in the system's dialog
+    when it is hidden, then stops the engine and quits, as macOS's Quit
+    does (`quitting.byIcon`, then the same road). Any other quit the app
+    is asked for there, as a signal a session ending sends, quits at
+    once and stops no engine, as before; Ctrl+Q stays the page's key.
+  - **Windows says once that Banda still runs** (decision 6), the first
+    time its window hides: Windows 11 puts a new icon in the
+    notification area's overflow. A system notification, silent, whose
+    click shows the window: "Banda is still running" / "Its icon is in
+    the notification area, under the arrow if you do not see it. Your
+    Agents work on. Quit Banda is in the icon's menu." That it was said
+    is the file `still-runs-said` in the window's folder of Banda's
+    state (`os-window/still-runs.ts`).
+  - **For the tests the tray is a recorded one** (`BANDA_TRAY=recorded`,
+    as `BANDA_DESKTOP` is for the notices; a packed Banda ignores it):
+    no `Tray` of Electron's, which a window with no screen cannot have,
+    and `globalThis.bandaTray` in main to pick its menu's items and say
+    whether a tray host is there.
 - **The menus in main.** In main the icon, the app's menu (macOS's: the app
   menu, File, Edit, and Window, whose Banda shows the main window) and
   the door `banda menu [route]` knocks at (`door.ts`, ADR 0017) are one

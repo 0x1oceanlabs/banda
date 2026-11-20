@@ -5,8 +5,8 @@
  * from `app://banda` (os-window/page.ts) and hands the page the engine's
  * address. Closing it
  * is not quitting Banda: the engine and its Agents go on, and Quit Banda
- * stops them; on macOS closing it hides it, and Banda lives in the menu
- * bar, its icon there saying who works and who waits (closing.ts,
+ * stops them; where Banda lives in the menu bar or the tray closing it
+ * hides it, its icon there saying who works and who waits (closing.ts,
  * menubar.ts, tray.ts). It also
  * runs `banda look --follow` and hands the page each look (ADR 0007),
  * opens `sidebar.toml` in the Person's editor (sidebar.ts), and

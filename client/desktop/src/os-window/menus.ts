@@ -7,11 +7,12 @@
  *   none.
  * - **The menu bar's icon and its menu** (ADR 0086, decision 4), where
  *   Banda lives in the menu bar (`hasMenuBar`): macOS's, the tray on
- *   Linux and Windows' notification area (ADR 0136, proposed in #1871).
+ *   Linux and Windows' notification area (ADR 0136).
  *   Drawn from `banda status --follow` alone (status.ts; menubar.ts says
  *   what they are, tray.ts draws them): a row opens its Thread in the
- *   window, Open Banda the window, as a click on the icon does off macOS,
- *   and Quit Banda is ⌘Q's.
+ *   window, Open Banda the window, hidden or not, as a click on the icon
+ *   does off macOS, and Quit Banda asks first while Agents work
+ *   (quitting.ts).
  * - **The door** (door.ts, ADR 0017): `banda menu [route]` opens the
  *   Banda menu in the window, or the settings at a route of their own;
  *   the page tells them apart. The bridge's `menu` is answered here, by
@@ -31,7 +32,14 @@ import { channel } from "../channel"
 import { type Commands, openDoor } from "../door"
 import { hasMenuBar } from "../menubar"
 import { Status } from "../status"
-import { headless, menuBar, type MenuBarDoes } from "../tray"
+import {
+  headless,
+  menuBar,
+  type MenuBarDoes,
+  recordedBar,
+  recordedTray,
+} from "../tray"
+import { Quitting } from "./quitting"
 import { Windows } from "./windows"
 
 /** The system's menus and the door, as this part uses them: Electron's
@@ -49,14 +57,12 @@ export type Menus = {
   /** Listens at `path` and answers by `commands`; returns how to shut it
    * (door.ts). */
   readonly door: (path: string, commands: Commands) => () => void
-  /** Asks the app to quit, as its menu's Quit does. */
-  readonly quit: () => void
 }
 
 /** The menus of the app Electron runs, and the door. */
 export const thisMenus = (): Menus => ({
   platform: process.platform,
-  headless: headless(),
+  headless: !recordedTray && headless(),
   appMenu: (banda) =>
     Menu.setApplicationMenu(
       banda &&
@@ -78,9 +84,10 @@ export const thisMenus = (): Menus => ({
         ])
     ),
   menuBar: (does) =>
-    menuBar(channel.name, app.getVersion(), does, process.platform),
+    recordedTray
+      ? recordedBar(recordedTray, does)
+      : menuBar(channel.name, app.getVersion(), does, process.platform),
   door: openDoor,
-  quit: () => app.quit(),
 })
 
 /** Opens the menu at `route` in the main window, brought to the front;
@@ -98,6 +105,7 @@ export const menusLayer = (menus: Menus) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const windows = yield* Windows
+      const quitting = yield* Quitting
       const status = yield* Status
       const engine = yield* Engine
       const run = yield* FiberSet.makeRuntime<Acts>()
@@ -128,9 +136,8 @@ export const menusLayer = (menus: Menus) =>
                     })
                   )
                 ),
-              // As ⌘Q: Quit Banda, asking first while Agents work
-              // (closing.ts).
-              quit: menus.quit,
+              // Quit Banda, asking first while Agents work (closing.ts).
+              quit: quitting.byIcon,
             })
           ),
           (bar) => Effect.sync(() => bar.destroy())

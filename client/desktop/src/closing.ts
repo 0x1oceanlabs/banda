@@ -1,19 +1,43 @@
 /**
  * What closing Banda's window and quitting the app do (ADR 0086, decision
- * 3). On Linux, and on Windows, closing the window closes it, and the
- * last one quits the app; an engine that is the session's service goes
- * on. On macOS the engine is a launchd job, which outlives the app, and
- * the app lives in the menu bar (decision 4, menubar.ts): closing the
- * main window hides it, its page left alive to call the Person (ADR 0011)
- * and sound (ADR 0009), and the Dock's icon goes while no window is
- * open (`dockShows`); the menu bar's Open Banda, or Banda opened again, shows
- * it. A launch the engine made, as it found no app, shows no window
- * (`startsHidden`). A quit the app is asked for there, by the menu bar's
- * Quit Banda, the app menu's or the Dock's Quit, or by ⌘Q where the page
- * leaves the key (in a terminal, over a dialog, with the window hidden),
- * is Quit Banda, which asks first while Agents work (`quitAsking`);
- * elsewhere ⌘Q is the page's own Quit Banda key. A Pane's own window
- * closes as anywhere (ADR 0025, decision 9).
+ * 3; ADR 0136, decisions 2 and 6). The cases, by where Banda's icon is:
+ *
+ * | The main window closes | It | Then |
+ * |---|---|---|
+ * | macOS | hides | Banda lives in the menu bar |
+ * | Windows | hides | Banda lives in the notification area, and says so the first time |
+ * | Linux, a tray host there | hides | Banda lives in the tray |
+ * | Linux, no tray host known, or no icon (no screen) | closes | the app quits, as its last window went |
+ * | anywhere, as Banda quits or an update restarts it | closes | the app quits |
+ *
+ * | The app is asked to quit | It |
+ * |---|---|
+ * | by the icon's Quit Banda, anywhere | asks first while Agents work: Quit Banda |
+ * | macOS, by anything else (its menu, the Dock, ⌘Q, a signal) | the same |
+ * | Linux and Windows, by anything else (a signal, the last window closed) | quits at once |
+ * | by Banda itself, or as macOS powers off | quits at once |
+ *
+ * An engine that is the session's service goes on wherever the app
+ * quits unasked. On Linux a tray host comes and goes, so it is asked for
+ * as the window closes (`onClose`; os-window/tray-host.ts), and anything
+ * but a clear yes closes the window: a hidden one with no icon could not
+ * be found again.
+ *
+ * Hidden, the window's page is left alive to call the Person (ADR 0011)
+ * and sound (ADR 0009), and reads as not in front (`visibilitychange` to
+ * `hidden`), so the machine pushes a call to the phone (ADR 0124,
+ * decision 10). The icon's Open Banda or a click on it, a row of its
+ * menu, `banda menu`, or Banda opened again, shows it.
+ *
+ * On macOS the engine is a launchd job, which outlives the app (decision
+ * 4, menubar.ts), and the Dock's icon goes while no window is open
+ * (`dockShows`). A launch the engine made, as it found no app, shows no
+ * window (`startsHidden`). A quit the app is asked for there comes by
+ * the menu bar's Quit Banda, the app menu's or the Dock's Quit, or by ⌘Q
+ * where the page leaves the key (in a terminal, over a dialog, with the
+ * window hidden); elsewhere ⌘Q, and Ctrl+Q off macOS, is the page's own
+ * Quit Banda key. A Pane's own window closes as anywhere (ADR 0025,
+ * decision 9).
  */
 import { Clock, Effect } from "effect"
 
@@ -26,21 +50,61 @@ export type Closing = {
   /** The system logs out, restarts or shuts down: nobody may be there to
    * answer, and macOS gives up on it unless every app quits. */
   readonly poweringOff: boolean
+  /** Whether Banda's icon is in the menu bar or the tray here
+   * (`hasMenuBar`, menubar.ts): not on a Linux window with no screen. */
+  readonly icon: boolean
 }
 
-/** Whether closing the main window hides it, rather than closing it. */
-export function hidesOnClose({ platform, quitting }: Closing): boolean {
-  return platform === "darwin" && !quitting
+/**
+ * Whether closing the main window hides it, rather than closing it:
+ * where Banda's icon is, with a tray `host` known to show it, unless
+ * Banda quits.
+ */
+export function hidesOnClose(
+  { icon, quitting }: Closing,
+  host: boolean
+): boolean {
+  return icon && host && !quitting
+}
+
+/**
+ * What a main window asked to close does: closes; hides; or, on Linux,
+ * asks whether a tray host is there now, and then hides or closes by
+ * what it hears (`hidesOnClose`). macOS's menu bar and Windows'
+ * notification area are always there.
+ */
+export function onClose(at: Closing): "close" | "hide" | "ask" {
+  if (!hidesOnClose(at, true)) return "close"
+  return at.platform === "linux" ? "ask" : "hide"
 }
 
 /**
  * Whether a quit the app is asked for is Quit Banda, which asks first
- * while Agents work (`quitAsking`), rather than going at once: where
- * closing the window hides it, while there is a window to ask in, and
- * unless the system powers off.
+ * while Agents work (`quitAsking`), rather than going at once: while
+ * there is a window to ask in, unless Banda quits already or the system
+ * powers off. On macOS every such quit is; on Linux and Windows only the
+ * icon's own Quit Banda (`byIcon`), so a signal, as a session ending
+ * sends, still quits at once.
  */
-export function asksOnQuit(at: Closing, hasWindow: boolean): boolean {
-  return hidesOnClose(at) && !at.poweringOff && hasWindow
+export function asksOnQuit(
+  at: Closing,
+  hasWindow: boolean,
+  byIcon: boolean
+): boolean {
+  if (at.quitting || at.poweringOff || !hasWindow) return false
+  return at.platform === "darwin" || byIcon
+}
+
+/**
+ * Whether a window that hides says that Banda still runs (ADR 0136,
+ * decision 6): on Windows, which puts a new icon in the notification
+ * area's overflow, and only until it was `said` once.
+ */
+export function saysStillRuns(
+  platform: NodeJS.Platform,
+  said: boolean
+): boolean {
+  return platform === "win32" && !said
 }
 
 /** What the engine tells an app it opens, as it found none (engine/src/
@@ -127,7 +191,7 @@ export function onDock(
   at: Closing,
   hasWindow: boolean
 ): "show" | "open" | null {
-  if (!hidesOnClose(at)) return null
+  if (at.platform !== "darwin" || at.quitting) return null
   return hasWindow ? "show" : "open"
 }
 

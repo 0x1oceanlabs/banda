@@ -13,17 +13,35 @@ export function script(text: string): string {
 
 /** The app as os-window/quitting.ts and asked.ts use it (`App`), faked:
  * what it `did`, in order, who listens to it, and what it is asked from
- * outside. A system dialog is answered `yes`. */
-export function fakeApp(platform: NodeJS.Platform, yes = false) {
+ * outside. A system dialog is answered `yes`. Its icon is in the menu bar
+ * or the tray unless `icon` says otherwise, and a tray `host` is there.
+ * Asked to quit, it asks its listeners first, as Electron does, and
+ * quits unless one stops it. */
+export function fakeApp(
+  platform: NodeJS.Platform,
+  yes = false,
+  { icon = true, host = true } = {}
+) {
   type Heard = (event: { preventDefault: () => void }) => void
   const did: string[] = []
   const listeners = new Map<string, Set<Heard>>()
   const power = new Set<() => void>()
+  /** The app is asked `event`; whether a listener stopped it. */
+  const asked = (event: string) => {
+    let stopped = false
+    for (const heard of listeners.get(event) ?? [])
+      heard({ preventDefault: () => (stopped = true) })
+    return stopped
+  }
   return {
     did,
     app: {
       platform,
-      quit: () => void did.push("quit"),
+      icon,
+      trayHost: Effect.succeed(host),
+      quit: () => {
+        if (!asked("before-quit")) did.push("quit")
+      },
       listen: (event: string, heard: Heard) => {
         const all = listeners.get(event) ?? new Set()
         listeners.set(event, all.add(heard))
@@ -43,13 +61,7 @@ export function fakeApp(platform: NodeJS.Platform, yes = false) {
     /** How many listen to the app, its power included. */
     listening: () =>
       power.size + [...listeners.values()].reduce((n, all) => n + all.size, 0),
-    /** The app is asked `event`; whether a listener stopped it. */
-    asked: (event: string) => {
-      let stopped = false
-      for (const heard of listeners.get(event) ?? [])
-        heard({ preventDefault: () => (stopped = true) })
-      return stopped
-    },
+    asked,
     /** The system says it logs out, restarts or shuts down. */
     powerOff: () => {
       for (const off of power) off()

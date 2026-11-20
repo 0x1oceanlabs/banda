@@ -54,19 +54,45 @@ const ICONS = join(import.meta.dirname, "menu-bar")
 export const headless = (): boolean =>
   app.commandLine.getSwitchValue("ozone-platform") === "headless"
 
-/** Whether the app Electron runs has the icon (`hasMenuBar`), and so
- * follows the status for it. */
-export const hasIcon = (): boolean => hasMenuBar(process.platform, headless())
-
 /** What the menu's items do. */
 export type MenuBarDoes = {
   /** Open Banda: the window, brought to the front. */
   readonly open: () => void
   /** A row: the window, on Thread `thread` of `project`. */
   readonly openThread: (project: string, thread: string, title: string) => void
-  /** Quit Banda, as ⌘Q is (closing.ts). */
+  /** Quit Banda, which asks first while Agents work (closing.ts). */
   readonly quit: () => void
 }
+
+/**
+ * A tray kept in main alone, for the end-to-end tests, as the notices'
+ * desktop is (`BANDA_DESKTOP`): their window has no screen, where
+ * Electron's `Tray` cannot be (`hasMenuBar`). They pick its menu's
+ * items (`does`) and say whether a tray host is there (`host`) through
+ * `globalThis.bandaTray`.
+ */
+export type RecordedTray = { host: boolean; does?: MenuBarDoes }
+
+/** The recorded tray, where the tests ask for one (`BANDA_TRAY=recorded`);
+ * a packaged app ignores it. */
+export const recordedTray: RecordedTray | null =
+  !app.isPackaged && process.env.BANDA_TRAY === "recorded"
+    ? ((globalThis as { bandaTray?: RecordedTray }).bandaTray = { host: true })
+    : null
+
+/** The icon of a recorded `tray`: it keeps what its menu's items do. */
+export const recordedBar = (
+  tray: RecordedTray,
+  does: MenuBarDoes
+): ReturnType<typeof menuBar> => {
+  tray.does = does
+  return { show: () => {}, destroy: () => delete tray.does }
+}
+
+/** Whether the app Electron runs has the icon (`hasMenuBar`), and so
+ * follows the status for it. */
+export const hasIcon = (): boolean =>
+  recordedTray !== null || hasMenuBar(process.platform, headless())
 
 /** Whether the bar the icon sits on is dark, and each change of it
  * (`listen`, which returns how to stop). */

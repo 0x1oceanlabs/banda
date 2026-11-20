@@ -5,6 +5,9 @@ import { vi } from "vitest"
 const electron = vi.hoisted(() => ({
   focused: [] as unknown[],
   outside: [] as string[],
+  /** The window's folder in Banda's state, and the notices shown. */
+  userData: "",
+  notices: [] as { made: unknown; click: () => void }[],
 }))
 vi.mock("electron", async () => {
   const { EventEmitter } = await import("node:events")
@@ -51,14 +54,41 @@ vi.mock("electron", async () => {
     isFullScreen() {
       return this.full
     }
+    isDestroyed() {
+      return false
+    }
+    /** As Electron's: it closes unless a listener stops it. */
+    close() {
+      let stopped = false
+      this.emit("close", { preventDefault: () => (stopped = true) })
+      this.did.push(stopped ? "close stopped" : "closes")
+    }
+  }
+  class Notification extends EventEmitter {
+    static isSupported() {
+      return true
+    }
+    readonly made: unknown
+    constructor(made: unknown) {
+      super()
+      this.made = made
+    }
+    show() {
+      electron.notices.push({
+        made: this.made,
+        click: () => this.emit("click"),
+      })
+    }
   }
   return {
     app: {
       isPackaged: true,
       whenReady: () => Promise.resolve(),
       focus: (how: unknown) => electron.focused.push(how),
+      getPath: () => electron.userData,
     },
     BrowserWindow,
+    Notification,
     shell: {
       openExternal: (url: string) => {
         electron.outside.push(url)
@@ -72,6 +102,9 @@ vi.mock("electron", async () => {
   }
 })
 import type { EventEmitter } from "node:events"
+import { existsSync, mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { expect, it } from "@effect/vitest"
 import { Window } from "@banda/desktop-kit"
 import { Effect, Layer } from "effect"
@@ -81,6 +114,7 @@ import { Dock } from "./dock"
 import { Material } from "./material"
 import { PAGE } from "./page"
 import { Quitting } from "./quitting"
+import { SAID, stillRuns } from "./still-runs"
 import { type Root, Windows } from "./windows"
 
 /** A window of the fake Electron above. */
@@ -95,8 +129,9 @@ type Fake = BrowserWindow & {
 }
 
 /** Main's root, whether Banda quits and the Dock, as the windows ask
- * them, and what they asked. */
-function rootAt(closing: Closing) {
+ * them, and what they asked. A tray host is there as `host` says when it
+ * is asked for. */
+function rootAt(closing: Closing, host: { there: boolean } = { there: true }) {
   const asked: string[] = []
   const heard: WebContents[] = []
   let dock: Promise<void> | null = null
@@ -108,7 +143,16 @@ function rootAt(closing: Closing) {
     Layer.succeed(Quitting)({
       closing: () => closing,
       quits: () => false,
+      // The bus answers later, never within the close itself.
+      trayHost: Effect.andThen(
+        Effect.yieldNow,
+        Effect.sync(() => {
+          asked.push("tray host?")
+          return host.there
+        })
+      ),
       asksFirst: () => false,
+      byIcon: () => {},
       leave: () => {},
       banda: Effect.void,
       updating: () => {},
@@ -135,12 +179,27 @@ function rootAt(closing: Closing) {
   }
 }
 
-const LINUX: Closing = {
-  platform: "linux",
+const MAC: Closing = {
+  platform: "darwin",
   quitting: false,
   poweringOff: false,
+  icon: true,
 }
-const MAC: Closing = { platform: "darwin", quitting: false, poweringOff: false }
+/** With no icon, as a window with no screen: it closes as it is asked. */
+const LINUX: Closing = { ...MAC, platform: "linux", icon: false }
+const TRAY: Closing = { ...MAC, platform: "linux" }
+const WINDOWS: Closing = { ...MAC, platform: "win32" }
+
+/** Lets what a close started run. */
+const settled = Effect.yieldNow.pipe(Effect.repeat({ times: 20 }))
+
+/** Asks `opened` to close, as its close button does; whether it was
+ * stopped. */
+const closeOf = (opened: Fake) => {
+  const event = { preventDefault: vi.fn() }
+  opened.emit("close", event)
+  return event.preventDefault.mock.calls.length > 0
+}
 
 /** The windows over `root`, made of a material that says only which
  * window it made. */
@@ -205,12 +264,11 @@ it.effect(
       opened.emit("focus")
       expect(asked).toEqual(["followDock", "followDock"])
       expect(opened.did.at(-1)).toBe("flash false")
-      // Off macOS it closes as it is asked to, and its Panes' own
-      // windows go with it.
-      const close = { preventDefault: vi.fn() }
-      opened.emit("close", close)
-      expect(close.preventDefault).not.toHaveBeenCalled()
+      // With no icon it closes as it is asked to, nothing asked of the
+      // bus, and its Panes' own windows go with it.
       asked.length = 0
+      expect(closeOf(opened)).toBe(false)
+      expect(asked).toEqual([])
       opened.emit("closed")
       expect(asked).toEqual(["followDock", "closePopped"])
       expect(main()).toBeNull()
@@ -260,11 +318,7 @@ it.effect(
       const { inFront, main } = yield* windows
       const opened = yield* open()
       opened.did.length = 0
-      const close = () => {
-        const event = { preventDefault: vi.fn() }
-        opened.emit("close", event)
-        return event.preventDefault.mock.calls.length > 0
-      }
+      const close = () => closeOf(opened)
       // It hides, its Panes' own windows close, and it is still the
       // main window.
       expect(close()).toBe(true)
@@ -287,6 +341,100 @@ it.effect(
       // Banda quits: the window closes.
       closing.quitting = true
       expect(close()).toBe(false)
+    }).pipe(Effect.provide(over(root)))
+  }
+)
+
+it.effect(
+  "on Linux the main window asks for a tray host as it closes: it hides where one is, in full screen too, and comes back as it is asked for (ADR 0136, decision 2)",
+  () => {
+    const { root, asked } = rootAt(TRAY)
+    return Effect.gen(function* () {
+      const { inFront, main } = yield* windows
+      const opened = yield* open()
+      opened.did.length = 0
+      // The close waits for the answer, and a second one meanwhile asks
+      // nothing more.
+      expect(closeOf(opened)).toBe(true)
+      expect(closeOf(opened)).toBe(true)
+      expect(opened.did).toEqual([])
+      yield* settled
+      expect(asked).toEqual(["tray host?", "closePopped"])
+      expect(opened.did).toEqual(["hide"])
+      expect(main()).toBe(opened)
+      expect(electron.notices).toEqual([])
+      // Open Banda, a row, banda menu or a second Banda shows it.
+      expect(inFront()).toBe(opened)
+      expect(opened.did).toEqual(["hide", "show", "focus"])
+      // Only macOS leaves full screen first.
+      opened.did.length = 0
+      opened.full = true
+      expect(closeOf(opened)).toBe(true)
+      yield* settled
+      expect(opened.did).toEqual(["hide"])
+    }).pipe(Effect.provide(over(root)))
+  }
+)
+
+it.effect(
+  "on Linux with no tray host known the window closes, as it does when Banda quits while the bus is asked",
+  () => {
+    const closing = { ...TRAY }
+    const host = { there: false }
+    const { root, asked } = rootAt(closing, host)
+    return Effect.gen(function* () {
+      yield* windows
+      const opened = yield* open()
+      opened.did.length = 0
+      expect(closeOf(opened)).toBe(true)
+      yield* settled
+      // The close it makes itself goes through, with nothing asked again.
+      expect(opened.did).toEqual(["closes"])
+      expect(asked).toEqual(["tray host?"])
+
+      // A host is there, yet Banda quits before it says so.
+      const again = yield* open()
+      again.did.length = 0
+      host.there = true
+      asked.length = 0
+      expect(closeOf(again)).toBe(true)
+      closing.quitting = true
+      // The quit's own close is not held by the question.
+      expect(closeOf(again)).toBe(false)
+      yield* settled
+      expect(again.did).toEqual(["closes"])
+      expect(asked).toEqual(["tray host?"])
+    }).pipe(Effect.provide(over(root)))
+  }
+)
+
+it.effect(
+  "on Windows the main window hides as it closes, and says once ever that Banda still runs; a click on the notice shows it (ADR 0136, decision 6)",
+  () => {
+    const closing = { ...WINDOWS }
+    const { root, asked } = rootAt(closing)
+    electron.userData = mkdtempSync(join(tmpdir(), "banda-test-"))
+    electron.notices.length = 0
+    return Effect.gen(function* () {
+      yield* windows
+      const opened = yield* open()
+      opened.did.length = 0
+      expect(closeOf(opened)).toBe(true)
+      // Nothing is asked: the notification area is always there.
+      expect(asked).toEqual(["closePopped"])
+      expect(opened.did).toEqual(["hide"])
+      expect(electron.notices.map((one) => one.made)).toEqual([
+        { ...stillRuns("Banda Local"), silent: true },
+      ])
+      expect(existsSync(join(electron.userData, SAID))).toBe(true)
+      electron.notices[0]?.click()
+      expect(opened.did).toEqual(["hide", "show", "focus"])
+      // Never again, in this run or the next.
+      expect(closeOf(opened)).toBe(true)
+      expect(electron.notices).toHaveLength(1)
+      // Banda quits, or an update restarts it: the window closes.
+      closing.quitting = true
+      expect(closeOf(opened)).toBe(false)
     }).pipe(Effect.provide(over(root)))
   }
 )
