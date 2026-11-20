@@ -155,7 +155,9 @@ panes: CallMethod<Nothing, Array<SeenWorkspace>>,
  * args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
  * `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with
  * `"file": "<path>"` to show one), a file (`files.file`, args
- * `{"path": "<path>", "line": <n>}`), a browser at a web
+ * `{"path": "<path>", "line": <n>}`), Files on a folder of your
+ * Project (`files.tree`, args `{"dir": "<path>"}`, with
+ * `"selected": "<name>"` to pick a row in it), a browser at a web
  * address (`browser.browser`, args `{"url": "https://…"}` alone),
  * or an App's screen (`apps.view`, args `{"app": "<id>", "view":
  * "<name>"}`, with `"args": {…}` when the view takes any).

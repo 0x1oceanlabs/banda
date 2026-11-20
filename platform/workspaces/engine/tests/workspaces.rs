@@ -1003,28 +1003,101 @@ async fn what_an_agent_opens_with_no_place_goes_into_its_threads_group_as_a_deck
     assert_eq!(last["group"], Value::Null);
 }
 
-/// `banda` run by an Agent goes by its pass, whatever `BANDA_PANE` says
-/// (ADR 0134, decision 4): `banda files`, which asks `workspaces.open`
-/// from the Pane of its terminal, stays refused under an Agent's pass,
-/// which opens only through `open_pane`, so naming the Person's Pane
-/// places nothing as the Person's.
+/// `banda` run by an Agent opens as its Agent's, by its pass, whatever
+/// `BANDA_PANE` says (ADR 0134, decisions 1 and 4). `workspaces.open`, which
+/// `banda files` asks from the Pane of its terminal for a Person, stays
+/// refused under an Agent's pass, so naming the Person's Pane places
+/// nothing as the Person's. Under a pass it asks `open_pane`, which shows
+/// Files on a folder of the pass's Project, in its Thread's Group.
 #[tokio::test]
 async fn banda_under_an_agents_pass_opens_nothing_as_the_person_whatever_pane_it_names() {
     let root = tempfile::tempdir().unwrap();
     let machine = Machine::open(root.path(), PersonId::new()).await;
-    let work = machine.project("Work").await;
+    let (work, home) = (machine.project("Work").await, machine.project("Home").await);
+    let listed = machine.command("projects.list", json!({})).await.unwrap();
+    let folder = |project: ProjectId| {
+        let listed = listed.as_array().unwrap().iter();
+        let one = listed.clone().find(|one| one["id"] == json!(project));
+        dunce::canonicalize(one.unwrap()["folder"].as_str().unwrap()).unwrap()
+    };
+    let (ours, theirs) = (folder(work), folder(home));
+    std::fs::create_dir(ours.join("src")).unwrap();
     let terminal = json!({ "project": work, "kind": "terminal.terminal", "args": {} });
     let terminal = machine.command("workspaces.open", terminal).await.unwrap();
+    let thread = Uuid::now_v7();
+    let shown = json!({ "project": work, "kind": "agents.thread", "args": { "thread": thread } });
+    let shown = machine.command("workspaces.open", shown).await.unwrap();
     let before = machine.list().await;
+    let agent = AgentId::new();
+    let ask = |method: &'static str, params| {
+        let caller = agent_in(agent, work, thread);
+        let answer = machine.answer_from(CommandId::new(), caller, method, params);
+        async { answer.await.map(|answer| answer.value) }
+    };
 
+    // The Person's door, from the Person's Pane: refused, as it was.
     let files = json!({
-        "project": work, "kind": "files.tree", "args": { "dir": "/w" },
+        "project": work, "kind": "files.tree", "args": { "dir": ours },
         "from": terminal["pane"], "via": "key",
     });
-    let agent = agent_in(AgentId::new(), work, Uuid::now_v7());
-    let refused = machine.answer_from(CommandId::new(), agent, "workspaces.open", files);
-    assert_eq!(refused.await.unwrap_err().code, Code::Forbidden);
+    let refused = ask("workspaces.open", files).await.unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
     assert_eq!(machine.list().await, before);
+
+    // The Agent's door: no folder outside its Project, by its whole path,
+    // by `..` or through a link, and no arg but the folder and its row.
+    let outside = [
+        json!({ "dir": theirs }),
+        json!({ "dir": ".." }),
+        json!({ "dir": "/" }),
+    ];
+    #[cfg(unix)]
+    let outside = {
+        std::os::unix::fs::symlink(&theirs, ours.join("out")).unwrap();
+        let through = json!({ "dir": ours, "selected": "out/a.md" });
+        outside
+            .into_iter()
+            .chain([json!({ "dir": "out" }), through])
+    };
+    for args in outside {
+        let tree = showing("files.tree", args.clone());
+        let refused = ask("workspaces.open_pane", tree).await.unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden, "{args}");
+        assert!(refused.message.contains("outside"), "{}", refused.message);
+    }
+    for (args, code) in [
+        (json!({}), Code::Invalid),
+        (json!({ "dir": ours, "selected": "../Home" }), Code::Invalid),
+        (json!({ "dir": ours, "selected": "/etc" }), Code::Invalid),
+        (json!({ "dir": ours, "trash": true }), Code::Forbidden),
+        (json!({ "dir": ours, "recent": true }), Code::Forbidden),
+        (json!({ "dir": ours, "thread": thread }), Code::Forbidden),
+    ] {
+        let refused = ask("workspaces.open_pane", showing("files.tree", args.clone()));
+        assert_eq!(refused.await.unwrap_err().code, code, "{args}");
+    }
+    assert_eq!(machine.list().await, before);
+
+    // A folder of its Project, from the Project's: in its Thread's Group,
+    // as its Agent's, named whole.
+    let tree = showing("files.tree", json!({ "dir": "src", "selected": "a.md" }));
+    let tree = ask("workspaces.open_pane", tree).await.unwrap();
+    let list = machine.opened().await;
+    assert_eq!(
+        group_of(&list, &tree["pane"]),
+        group_of(&list, &shown["pane"])
+    );
+    assert_ne!(
+        group_of(&list, &tree["pane"]),
+        group_of(&list, &terminal["pane"])
+    );
+    let pane = (panes(&list["workspaces"]).into_iter())
+        .find(|pane| pane["id"] == tree["pane"])
+        .unwrap();
+    assert_eq!(pane["by"], json!(agent));
+    assert_eq!(pane["project"], json!(work));
+    let args = json!({ "dir": ours.join("src"), "selected": "a.md" });
+    assert_eq!(pane["args"], args);
 }
 
 #[tokio::test]

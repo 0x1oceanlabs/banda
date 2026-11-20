@@ -46,8 +46,8 @@ pub use banda_tiling::model;
 use banda_tiling::{commands, placing};
 
 use banda_kernel::{
-    AgentId, Call, Error, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Scope,
-    Tool, Tx, Wall,
+    AgentId, Call, Error, Kind, Module, ModuleProject, Nothing, ProjectId, Reach, Refusal, Right,
+    Scope, Tool, Tx, Wall,
 };
 pub use commands::{
     Arrange, Fill, Height, Maximize, MoveColumn, MovePane, MoveWorkspace, OneColumn, OnePane, Open,
@@ -60,6 +60,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::BTreeSet;
+use std::path::{Component, Path};
 use tiling::Tiling;
 use ts_rs::TS;
 use uuid::Uuid;
@@ -256,7 +257,9 @@ banda_kernel::methods! {
         /// args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
         /// `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with
         /// `"file": "<path>"` to show one), a file (`files.file`, args
-        /// `{"path": "<path>", "line": <n>}`), a browser at a web
+        /// `{"path": "<path>", "line": <n>}`), Files on a folder of your
+        /// Project (`files.tree`, args `{"dir": "<path>"}`, with
+        /// `"selected": "<name>"` to pick a row in it), a browser at a web
         /// address (`browser.browser`, args `{"url": "https://…"}` alone),
         /// or an App's screen (`apps.view`, args `{"app": "<id>", "view":
         /// "<name>"}`, with `"args": {…}` when the view takes any).
@@ -302,16 +305,22 @@ type ArgsRule = fn(&Value) -> Result<(), Refusal>;
 /// Person (ADR 0083, decision 3), so a kind's rule refuses an Agent every
 /// arg that would send or start something. The Diff's args and a file's
 /// choose only what they show: staging, reverting and saving wait for the
-/// Person's click and typing. A browser loads its page in the Person's own
-/// profile until an Agent's tabs have their Project's (ADR 0083,
-/// decision 4).
+/// Person's click and typing. Files shows a folder of the Agent's Project
+/// (`in_its_project`): where it goes from there, and what it opens, moves
+/// or trashes, wait for the Person's too. A browser loads its page in the
+/// Person's own profile until an Agent's tabs have their Project's (ADR
+/// 0083, decision 4).
 const AGENT_KINDS: &[(&str, ArgsRule)] = &[
-    ("agents.thread", a_thread),
+    (THREAD, a_thread),
     ("git.diff", |_| Ok(())),
     ("files.file", |_| Ok(())),
+    (TREE, a_folder),
     ("browser.browser", web_address),
     ("apps.view", a_screen),
 ];
+
+/// A Thread's Pane.
+const THREAD: &str = "agents.thread";
 
 /// What an Agent does instead of giving a Thread's Pane words to send.
 const SEND: &str = "To start a Task or write to one, call `send`, as yourself.";
@@ -352,6 +361,47 @@ fn a_screen(args: &Value) -> Result<(), Refusal> {
         "An App's screen is one of its views: args {\"app\": \"<id>\", \"view\": \"<name>\"}, \
          with \"args\": {…} when the view takes any.",
     ))
+}
+
+/// Files, the Pane that shows a folder as a Finder does (ADR 0073).
+const TREE: &str = "files.tree";
+
+/// Refuses Files an Agent opens without saying on which folder, or with a
+/// row to pick that is no name in it. The rest of its args are the
+/// Person's: Recent and the Trash, which are the machine's, the Thread it
+/// follows, and how it shows. Where the folder is, `in_its_project` holds.
+fn a_folder(args: &Value) -> Result<(), Refusal> {
+    shows_only(args, &["dir", "selected"])?;
+    // A row of the folder, by its names from it: no `..`, and no root.
+    let named =
+        |row: &str| (Path::new(row).components()).all(|part| matches!(part, Component::Normal(_)));
+    let picks =
+        (args.get("selected")).is_none_or(|row| row.is_null() || row.as_str().is_some_and(named));
+    if args.get("dir").is_some_and(Value::is_string) && picks {
+        return Ok(());
+    }
+    Err(Refusal::invalid(
+        "Files shows a folder of your Project: args {\"dir\": \"<path>\"}, with \
+         \"selected\": \"<name>\" to pick a row in it.",
+    ))
+}
+
+/// Holds the folder Files shows for an Agent, and the row it picks there,
+/// inside the Project its pass is for, as the path guard reads them, links
+/// and `..` followed (ADR 0073, decision 14): one outside is refused. The
+/// folder is named whole, from the Project's, as the Pane takes it. Any
+/// other kind's args stay as they are.
+async fn in_its_project(call: &Call, kind: &str, args: &mut Value) -> Result<(), Refusal> {
+    if kind != TREE {
+        return Ok(());
+    }
+    let asked = args["dir"].as_str().unwrap_or_default();
+    let dir = Reach::of_machine(call, asked).await?.into_path();
+    if let Some(row) = args["selected"].as_str() {
+        Reach::of_machine(call, dir.join(row)).await?;
+    }
+    args["dir"] = dir.display().to_string().into();
+    Ok(())
 }
 
 /// Refuses any arg but `shows`, the ones an Agent gives a kind of Pane.
@@ -404,7 +454,7 @@ fn seen(list: &Arrangement, wall: Wall, pane: PaneId) -> Result<&model::Pane, Re
 /// decision 3).
 fn unasked(pane: &mut model::Pane) {
     if pane.by.is_some()
-        && pane.shows.kind == "agents.thread"
+        && pane.shows.kind == THREAD
         && let Some(args) = pane.shows.args.as_object_mut()
     {
         args.remove("ask");
@@ -463,12 +513,12 @@ pub struct SeenPane {
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "workspaces/")]
 pub struct OpenPane {
-    /// The kind: `agents.thread`, `git.diff`, `files.file`, `browser.browser`
-    /// or `apps.view`.
+    /// The kind: `agents.thread`, `git.diff`, `files.file`, `files.tree`,
+    /// `browser.browser` or `apps.view`.
     pub kind: String,
     /// The kind's own, an object, only those that choose what it shows:
     /// a Thread's ID alone for a Thread's Pane, a web address alone for a
-    /// browser.
+    /// browser, a folder of your Project for Files.
     #[schemars(with = "serde_json::Map<String, Value>")]
     pub args: Value,
     /// A Pane `panes` lists, to open it beside. Left out, right of your
@@ -1083,11 +1133,13 @@ impl Workspaces {
 
     async fn open_pane(&self, call: Call, open: OpenPane) -> Result<Opened, Refusal> {
         let (wall, me) = walled(&call)?;
-        an_agents(&open.kind, &open.args)?;
+        let mut args = open.args;
+        an_agents(&open.kind, &args)?;
+        in_its_project(&call, &open.kind, &mut args).await?;
         let shows = Shown {
             project: wall.project,
             kind: open.kind,
-            args: open.args,
+            args,
         };
         // Said in the machine's log, for the windows of other machines
         // that show the Agent's Thread: each places it in its own

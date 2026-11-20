@@ -1,10 +1,11 @@
 //! `banda files [path]`: Files in Banda's window, on a folder (ADR 0073,
 //! decision 1). It opens a `files.tree` Pane through `workspaces.open`, as
 //! the window shows every Pane the workspaces hold; a file opens its folder
-//! with it picked.
+//! with it picked. Run by an Agent, it opens through the Agent's door,
+//! `workspaces.open_pane`, as its Agent's.
 
 use crate::Failure;
-use crate::client::Client;
+use crate::client::{Client, Pass};
 use crate::places::Places;
 use banda_kernel::{CommandId, ProjectId, ProjectSummary, Refusal};
 use serde_json::{Value, json};
@@ -18,7 +19,20 @@ pub async fn open(
     project: Option<ProjectId>,
 ) -> Result<(), Failure> {
     let (dir, selected) = shown(path.unwrap_or_else(|| PathBuf::from(".")))?;
+    let args = json!({
+        "dir": dir.display().to_string(),
+        "selected": selected.map_or(Value::Null, Value::from),
+    });
     let mut client = Client::connect(places).await?;
+    // Run by an Agent, under its pass, it opens as its Agent's, through
+    // the Agent's door: in the pass's Project, placed by the pass, whatever
+    // Pane or Project this names (ADR 0134, decisions 1 and 4).
+    if Pass::from_env()?.is_some() {
+        let params = json!({ "kind": "files.tree", "args": args });
+        let opened = (client.call("workspaces.open_pane", None, CommandId::new(), params)).await?;
+        println!("{}", json!({ "ok": opened }));
+        return Ok(());
+    }
     let project = match project {
         Some(project) => project,
         None => {
@@ -32,14 +46,9 @@ pub async fn open(
             })?
         }
     };
-    let args = json!({
-        "dir": dir.display().to_string(),
-        "selected": selected.map_or(Value::Null, Value::from),
-    });
     // As by a key, from the Pane of the terminal this runs in, where it
     // runs in one, so it lands where that key would there (ADR 0134,
-    // decision 4). An Agent's pass is refused it, whatever Pane it names:
-    // an Agent opens through `open_pane`, which takes no `files.tree` yet.
+    // decision 4).
     let params = json!({
         "project": project, "kind": "files.tree", "args": args,
         "from": banda_kernel::pane_from_env(), "via": "key",

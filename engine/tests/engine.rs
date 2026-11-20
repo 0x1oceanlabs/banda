@@ -1626,6 +1626,95 @@ fn an_agents_banda_acts_under_its_pass() {
     assert!(engine.wait().unwrap().success());
 }
 
+/// `banda files` run by an Agent, in its session's shell, opens Files as
+/// its Agent's: on a folder of its Project, in its Thread's Group, whatever
+/// Pane `BANDA_PANE` names and whatever Project it is told. Run by the
+/// Person, it opens from that Pane, as theirs (ADR 0134, decisions 1 and
+/// 4).
+#[test]
+fn an_agents_banda_files_opens_files_in_its_threads_group_and_the_persons_from_their_pane() {
+    let places = Places::new();
+    let (mut engine, stdin, _) = places.serve();
+    let made = |name: &str| {
+        let made = places.ok("projects.create", None, json!({ "name": name }));
+        let folder = dunce::canonicalize(text(&made["folder"])).unwrap();
+        (text(&made["id"]).to_owned(), folder)
+    };
+    let ((work, ours), (home, theirs)) = (made("Work"), made("Home"));
+    std::fs::write(ours.join("a.md"), "").unwrap();
+    let sent = json!({ "harness": "fake", "text": "hello" });
+    let sent = places.ok("agents.send", Some(&work), sent);
+    let shells = wait_for(Duration::from_secs(30), || {
+        let bytes = std::fs::read(&places.shells).ok()?;
+        serde_json::from_slice::<Value>(&bytes).ok()
+    })
+    .expect("the session told what its shells get");
+    let open = |kind: &str, args: Value| {
+        let params = json!({ "project": work, "kind": kind, "args": args });
+        text(&places.ok("workspaces.open", None, params)["pane"]).to_owned()
+    };
+    let terminal = open("terminal.terminal", json!({}));
+    let thread = open("agents.thread", json!({ "thread": sent["thread"] }));
+    // Every Pane the workspaces show, each with the Group of its column.
+    let shown = || {
+        let list = places.ok("workspaces.list", None, json!({}));
+        let workspaces = list["workspaces"].as_array().unwrap().iter();
+        let columns = workspaces.flat_map(|w| w["columns"].as_array().unwrap());
+        let panes = columns.flat_map(|column| {
+            let panes = column["panes"].as_array().unwrap().iter();
+            panes.map(|pane| (pane.clone(), column["group"].clone()))
+        });
+        panes.collect::<Vec<_>>()
+    };
+    let found = |id: &Value| {
+        let found = shown().into_iter().find(|(pane, _)| &pane["id"] == id);
+        found.expect("the Pane is shown")
+    };
+    let files = |variables: Option<&Value>, args: &[&str]| {
+        let args = [&["files"], args].concat();
+        let mut banda = match variables {
+            Some(variables) => places.agent(variables, &args),
+            None => places.banda(&args),
+        };
+        banda.env("BANDA_PANE", &terminal).output().unwrap()
+    };
+
+    // The Agent's, from a terminal's Pane it names and for another Project
+    // it names: its own Project's file, in its Thread's Group.
+    let before = shown().len();
+    let file = ours.join("a.md");
+    let asked = ["--project", &home, file.to_str().unwrap()];
+    let opened = files(Some(&shells["session"]), &asked);
+    assert!(opened.status.success(), "{opened:?}");
+    let opened: Value = serde_json::from_slice(&opened.stdout).unwrap();
+    let (tree, group) = found(&opened["ok"]["pane"]);
+    assert_eq!(tree["kind"], "files.tree");
+    assert_eq!(tree["project"], work.as_str());
+    assert!(tree["by"].is_string(), "{tree}");
+    assert_eq!(tree["args"], json!({ "dir": ours, "selected": "a.md" }));
+    assert!(group.is_string());
+    assert_eq!(group, found(&json!(thread)).1);
+    assert_ne!(group, found(&json!(terminal)).1);
+
+    // A folder outside its Project is refused, and nothing opens.
+    let outside = files(Some(&shells["session"]), &[theirs.to_str().unwrap()]);
+    assert_eq!(refusal(&outside), "forbidden");
+    let said = String::from_utf8_lossy(&outside.stdout).into_owned();
+    assert!(said.contains("outside"), "{said}");
+    assert_eq!(shown().len(), before + 1);
+
+    // The Person's, as before: theirs, in the Project that holds it.
+    let opened = files(None, &[theirs.to_str().unwrap()]);
+    assert!(opened.status.success(), "{opened:?}");
+    let opened: Value = serde_json::from_slice(&opened.stdout).unwrap();
+    let (tree, _) = found(&opened["ok"]["pane"]);
+    assert_eq!(tree["project"], home.as_str());
+    assert!(tree.get("by").is_none_or(Value::is_null), "{tree}");
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
 /// Where the fence does not hold, Full access for a Harness's new Threads
 /// is the Person's choice only as they set it through the engine, as
 /// Settings writes `agents.toml`: written there otherwise, by hand or by a

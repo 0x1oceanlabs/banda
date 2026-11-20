@@ -4,14 +4,14 @@ import type { Beside } from "./Beside";
 
 export type OpenPane = { 
 /**
- * The kind: `agents.thread`, `git.diff`, `files.file`, `browser.browser`
- * or `apps.view`.
+ * The kind: `agents.thread`, `git.diff`, `files.file`, `files.tree`,
+ * `browser.browser` or `apps.view`.
  */
 kind: string, 
 /**
  * The kind's own, an object, only those that choose what it shows:
  * a Thread's ID alone for a Thread's Pane, a web address alone for a
- * browser.
+ * browser, a folder of your Project for Files.
  */
 args: JsonValue, 
 /**

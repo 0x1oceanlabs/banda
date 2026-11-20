@@ -26,6 +26,12 @@ arranged: workspaces one under another, each a Strip of columns.
   `client/web/vite.config.ts`), the window draws ahead of the engine by
   it (`client/web/src/tiling/engine.ts`), and its `parity.test.ts`
   replays the traces through it.
+- **What an Agent may open** is `AGENT_KINDS` in `engine/src/lib.rs`, each
+  kind with the rule its args keep: its Project's Threads, the Diff, a
+  file, Files on a folder of its Project, a browser at a web address and
+  an App's screen. `open_pane` is its one door, and `banda files` in an
+  Agent's shell goes through it (ADR 0134, decision 4): `workspaces.open`
+  is refused an Agent's pass.
 - Its settings: `~/.config/banda/tiling.toml`.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).
