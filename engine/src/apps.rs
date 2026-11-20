@@ -868,7 +868,9 @@ mod tests {
     /// is held to that only as it takes the workspace's lints. These do
     /// not: each denies it and allows it where its manifest says, with
     /// its reason.
-    const OWN_LINTS: [&str; 3] = [
+    const OWN_LINTS: [&str; 4] = [
+        // The Windows installer's card: a window made of Windows' calls.
+        "client/desktop/setup",
         // The launcher's calls to the system, which Rust cannot make safe.
         "platform/fence",
         // The system's call that keeps a Mac awake.

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "kernel/base", "platform/apps/engine", "platform/bytes/engine", "platform/devices/engine", "platform/environments", "platform/fence", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/machines/engine", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/theme", "platform/tiling", "platform/tiling/wasm", "platform/updates/engine", "platform/updates/setup", "platform/workspaces/engine", "tools/fake-agent"]
+members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "client/desktop/setup", "engine", "kernel", "kernel/base", "platform/apps/engine", "platform/bytes/engine", "platform/devices/engine", "platform/environments", "platform/fence", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/machines/engine", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/theme", "platform/tiling", "platform/tiling/wasm", "platform/updates/engine", "platform/workspaces/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,7 +10,7 @@ license = "Apache-2.0"
 publish = false
 
 [workspace.dependencies]
-# The Windows installer's card is drawn in pixels (platform/updates/setup):
+# The Windows installer's card is drawn in pixels (client/desktop/setup):
 # its text, in Inter, and its shapes, in pure Rust.
 ab_glyph = "0.2.32"
 # A sub-agent's session and its updates come only behind `unstable_subagents`

@@ -2,7 +2,7 @@
 ; (ADR 0090, decision 8): electron-builder.config.mjs names this file as
 ; nsis.include.
 
-; Banda's card (platform/updates/setup): a double-click on the installer
+; Banda's card (client/desktop/setup): a double-click on the installer
 ; shows it, and none of NSIS's own windows. The card is banda-setup.exe,
 ; started from the plugins folder with the installer's process, the
 ; folders it fills and what the app takes unpacked, so it measures how

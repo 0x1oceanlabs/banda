@@ -15,7 +15,7 @@ use tiny_skia::{
 
 const REGULAR: &[u8] = include_bytes!("../fonts/Inter-Regular.ttf");
 const SEMIBOLD: &[u8] = include_bytes!("../fonts/Inter-SemiBold.ttf");
-const THEME: &str = include_str!("../../../theme/themes/banda/theme.toml");
+const THEME: &str = include_str!("../../../../platform/theme/themes/banda/theme.toml");
 
 // The look's lengths, in CSS pixels (docs/design/README.md, "Tokens").
 /// The card's width.
@@ -737,8 +737,8 @@ fn rgba(r: u8, g: u8, b: u8, a: f32) -> Color {
 mod tests {
     use super::*;
 
-    const DEV: &str = include_str!("../../../../client/desktop/icons/banda-dev.svg");
-    const STABLE: &str = include_str!("../../../../client/desktop/icons/banda.svg");
+    const DEV: &str = include_str!("../../icons/banda-dev.svg");
+    const STABLE: &str = include_str!("../../icons/banda.svg");
 
     #[test]
     fn both_icons_are_four_tiles_and_a_tilted_hat() {
