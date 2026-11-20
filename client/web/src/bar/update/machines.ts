@@ -288,6 +288,8 @@ export function waitWords(
  * behind Details.
  */
 export function plainOf(raw: string): string {
+  if (/did not start/i.test(raw))
+    return "The new version didn't start, so the one before is back."
   if (/no room|no space|ENOSPC|disk/i.test(raw)) return "Not enough disk space."
   if (/token|hello|forbidden|refused/i.test(raw))
     return "Banda lost touch with itself for a moment."
