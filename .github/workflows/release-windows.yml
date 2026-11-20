@@ -280,6 +280,12 @@ jobs:
             public static extern IntPtr FindWindow(string name, string title);
             [DllImport("user32.dll")]
             public static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
+            [DllImport("user32.dll")]
+            public static extern IntPtr GetDC(IntPtr window);
+            [DllImport("user32.dll")]
+            public static extern int ReleaseDC(IntPtr window, IntPtr dc);
+            [DllImport("gdi32.dll")]
+            public static extern bool BitBlt(IntPtr to, int x, int y, int w, int h, IntPtr from, int fx, int fy, uint how);
           }
           '@
           function Fact($said) { "- $said" >> $env:GITHUB_STEP_SUMMARY }
@@ -287,14 +293,22 @@ jobs:
             for ($i = 0; $i -lt $seconds -and -not (& $done); $i++) { Start-Sleep 1 }
             [bool](& $done)
           }
-          # The screen, layered windows with it.
+          # The screen, layered windows with it (SRCCOPY | CAPTUREBLT). A
+          # picture that cannot be taken fails nothing.
           function Shot($name) {
-            $screen = [Windows.Forms.Screen]::PrimaryScreen.Bounds
-            $picture = New-Object Drawing.Bitmap $screen.Width, $screen.Height
-            $drawing = [Drawing.Graphics]::FromImage($picture)
-            $drawing.CopyFromScreen($screen.X, $screen.Y, 0, 0, $screen.Size,
-              [Drawing.CopyPixelOperation]::SourceCopy -bor [Drawing.CopyPixelOperation]::CaptureBlt)
-            $picture.Save((Join-Path $shots "$name.png"))
+            try {
+              $screen = [Windows.Forms.Screen]::PrimaryScreen.Bounds
+              $picture = New-Object Drawing.Bitmap $screen.Width, $screen.Height
+              $drawing = [Drawing.Graphics]::FromImage($picture)
+              $to = $drawing.GetHdc()
+              $from = [Win]::GetDC([IntPtr]::Zero)
+              [void][Win]::BitBlt($to, 0, 0, $screen.Width, $screen.Height, $from, $screen.X, $screen.Y, 0x40CC0020)
+              [void][Win]::ReleaseDC([IntPtr]::Zero, $from)
+              $drawing.ReleaseHdc($to)
+              $picture.Save((Join-Path $shots "$name.png"))
+            } catch {
+              Write-Warning "no picture of $name`: $_"
+            }
           }
           function Card($run) { [Win]::FindWindow("BandaSetup-$($run.Id)", $null) }
           # Banda's programs from its folder: the window and its engine.
