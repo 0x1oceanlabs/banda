@@ -25,7 +25,12 @@ echo "== Banda $BANDA_VERSION ($BANDA_CHANNEL)"
 if [[ $(uname) == Darwin ]]; then
   export CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO=packed
 fi
-cargo build --release --bin banda --bin banda-update
+programs=(--bin banda --bin banda-update)
+# On Windows, the card the installer shows (installer.nsh).
+if [[ ${OS:-} == Windows_NT ]]; then
+  programs+=(--bin banda-setup)
+fi
+cargo build --release "${programs[@]}"
 pnpm install --frozen-lockfile --silent
 # The app carries the licenses of what it is built from (ADR 0038). On
 # Windows it also carries a Node, which runs the adapters there (ADR 0090,
@@ -34,12 +39,15 @@ pnpm install --frozen-lockfile --silent
 # banda.pdb.
 licenses=(--notices target/release/THIRD-PARTY-NOTICES.txt)
 if [[ ${OS:-} == Windows_NT ]]; then
-  # The engine links Microsoft's C runtime in (.cargo/config.toml): one
-  # that needs VCRUNTIME140.dll would not start where none is installed.
-  if grep -qai vcruntime140 target/release/banda.exe; then
-    echo "package.sh: banda.exe needs VCRUNTIME140.dll" >&2
-    exit 1
-  fi
+  # The engine and the installer's card link Microsoft's C runtime in
+  # (.cargo/config.toml): one that needs VCRUNTIME140.dll would not start
+  # where none is installed.
+  for program in banda banda-setup; do
+    if grep -qai vcruntime140 "target/release/$program.exe"; then
+      echo "package.sh: $program.exe needs VCRUNTIME140.dll" >&2
+      exit 1
+    fi
+  done
   platform=win-x64
   node scripts/node.mjs "$platform"
   licenses+=(--node "target/node/$platform")

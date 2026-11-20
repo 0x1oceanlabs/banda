@@ -14,7 +14,10 @@
 # a program running from its folder, and uninstalls it: it stops only what
 # runs from inside its own folder (installer.nsh). Then it starts the app,
 # which runs its engine from a copy of its own and removes the old copies
-# no program runs from (client/desktop/src/program.ts).
+# no program runs from (client/desktop/src/program.ts). Last, it installs
+# as a Person does, with a double-click: Banda's card shows in NSIS's
+# place, and opens Banda; again over the open Banda, which the card asks
+# to close. The run keeps pictures of the screen as it does.
 name: release-windows
 
 on:
@@ -24,6 +27,7 @@ on:
       - .github/workflows/release-windows.yml
       - client/desktop/electron-builder.config.mjs
       - client/desktop/installer.nsh
+      - platform/updates/setup/**
       - client/desktop/src/program.ts
       - client/desktop/src/packed.test.ts
       - scripts/licenses.mjs
@@ -257,6 +261,86 @@ jobs:
           if (-not $app.HasExited) { throw 'the install left the app running' }
           Fact "the engine stopped with its window, closed by the install: $(Wait-Until { -not (Engine) } 30)"
           Run (Get-Item (Join-Path $dir 'Uninstall *.exe')).FullName
+      - name: install with the card, as a Person does
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Get-Item client/desktop/dist/banda-dev-*-x64.exe).FullName
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\banda-dev'
+          $shots = Join-Path $env:RUNNER_TEMP 'shots'
+          New-Item -ItemType Directory -Force $shots | Out-Null
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          Add-Type @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class Win {
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+            public static extern IntPtr FindWindow(string name, string title);
+            [DllImport("user32.dll")]
+            public static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
+          }
+          '@
+          function Fact($said) { "- $said" >> $env:GITHUB_STEP_SUMMARY }
+          function Wait-Until([scriptblock]$done, $seconds) {
+            for ($i = 0; $i -lt $seconds -and -not (& $done); $i++) { Start-Sleep 1 }
+            [bool](& $done)
+          }
+          # The screen, layered windows with it.
+          function Shot($name) {
+            $screen = [Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $picture = New-Object Drawing.Bitmap $screen.Width, $screen.Height
+            $drawing = [Drawing.Graphics]::FromImage($picture)
+            $drawing.CopyFromScreen($screen.X, $screen.Y, 0, 0, $screen.Size,
+              [Drawing.CopyPixelOperation]::SourceCopy -bor [Drawing.CopyPixelOperation]::CaptureBlt)
+            $picture.Save((Join-Path $shots "$name.png"))
+          }
+          function Card($run) { [Win]::FindWindow("BandaSetup-$($run.Id)", $null) }
+          # Banda's programs from its folder: the window and its engine.
+          function Banda {
+            Get-CimInstance Win32_Process |
+              ? { $_.ExecutablePath -like "$dir\*" -or $_.ExecutablePath -like "*\$env:VERSION\banda.exe" }
+          }
+          # Double-clicks the installer; `answer` presses Enter on the card
+          # until it ends, as a Person answers its question.
+          function Install($name, [switch]$answer) {
+            $run = Start-Process $installer -PassThru
+            if (-not (Wait-Until { (Card $run) -ne [IntPtr]::Zero } 30)) { throw 'the installer showed no card' }
+            Start-Sleep 2
+            Shot "$name-1"
+            for ($i = 0; $i -lt 300 -and -not $run.HasExited; $i++) {
+              if ($answer -and $i -eq 6) { Shot "$name-2" }
+              if ($answer -and $i -ge 6) { [void][Win]::PostMessage((Card $run), 0x0100, [IntPtr]0x0D, [IntPtr]0) }
+              Start-Sleep 1
+            }
+            if (-not $run.HasExited) { Shot "$name-stuck"; throw "the installer ($name) did not end in five minutes" }
+            if ($run.ExitCode) { throw "the installer ($name) ended with code $($run.ExitCode)" }
+          }
+
+          Install first
+          if (-not (Wait-Until { Banda } 120)) { throw 'the card opened no Banda' }
+          Start-Sleep 5
+          Shot first-3
+          $before = @(Banda).ProcessId
+          Fact "the card opened Banda: $(@(Banda).Count) of its programs run"
+
+          Install again -answer
+          $left = @(Banda | ? { $before -contains $_.ProcessId })
+          if ($left) { throw "the install over the open Banda left $($left.Count) of its programs" }
+          if (-not (Wait-Until { Banda } 120)) { throw 'the card opened no Banda the second time' }
+          Fact 'over the open Banda, the card asked, closed it and opened the new one'
+
+          Banda | % { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          $uninstall = Start-Process (Get-Item (Join-Path $dir 'Uninstall *.exe')).FullName -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode) { throw "the uninstaller ended with code $($uninstall.ExitCode)" }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ !cancelled() }}
+        with:
+          name: banda-setup-shots-${{ github.run_number }}
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          retention-days: 14
       - name: how long it took
         if: ${{ !cancelled() && steps.start.outputs.at }}
         env:
