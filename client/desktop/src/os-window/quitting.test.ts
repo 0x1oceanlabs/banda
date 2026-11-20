@@ -11,8 +11,8 @@ import { POWERING_OFF, quitAnswer, Quitting } from "./quitting"
 
 /** Whether Banda quits, over the app faked on `platform` and a `banda
  * stop` that says what it did among the app's. */
-function on(platform: NodeJS.Platform) {
-  const fake = fakeApp(platform)
+function on(platform: NodeJS.Platform, icon = true) {
+  const fake = fakeApp(platform, false, { icon })
   const layer = Quitting.layer(fake.app).pipe(
     Layer.provideMerge(
       Layer.succeed(Stop)({
@@ -34,6 +34,7 @@ it.effect(
         platform: "darwin",
         quitting: false,
         poweringOff: false,
+        icon: true,
       })
       yield* quitAnswer[1]([], {} as IpcMainEvent)
       expect(did).toEqual(["banda stop --force", "quit"])
@@ -110,16 +111,45 @@ it.effect(
   }
 )
 
-it.effect("off macOS every quit goes through", () => {
-  const { layer, listening } = on("linux")
-  return Effect.gen(function* () {
-    const quitting = yield* Quitting
-    // Linux's `shutdown` would hold the session's shutdown for Banda.
-    expect(listening()).toBe(0)
-    expect(quitting.asksFirst(true)).toBe(false)
-    expect(quitting.closing().quitting).toBe(true)
-  }).pipe(Effect.provide(layer))
-})
+it.effect(
+  "off macOS a quit the app is asked for goes through, but the icon's Quit Banda, which asks first (ADR 0136)",
+  () => {
+    const { app, did, layer, listening } = on("linux")
+    return Effect.gen(function* () {
+      const quitting = yield* Quitting
+      // Linux's `shutdown` would hold the session's shutdown for Banda.
+      expect(listening()).toBe(0)
+      // As asked.ts hears each quit: whether it asks first.
+      const heard: boolean[] = []
+      app.listen("before-quit", (event) => {
+        const asks = quitting.asksFirst(true)
+        heard.push(asks)
+        if (asks) event.preventDefault()
+      })
+      quitting.byIcon()
+      expect(heard).toEqual([true])
+      expect(did).toEqual([])
+      expect(quitting.closing().quitting).toBe(false)
+      // A quit that comes after it, by a signal, is not the icon's.
+      app.quit()
+      expect(heard).toEqual([true, false])
+      expect(did).toEqual(["quit"])
+      expect(quitting.closing().quitting).toBe(true)
+    }).pipe(Effect.provide(layer))
+  }
+)
+
+it.effect(
+  "where Banda's icon is, and whether a tray host is there, are the app's to say",
+  () => {
+    const { layer } = on("linux", false)
+    return Effect.gen(function* () {
+      const quitting = yield* Quitting
+      expect(quitting.closing().icon).toBe(false)
+      expect(yield* quitting.trayHost).toBe(true)
+    }).pipe(Effect.provide(layer))
+  }
+)
 
 it.effect(
   "a logout, restart or shutdown lets a quit through for a minute, then Quit Banda asks again",
@@ -138,6 +168,7 @@ it.effect(
         platform: "darwin",
         quitting: false,
         poweringOff: false,
+        icon: true,
       })
       expect(quitting.asksFirst(true)).toBe(true)
       // The quit that comes with it goes through.

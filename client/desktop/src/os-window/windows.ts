@@ -5,10 +5,13 @@
  * nowhere else; the kit's `Window`, which a module asks which window it
  * is, is answered from here.
  *
- * On macOS the main window hides as it closes, unless Banda quits, and
- * leaves full screen first (closing.ts; ADR 0086, decision 4), by whether
- * Banda quits (quitting.ts); the Dock's icon follows the windows there
- * are (dock.ts). Main's root hands in how the Panes' own windows close,
+ * The main window hides as it closes where Banda lives in the menu bar
+ * or the tray, unless Banda quits (closing.ts; ADR 0086, decision 4; ADR
+ * 0136, decision 2), by whether Banda quits and where its icon is
+ * (quitting.ts): on Linux it asks first whether a tray host is there,
+ * and closes where none is known; on macOS it leaves full screen first;
+ * on Windows the first hide says that Banda still runs (still-runs.ts).
+ * The Dock's icon follows the windows there are (dock.ts). Main's root hands in how the Panes' own windows close,
  * which are kept over the windows (popped.ts).
  *
  * A part of the device's window (ADR 0089, decision 9), made of what the
@@ -16,7 +19,7 @@
  */
 import { join } from "node:path"
 import { Window } from "@banda/desktop-kit"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, FiberSet, Layer } from "effect"
 import {
   app,
   BrowserWindow,
@@ -24,12 +27,13 @@ import {
   shell,
   type WebContents,
 } from "electron"
-import { hidesOnClose } from "../closing"
+import { hidesOnClose, onClose } from "../closing"
 import { revive } from "../revive"
 import { Dock } from "./dock"
 import { Material } from "./material"
 import { PAGE } from "./page"
 import { Quitting } from "./quitting"
+import { sayStillRuns } from "./still-runs"
 
 /** What the windows ask of main's root, which keeps it. */
 export type Root = {
@@ -82,6 +86,8 @@ const make = (root: Root) =>
     const material = yield* Material
     const quitting = yield* Quitting
     const dock = yield* Dock
+    const { platform } = quitting.closing()
+    const run = yield* FiberSet.makeRuntime()
     let window: BrowserWindow | null = null
     let began = false
     /** Set while the window, closed in full screen on macOS, leaves it to
@@ -174,25 +180,49 @@ const make = (root: Root) =>
         ),
         (opened) => {
           void opened.loadURL(PAGE)
-          // On macOS it hides as it closes, unless Banda quits
-          // (closing.ts). Its Panes in windows of their own close, back to
-          // their places, as they do when it closes.
-          opened.on("close", (event) => {
-            if (!hidesOnClose(quitting.closing())) return
-            event.preventDefault()
+          /** Hides it, where Banda lives in the menu bar or the tray.
+           * Its Panes in windows of their own close, back to their
+           * places, as they do when it closes. */
+          const hide = () => {
             root.closePopped()
-            if (!opened.isFullScreen()) {
+            if (platform !== "darwin" || !opened.isFullScreen()) {
               opened.hide()
+              sayStillRuns(platform, () => void inFront())
               return
             }
-            // A window hidden in full screen would leave its Space black:
-            // it leaves full screen first, and comes back windowed.
+            // On macOS a window hidden in full screen would leave its
+            // Space black: it leaves full screen first, and comes back
+            // windowed.
             hiding = true
             opened.once("leave-full-screen", () => {
               if (hiding) opened.hide()
               hiding = false
             })
             opened.setFullScreen(false)
+          }
+          /** Set while a tray host is asked for, and once none was
+           * known: the close that follows goes through. */
+          let asking = false
+          let closes = false
+          // It hides as it closes, unless Banda quits, where its icon
+          // is and, on Linux, a tray host to show it (closing.ts).
+          opened.on("close", (event) => {
+            if (closes) return
+            const does = onClose(quitting.closing())
+            if (does === "close") return
+            event.preventDefault()
+            if (does === "hide") return hide()
+            if (asking) return
+            asking = true
+            run(
+              Effect.map(quitting.trayHost, (host) => {
+                asking = false
+                if (opened.isDestroyed()) return
+                if (hidesOnClose(quitting.closing(), host)) return hide()
+                closes = true
+                opened.close()
+              })
+            )
           })
           opened.on("closed", () => {
             window = null

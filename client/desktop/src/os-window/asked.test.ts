@@ -99,6 +99,56 @@ it.effect(
 )
 
 it.effect(
+  "off macOS the icon's Quit Banda asks first while Agents work: the page with the window shown, the system with it hidden in the tray; and a quit by anything else still goes at once (ADR 0136)",
+  () => {
+    const { did, app, asked, now, layer } = on("linux")
+    return Effect.gen(function* () {
+      const quitting = yield* Quitting
+      quitting.byIcon()
+      yield* settled
+      expect(did).toEqual(["banda stop", "in front", "page: banda.quit"])
+      did.length = 0
+      now.visible = false
+      // Soon after the page asked, and with no window shown: the system.
+      quitting.byIcon()
+      yield* settled
+      expect(did).toEqual([
+        "banda stop",
+        "focus",
+        `alone: ${quitAsks(2, false)?.title}`,
+      ])
+      expect(quitting.closing().quitting).toBe(false)
+      did.length = 0
+      // A signal, as a session ending sends: at once, with no question.
+      app.quit()
+      expect(did).toEqual(["quit"])
+      expect(asked("before-quit")).toBe(false)
+    }).pipe(Effect.provide(layer))
+  }
+)
+
+it.effect(
+  "off macOS the icon's Quit Banda stops the engine and quits where no Agent works, and as the Person says where some do",
+  () => {
+    const idle = on("win32", { working: 0 })
+    const yes = on("win32", { yes: true })
+    return Effect.gen(function* () {
+      yield* Effect.gen(function* () {
+        ;(yield* Quitting).byIcon()
+        yield* settled
+        expect(idle.did).toEqual(["banda stop", "quit"])
+      }).pipe(Effect.provide(idle.layer))
+      yield* Effect.gen(function* () {
+        yes.now.visible = false
+        ;(yield* Quitting).byIcon()
+        yield* settled
+        expect(yes.did.slice(3)).toEqual(["banda stop --force", "quit"])
+      }).pipe(Effect.provide(yes.layer))
+    })
+  }
+)
+
+it.effect(
   "on macOS a quit asked while Agents work is the page's to ask, in the window brought to the front, and Banda keeps running",
   () => {
     const { did, asked, layer } = on("darwin")

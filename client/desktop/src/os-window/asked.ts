@@ -5,15 +5,17 @@
  * - **Its last window closed.** It quits: closing the last window closes
  *   the window only. An engine that is the session's service goes on, and
  *   its Agents with it; one that is the window's child, as on Windows, on
- *   a Linux without systemd and in Banda Local, stops with it. On macOS
- *   the main window hides as it closes instead, and Banda lives in the
- *   menu bar, so this comes on Linux and Windows.
- * - **To quit.** On macOS a quit the app is asked for, by the app menu's
- *   or the Dock's Quit, or by ⌘Q where the page leaves the key (in a
- *   terminal, over a dialog, with the window hidden), is Quit Banda: it
- *   asks first while Agents work. Elsewhere ⌘Q is the page's own Quit
- *   Banda key. A quit Banda makes itself goes through, as does a logout,
- *   restart or shutdown, and every quit on Linux and Windows.
+ *   a Linux without systemd and in Banda Local, stops with it. Where
+ *   Banda lives in the menu bar or the tray the main window hides as it
+ *   closes instead, so this comes on a Linux with no tray host known.
+ * - **To quit.** The icon's Quit Banda, in the menu bar or the tray, is
+ *   Quit Banda on every system: it asks first while Agents work. On
+ *   macOS so is any quit the app is asked for, by the app menu's or the
+ *   Dock's Quit, or by ⌘Q where the page leaves the key (in a terminal,
+ *   over a dialog, with the window hidden); elsewhere ⌘Q, and Ctrl+Q off
+ *   macOS, is the page's own Quit Banda key. A quit Banda makes itself
+ *   goes through, as does a logout, restart or shutdown, and every other
+ *   quit on Linux and Windows.
  * - **For its window, by the Dock's icon.** The window shows again,
  *   hidden as it closed on macOS.
  *
@@ -41,7 +43,8 @@ export const askedLayer = (app: App) =>
       const run = yield* FiberSet.makeRuntimePromise<Acts>()
 
       /**
-       * Quit Banda as macOS's Quit runs it (closing.ts): `banda stop`
+       * Quit Banda as macOS's Quit and the icon's Quit Banda run it
+       * (closing.ts): `banda stop`
        * with no terminal to ask in stops the engine where no Agent works,
        * and Banda quits. Where some do, the window comes to the front and
        * its page's Quit Banda asks first, as on Ctrl+Q, run by the road
@@ -51,8 +54,8 @@ export const askedLayer = (app: App) =>
        */
       const askToQuit = quitAsking<Acts>({
         working: stop.unlessWorking,
-        // With no window shown, as Banda lives in the menu bar, macOS
-        // asks.
+        // With no window shown, as Banda lives in the menu bar or the
+        // tray, the system asks.
         pageCan: Effect.sync(() => {
           const window = windows.main()
           const contents = window?.webContents
