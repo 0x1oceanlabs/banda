@@ -528,6 +528,34 @@ mod tests {
         assert!(!kinds.contains("browser.browser"));
     }
 
+    /// A kind of Pane an Agent may open is one a window part offers, and
+    /// each is handed once: a name that is no Pane's would open nothing.
+    #[test]
+    fn each_kind_an_agent_may_open_is_a_pane_a_window_part_offers() {
+        let offered = kinds_in(APPS, |_| true);
+        let handed: Vec<&str> = (crate::apps::agent_panes().iter())
+            .map(|pane| pane.kind)
+            .collect();
+        for kind in &handed {
+            assert!(offered.contains(*kind), "{kind}");
+        }
+        assert_eq!(
+            handed,
+            [
+                "agents.thread",
+                "browser.browser",
+                "files.file",
+                "files.tree",
+                "git.diff"
+            ]
+        );
+        // A browser's tabs are the Person's but those the Project's Agents
+        // opened: its kind says what an Agent sees of it, or the wall
+        // would show them whole (ADR 0083, decision 4).
+        let browser = crate::apps::agent_panes()[1];
+        assert!(browser.seen.is_some());
+    }
+
     /// What opens at the narrowest of the Tiling's widths is what the
     /// window's code says: Files alone.
     #[test]

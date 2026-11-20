@@ -14,6 +14,7 @@ base64.workspace = true
 banda-bytes = { path = "../../../platform/bytes/engine" }
 banda-harnesses = { path = "../../../platform/harnesses/engine" }
 banda-kernel = { path = "../../../kernel" }
+banda-tiling = { path = "../../../platform/tiling" }
 banda-look = { path = "../../../platform/look" }
 rusqlite.workspace = true
 schemars.workspace = true

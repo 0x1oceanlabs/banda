@@ -229,7 +229,8 @@ const NOT_AN_APP: [(&str, &str); 5] = [
     ("platform/theme/src/tokens.rs", "\"terminal\""),
     // A folder named files, in the agents module's own data.
     ("apps/agents/engine/src/kept.rs", "\"files\""),
-    // browser.toml's own table for Agents, and its sites.
+    // browser.toml's own table for Agents, and its sites; and the key of
+    // a tab that names the Project whose Agents opened it.
     ("apps/browser/engine/src/lib.rs", "\"agents\""),
     ("apps/browser/engine/src/settings.rs", "\"agents."),
 ];
@@ -244,8 +245,8 @@ const PLATFORM_NAMES: &[(&str, usize)] = &[
     ("platform/sharing/engine/src/events.rs", 2),
     // The agents module's events, heard for the usage shared.
     ("platform/sharing/engine/src/usage.rs", 1),
-    // The five Pane kinds an Agent may open, and a browser tab's wall.
-    ("platform/workspaces/engine/src/lib.rs", 7),
+    // A Thread's Pane kind, for the words an Agent's Pane never keeps.
+    ("platform/workspaces/engine/src/lib.rs", 1),
     // A Thread's Pane kind, and the old agents.diff made git.diff.
     ("platform/tiling/src/model.rs", 3),
     // A Thread's Pane kind.

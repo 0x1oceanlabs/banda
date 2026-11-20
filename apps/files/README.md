@@ -45,7 +45,7 @@ the same PR.
   Project that the menu's Files (`files.tree`, Alt+E), "Show in Files"
   and `banda files [path]` find again. An Agent opens it only on a folder
   of its own Project, with `open_pane` or `banda files` in its shell, in
-  its Thread's Group (`AGENT_KINDS` in the workspaces module; ADR 0134,
+  its Thread's Group (`AGENT_PANES` in `engine/src/lib.rs`; ADR 0134,
   decision 4): where it goes from there is the Person's. It shows:
   - the places on its left (the Projects with their badges, Home,
     Desktop, Downloads, what `files.toml` pins, Recent), folded to icons

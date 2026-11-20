@@ -67,6 +67,43 @@ use std::sync::{Arc, Mutex};
 /// shows things, and the editor, are the device's (ADR 0101, decision 3).
 pub const SETTINGS: [banda_look::SettingsFile; 1] = [FILE];
 
+/// The kinds of Pane of this App an Agent may open. A file, whose args
+/// choose only what it shows: saving waits for the Person's typing (ADR
+/// 0083, decision 3). And Files, the Pane that shows a folder as a Finder
+/// does (ADR 0073), on a folder of the Agent's Project: where it goes
+/// from there, and what it opens, moves or trashes, wait for the Person's
+/// too (ADR 0134, decision 4).
+pub const AGENT_PANES: [banda_tiling::agent::AgentPane; 2] = [
+    banda_tiling::agent::AgentPane::shows("files.file"),
+    banda_tiling::agent::AgentPane {
+        opens: a_folder,
+        folder: Some(("dir", "selected")),
+        ..banda_tiling::agent::AgentPane::shows("files.tree")
+    },
+];
+
+/// Refuses Files an Agent opens without saying on which folder, or with a
+/// row to pick that is no name in it. The rest of its args are the
+/// Person's: Recent and the Trash, which are the machine's, the Thread it
+/// follows, and how it shows. Where the folder is, the workspaces hold,
+/// by the kind's `folder`.
+fn a_folder(args: &Value) -> Result<(), Refusal> {
+    banda_tiling::agent::shows_only(args, &["dir", "selected"])?;
+    // A row of the folder, by its names from it: no `..`, and no root.
+    let named = |row: &str| {
+        (Path::new(row).components()).all(|part| matches!(part, std::path::Component::Normal(_)))
+    };
+    let picks =
+        (args.get("selected")).is_none_or(|row| row.is_null() || row.as_str().is_some_and(named));
+    if args.get("dir").is_some_and(Value::is_string) && picks {
+        return Ok(());
+    }
+    Err(Refusal::invalid(
+        "Files shows a folder of your Project: args {\"dir\": \"<path>\"}, with \
+         \"selected\": \"<name>\" to pick a row in it.",
+    ))
+}
+
 const FILE: banda_look::SettingsFile = banda_look::SettingsFile::of::<settings::FilesSettings>()
     .class(
         banda_look::Class::Device,
@@ -1115,6 +1152,38 @@ async fn send(say: &tokio::sync::mpsc::Sender<Value>, piece: &impl serde::Serial
 mod tests {
     use super::*;
     use std::io::{Error, ErrorKind::*};
+
+    /// Files an Agent opens is on a folder, with a row of it to pick by
+    /// its names from it; every other arg is the Person's (ADR 0134,
+    /// decision 4). Where the folder is, the workspaces hold.
+    #[test]
+    fn an_agent_opens_files_on_a_folder_and_a_row_of_it_alone() {
+        use banda_kernel::Code;
+        use serde_json::json;
+        for args in [
+            json!({ "dir": "src" }),
+            json!({ "dir": "src", "selected": "a.md" }),
+            json!({ "dir": "src", "selected": "deep/a.md" }),
+            json!({ "dir": "src", "selected": null }),
+        ] {
+            assert!(a_folder(&args).is_ok(), "{args}");
+        }
+        for (args, code) in [
+            (json!({}), Code::Invalid),
+            (json!({ "dir": 1 }), Code::Invalid),
+            (
+                json!({ "dir": "src", "selected": "../Home" }),
+                Code::Invalid,
+            ),
+            (json!({ "dir": "src", "selected": "/etc" }), Code::Invalid),
+            (json!({ "dir": "src", "selected": 1 }), Code::Invalid),
+            (json!({ "dir": "src", "trash": true }), Code::Forbidden),
+            (json!({ "dir": "src", "recent": true }), Code::Forbidden),
+        ] {
+            assert_eq!(a_folder(&args).unwrap_err().code, code, "{args}");
+        }
+        assert_eq!(AGENT_PANES[1].folder, Some(("dir", "selected")));
+    }
 
     #[test]
     fn a_disk_failure_that_may_pass_is_not_kept_on_a_receipt() {

@@ -12,6 +12,7 @@ async-trait.workspace = true
 base64.workspace = true
 banda-git-cli = { path = "../../../platform/git-cli" }
 banda-kernel = { path = "../../../kernel" }
+banda-tiling = { path = "../../../platform/tiling" }
 banda-look = { path = "../../../platform/look" }
 calamine.workspace = true
 dirs.workspace = true

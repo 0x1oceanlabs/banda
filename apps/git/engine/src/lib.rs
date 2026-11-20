@@ -46,6 +46,12 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+/// The kinds of Pane of this App an Agent may open: the Diff, whose args
+/// choose only what it shows. Staging, reverting and committing wait for
+/// the Person's click (ADR 0083, decision 3).
+pub const AGENT_PANES: [banda_tiling::agent::AgentPane; 1] =
+    [banda_tiling::agent::AgentPane::shows("git.diff")];
+
 #[derive(Default)]
 pub struct Git {
     writing: Repositories,

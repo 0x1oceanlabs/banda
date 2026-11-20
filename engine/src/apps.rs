@@ -94,6 +94,19 @@ include!(concat!(env!("OUT_DIR"), "/apps.rs"));
 /// scan writes them ([`HANDED`]).
 pub const SETTINGS: Settings = Settings::over(HANDED);
 
+/// The kinds of Pane an Agent may open, as each App that has one says,
+/// with its own rule for their args: the workspaces take them as the
+/// engine starts, and name no App for them (#1798, step 3).
+pub(crate) fn agent_panes() -> Vec<banda_workspaces::AgentPane> {
+    [
+        &banda_agents::AGENT_PANES[..],
+        &banda_browser::AGENT_PANES,
+        &banda_files::AGENT_PANES,
+        &banda_git::AGENT_PANES,
+    ]
+    .concat()
+}
+
 /// The lines of the `methods!` table of the part `build` makes.
 const fn table_of<M: MethodTable>(_build: fn(&HostContext<'_>) -> M) -> fn() -> Vec<Method> {
     M::method_list
@@ -278,6 +291,8 @@ mod build {
     /// of the Tiling's file, its Flow, its widths and its rules by kind
     /// of Pane (ADR 0110,
     /// decision 5; ADR 0127, decision 4).
+    /// The kinds of Pane an Agent may open are those each App says
+    /// ([`agent_panes`](super::agent_panes)).
     pub fn workspaces(host: &HostContext<'_>) -> Workspaces {
         let config = host.places.config.clone();
         Workspaces::new()
@@ -285,6 +300,7 @@ mod build {
             .home_kinds(crate::modules::home_kinds())
             .narrow_kinds(crate::modules::narrow_kinds())
             .elsewhere_kinds(crate::modules::elsewhere_kinds())
+            .agent_panes(super::agent_panes())
             .tiling(move || banda_workspaces::tiling::read(&config))
     }
 }

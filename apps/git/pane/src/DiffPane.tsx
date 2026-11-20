@@ -53,7 +53,7 @@ import { GitAlert } from "./GitAlert"
  *
  * An Agent opens it with any of these args, as each chooses only what it
  * shows; one that sends or starts something is the Person's, and
- * `AGENT_KINDS` in the workspaces engine refuses it to an Agent.
+ * `AGENT_PANES` in this App's engine part refuses it to an Agent.
  */
 type DiffArgs = {
   scope: Scope
