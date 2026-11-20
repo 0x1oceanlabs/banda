@@ -9,7 +9,8 @@
 ; far the copying is itself. Once its window, of class
 ; BandaSetup-<installer pid>, is up, the installer goes on silent: the
 ; card says the step and asks the questions, by the two messages
-; src/window.rs names. A card that does not come up leaves NSIS's own
+; src/window.rs names. Silent, NSIS answers its own rare questions with
+; their defaults: a file it cannot replace is retried, then overwritten. A card that does not come up leaves NSIS's own
 ; windows as they were, and a silent run shows nothing. An update runs
 ; the installer as a double-click does (platform/updates/desktop), so
 ; the card shows then too, and asks nothing.
@@ -55,29 +56,32 @@
 !macro bandaStep step
   !ifndef BUILD_UNINSTALLER
     ${If} $bandaCard != ""
-      SendMessage $bandaCard ${BANDA_SET} ${step} 0
+      SendMessage $bandaCard ${BANDA_SET} ${step} 0 /TIMEOUT=2000
     ${EndIf}
   !endif
 !macroend
 
-; A question, on the card (`step`, with `value`) or, with none, in
+; A question, on the card (`step`) or, with none, in
 ; NSIS's box (`flags`, `text`, answered `default` when silent). $R3 is 1
-; to go on, 2 to stop. A card that goes away answers stop.
-!macro bandaAsk step value flags text default
+; to go on, 2 to stop. A card that went away or stopped answering
+; Windows answers stop: the installer never waits on it for good.
+!macro bandaAsk step flags text default
   !ifndef BUILD_UNINSTALLER
     ${If} $bandaCard != ""
-      SendMessage $bandaCard ${BANDA_SET} ${step} ${value}
+      SendMessage $bandaCard ${BANDA_SET} ${step} 0 /TIMEOUT=2000
       StrCpy $R3 0
       ${Do}
         Sleep 100
         System::Call 'user32::IsWindow(p $bandaCard) i.R4'
+        System::Call 'user32::IsHungAppWindow(p $bandaCard) i.R5'
         ${If} $R4 == 0
+        ${OrIf} $R5 != 0
           StrCpy $R3 2
         ${Else}
-          SendMessage $bandaCard ${BANDA_ANSWER} 0 0 $R3
+          SendMessage $bandaCard ${BANDA_ANSWER} 0 0 $R3 /TIMEOUT=2000
         ${EndIf}
       ${LoopUntil} $R3 != 0
-      SendMessage $bandaCard ${BANDA_SET} 1 0
+      SendMessage $bandaCard ${BANDA_SET} 1 0 /TIMEOUT=2000
     ${Else}
   !endif
       StrCpy $R3 2
@@ -90,21 +94,23 @@
 
 ; Banda runs on Windows 10 1809 (build 17763) or later: ConPTY and Claude
 ; Code need it (ADR 0090, decision 1). An older Windows is refused, and
-; told why.
+; told why, before the card, which runs on no older one either.
 !macro customInit
-  ${IfNot} ${Silent}
-    !insertmacro bandaCardStart
-  ${EndIf}
   ${WinVerGetBuild} $0
   ${If} $0 < 17763
-    !insertmacro bandaAsk 4 $0 MB_OK|MB_ICONSTOP "${PRODUCT_NAME} needs Windows 10 version 1809 (build 17763) or later. This Windows is build $0." IDOK
+    MessageBox MB_OK|MB_ICONSTOP "${PRODUCT_NAME} needs Windows 10 version 1809 (build 17763) or later. This Windows is build $0." /SD IDOK
     Quit
+  ${EndIf}
+  ${IfNot} ${Silent}
+    !insertmacro bandaCardStart
   ${EndIf}
 !macroend
 
 ; Installed: the card says Banda opens, and the installer opens it, as
 ; it would if it were not silent. Told to (--force-run, as an update
 ; is), electron-builder's installer opens it itself, silent or not.
+; This is its StartApp, which declares a variable and so cannot be
+; inserted a second time beside its own.
 !macro customInstall
   ${If} $bandaCard != ""
     !insertmacro bandaStep 6
@@ -166,7 +172,7 @@
   ${If} $R0 == 10
     ${If} $R2 == 0
     ${AndIfNot} ${isUpdated}
-      !insertmacro bandaAsk 2 0 MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" IDOK
+      !insertmacro bandaAsk 2 MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" IDOK
       ${If} $R3 != 1
         Quit
       ${EndIf}
@@ -186,7 +192,7 @@
   ${If} $R0 != 11
     ; Something runs there that could not be stopped, as one started as
     ; admin: the Person closes it, or the install stops.
-    !insertmacro bandaAsk 3 0 MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" IDCANCEL
+    !insertmacro bandaAsk 3 MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" IDCANCEL
     ${If} $R3 == 1
       Goto banda_check
     ${EndIf}

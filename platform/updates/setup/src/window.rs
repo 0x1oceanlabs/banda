@@ -6,9 +6,8 @@
 //! messages to the window of class `BandaSetup-<installer pid>`:
 //!
 //! - [`SET`] (`WM_APP + 1`): `wParam` is the step, 1 installing, 2 Banda
-//!   is open, 3 it could not be stopped, 4 this Windows is too old
-//!   (`lParam` its build), 5 closing Banda, 6 Banda is opening. It forgets
-//!   the last answer.
+//!   is open, 3 it could not be stopped, 5 closing Banda, 6 Banda is
+//!   opening. It forgets the last answer.
 //! - [`ANSWER`] (`WM_APP + 2`): what the Person answered since, 0 nothing
 //!   yet, 1 go on, 2 stop.
 //!
@@ -23,6 +22,8 @@ use crate::card::{Card, Drawn, GO, Icon, Painter, STOP, Step};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{
     COLORREF, CloseHandle, HANDLE, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WAIT_OBJECT_0, WPARAM,
@@ -56,7 +57,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{BOOL, HSTRING, PCWSTR, PWSTR};
 
-/// Sets the step: `wParam` the step, `lParam` the Windows build for 4.
+/// Sets the step: `wParam` the step.
 pub const SET: u32 = WM_APP + 1;
 /// Returns the Person's answer since the last [`SET`].
 pub const ANSWER: u32 = WM_APP + 2;
@@ -88,12 +89,12 @@ struct App {
     hover: Option<usize>,
     pressed: Option<usize>,
     buttons: Vec<(tiny_skia::Rect, u32)>,
-    /// The copying, measured and shown: shown follows measured.
-    measured: f32,
+    /// How far the copying is, as the measuring thread last found it,
+    /// in an f32's bits; the bar shows `shown`, which follows it.
+    measured: Arc<AtomicU32>,
     shown: f32,
-    measured_at: Instant,
-    total: u64,
-    extract: Option<PathBuf>,
+    /// When the windows were last looked at for Banda's.
+    looked_at: Instant,
     dir: Option<PathBuf>,
     installer: Option<HANDLE>,
     /// When the installer ended.
@@ -206,11 +207,9 @@ fn open(args: &Args, icon: Icon) -> windows::core::Result<()> {
             hover: None,
             pressed: None,
             buttons: Vec::new(),
-            measured: 0.0,
+            measured: measuring(args),
             shown: 0.0,
-            measured_at: now - MEASURE,
-            total: args.size * 1024,
-            extract: args.extract.clone(),
+            looked_at: now - MEASURE,
             dir: args.dir.clone(),
             installer,
             ended: None,
@@ -284,7 +283,6 @@ impl App {
                 self.step = match wparam.0 {
                     2 => Step::Open,
                     3 => Step::Stuck,
-                    4 => Step::Refused(lparam.0 as u32),
                     5 => Step::Closing,
                     6 => Step::Opening,
                     _ => Step::Installing,
@@ -410,13 +408,10 @@ impl App {
         {
             self.ended = Some(now);
         }
-        // The folders and the windows are looked at less often than a frame.
-        let looks = now - self.measured_at >= MEASURE;
+        // The windows are looked at less often than a frame.
+        let looks = now - self.looked_at >= MEASURE;
         if looks {
-            self.measured_at = now;
-            if matches!(self.step, Step::Installing | Step::Closing) {
-                self.measured = self.measure();
-            }
+            self.looked_at = now;
         }
         if let Some(ended) = self.ended {
             // Banda is starting: the card stays until its window shows.
@@ -430,28 +425,18 @@ impl App {
         let target = if self.step == Step::Opening {
             1.0
         } else {
-            self.measured
+            f32::from_bits(self.measured.load(Ordering::Relaxed))
         };
-        self.shown += (target - self.shown) * 0.2;
-        self.paint(None);
-    }
-
-    /// How far the copying is: the bytes unpacked, then the bytes copied
-    /// into the install folder, each of what the app takes.
-    fn measure(&self) -> f32 {
-        if self.total == 0 {
-            return 0.0;
+        let gap = target - self.shown;
+        self.shown += gap * 0.2;
+        // Only what moves is drawn again: the hat while Banda installs, the
+        // bar, the fade in.
+        let moves = matches!(self.step, Step::Installing | Step::Closing)
+            || gap.abs() > 0.001
+            || now - self.started < FADE * 2;
+        if moves {
+            self.paint(None);
         }
-        let of = |folder: &Option<PathBuf>| {
-            folder.as_deref().map_or(0.0, |folder| {
-                (bytes(folder) as f64 / self.total as f64).min(1.0) as f32
-            })
-        };
-        let unpacked = of(&self.extract);
-        // What was there before the old Banda was taken out does not
-        // count: the copy starts once the unpacking is through.
-        let copied = if unpacked >= 0.97 { of(&self.dir) } else { 0.0 };
-        (0.6 * unpacked + 0.4 * copied).min(0.98)
     }
 
     /// Whether a window of the installed Banda shows.
@@ -582,7 +567,16 @@ impl App {
                     continue;
                 };
                 let _ = DeleteDC(dc);
-                let mask = CreateBitmap(scaled as i32, scaled as i32, 1, 1, None);
+                // The colour's alpha is the icon's shape; the mask is unused
+                // but must be there, and is cleared.
+                let clear = vec![0u8; (scaled as usize).div_ceil(16) * 2 * scaled as usize];
+                let mask = CreateBitmap(
+                    scaled as i32,
+                    scaled as i32,
+                    1,
+                    1,
+                    Some(clear.as_ptr().cast()),
+                );
                 let info = ICONINFO {
                     fIcon: BOOL(1),
                     hbmMask: mask,
@@ -631,7 +625,11 @@ unsafe fn bitmap(
     // the size asked for.
     unsafe {
         let dc = CreateCompatibleDC(None);
-        let bitmap = CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
+        let Ok(bitmap) = CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &mut bits, None, 0)
+        else {
+            let _ = DeleteDC(dc);
+            return None;
+        };
         let out = std::slice::from_raw_parts_mut(bits.cast::<u8>(), (width * height * 4) as usize);
         for (to, from) in out
             .as_chunks_mut::<4>()
@@ -694,6 +692,37 @@ fn light() -> bool {
         .and_then(|key| key.get_u32("AppsUseLightTheme"))
         .ok()
         .is_none_or(|value| value != 0)
+}
+
+/// A thread that measures how far the copying is, off the window's
+/// thread, as a walk of a folder may take a while: the bytes unpacked,
+/// then the bytes copied into the install folder, each of what the app
+/// takes. It ends with the process.
+fn measuring(args: &Args) -> Arc<AtomicU32> {
+    let measured = Arc::new(AtomicU32::new(0f32.to_bits()));
+    let total = args.size * 1024;
+    if total == 0 {
+        return measured;
+    }
+    let (extract, dir) = (args.extract.clone(), args.dir.clone());
+    let out = Arc::clone(&measured);
+    std::thread::spawn(move || {
+        let of = |folder: &Option<PathBuf>| {
+            folder.as_deref().map_or(0.0, |folder| {
+                (bytes(folder) as f64 / total as f64).min(1.0) as f32
+            })
+        };
+        loop {
+            let unpacked = of(&extract);
+            // What was there before the old Banda was taken out does not
+            // count: the copy starts once the unpacking is through.
+            let copied = if unpacked >= 0.97 { of(&dir) } else { 0.0 };
+            let progress = (0.6 * unpacked + 0.4 * copied).min(0.98);
+            out.store(progress.to_bits(), Ordering::Relaxed);
+            std::thread::sleep(MEASURE);
+        }
+    });
+    measured
 }
 
 /// The bytes of the files in a folder and under it.
