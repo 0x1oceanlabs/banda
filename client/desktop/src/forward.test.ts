@@ -65,6 +65,7 @@ const hostsLayer = (states: SubscriptionRef.SubscriptionRef<HostState[]>) =>
     addressNow: () => Effect.die("unused"),
     addressWhenBack: () => Effect.die("unused"),
     signed: () => Effect.die("unused"),
+    woke: Effect.die("unused"),
     start: () => Effect.die("unused"),
     add: () => Effect.die("unused"),
     set: () => Effect.die("unused"),

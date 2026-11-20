@@ -32,7 +32,7 @@
 import { existsSync } from "node:fs"
 import { userInfo } from "node:os"
 import { join, resolve } from "node:path"
-import { app, nativeTheme, type WebContents } from "electron"
+import { app, nativeTheme, powerMonitor, type WebContents } from "electron"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import { Engine, none, serve, tellPage, text } from "@banda/desktop-kit"
@@ -258,6 +258,9 @@ if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
   app.quit()
 } else {
   app.on("second-instance", () => windows?.inFront())
+  powerMonitor.on("resume", () =>
+    runtime.runFork(Hosts.use((hosts) => hosts.woke))
+  )
   listApp()
   void app.whenReady().then(ready)
 }
