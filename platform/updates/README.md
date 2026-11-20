@@ -87,7 +87,10 @@ PR.
   an engine that moved as the Person said asks its app as it starts.
   While Turns run that this would end, it refuses, restarts with
   `force`, or with `wait` holds it (`held`) until none runs;
-  `updates.later` (`banda update --later`) drops that.
+  `updates.later` (`banda update --later`) drops that. With `ask` it
+  does nothing, and answers what it would do and how many Turns it would
+  end (`stops`): `banda update --now` reads that before it asks the
+  Person, so it asks only where the engine says Agents would stop.
 - **The window only swaps its own app, and says each step to the
   engine** (ADR 0119, decisions 2 and 4; ADR 0137;
   `platform/updates/desktop`, `@banda/updates-desktop`). It follows its

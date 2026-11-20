@@ -7,4 +7,8 @@ export type Moving = { from: string, to: string,
 /**
  * Not yet: it waits until no Turn runs.
  */
-held?: boolean, };
+held?: boolean, 
+/**
+ * Asked only (`ask`): how many Turns this Update would end.
+ */
+stops?: number, };

@@ -1042,9 +1042,20 @@ async fn update(places: &Places, asked: Update) -> Result<(), Failure> {
     if asked.now {
         let mut force = asked.force;
         if !force && !asked.wait {
-            let working = control::working(&mut client).await?;
-            if working > 0 {
-                if !control::agreed(working, control::Ending::Restart)? {
+            // The engine says how many Agents this Update would stop: an
+            // app's restart beside an engine that goes on stops none.
+            let would = client
+                .call(
+                    "updates.restart",
+                    None,
+                    CommandId::new(),
+                    json!({ "ask": true }),
+                )
+                .await?;
+            let stops = would["stops"].as_u64().unwrap_or(0);
+            if stops > 0 {
+                let stops = usize::try_from(stops).unwrap_or(usize::MAX);
+                if !control::agreed(stops, control::Ending::Restart)? {
                     return Err(Failure::Broken("Nothing was restarted.".into()));
                 }
                 force = true;
