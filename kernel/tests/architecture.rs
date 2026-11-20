@@ -244,7 +244,7 @@ const PLATFORM_NAMES: &[(&str, usize)] = &[
     ("platform/sharing/engine/src/events.rs", 2),
     // The agents module's events, heard for the usage shared.
     ("platform/sharing/engine/src/usage.rs", 1),
-    // The four Pane kinds an Agent may open, and a browser tab's wall.
+    // The five Pane kinds an Agent may open, and a browser tab's wall.
     ("platform/workspaces/engine/src/lib.rs", 7),
     // A Thread's Pane kind, and the old agents.diff made git.diff.
     ("platform/tiling/src/model.rs", 3),

@@ -950,6 +950,7 @@ dependencies = [
  "banda-kernel",
  "banda-look",
  "banda-tiling",
+ "dunce",
  "rusqlite",
  "schemars 1.2.3",
  "serde",

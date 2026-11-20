@@ -332,7 +332,8 @@ enum Command {
     },
     /// Opens Files in Banda's window on a folder: PATH, or where this
     /// runs; a file opens its folder with it picked. It shows in the
-    /// Project whose folder holds it, else in the first one.
+    /// Project whose folder holds it, else in the first one. Run by an
+    /// Agent, it shows a folder of its Project, in its Thread's Group.
     Files {
         /// The folder or the file: absolute, from ~, or from where this
         /// runs.

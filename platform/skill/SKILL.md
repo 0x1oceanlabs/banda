@@ -158,8 +158,8 @@ your Person has outside it is out of your reach too:
 - what needs another user's rights: `sudo`, `newuidmap`, `fusermount`,
   and so AppImages (`APPIMAGE_EXTRACT_AND_RUN=1` runs one) and sshfs;
 - devices but the plain ones: no GPU, `kvm`, `fuse`, `tun` or sound;
-- Banda's window: `banda menu` and `banda files` reach none. `banda act`
-  and the `act` tool go through the engine, and do.
+- Banda's window: `banda menu` reaches none. `banda act`, the `act` tool
+  and `banda files` go through the engine, and do.
 
 What you start ends with your Harness, in the background too: a dev
 server, a trial, `gh run watch`, a long build. Your Harness ends as the
