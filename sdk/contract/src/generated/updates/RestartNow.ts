@@ -12,4 +12,9 @@ force?: boolean,
  * While Turns run that it would end, holds the Update until none
  * does, in place of refusing.
  */
-wait?: boolean, };
+wait?: boolean, 
+/**
+ * Does nothing, and answers what it would do and how many Turns it
+ * would end (`stops`): what a caller reads before it asks the Person.
+ */
+ask?: boolean, };

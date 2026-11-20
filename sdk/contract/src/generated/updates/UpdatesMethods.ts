@@ -26,7 +26,9 @@ state: StreamMethod<Nothing, UpdateState>,
  * terminals, and the app is asked to restart into its version
  * ready (`wants_app`). While Turns run that this would end, it
  * refuses; unless `force`, as the Person said so after Quit's
- * warning, or `wait`, which holds it until none runs.
+ * warning, or `wait`, which holds it until none runs. With `ask`
+ * it does nothing, and answers what it would do and how many
+ * Turns it would end.
  */
 restart: CallMethod<RestartNow, Moving>, 
 /**

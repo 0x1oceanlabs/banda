@@ -876,7 +876,9 @@ banda_kernel::methods! {
         /// terminals, and the app is asked to restart into its version
         /// ready (`wants_app`). While Turns run that this would end, it
         /// refuses; unless `force`, as the Person said so after Quit's
-        /// warning, or `wait`, which holds it until none runs.
+        /// warning, or `wait`, which holds it until none runs. With `ask`
+        /// it does nothing, and answers what it would do and how many
+        /// Turns it would end.
         call restart(RestartNow) -> Moving, Manage;
         /// What the app on this machine does with its own update, as its
         /// window's main says each change of it: the module keeps it in
@@ -907,6 +909,11 @@ struct RestartNow {
     #[serde(default)]
     #[ts(optional)]
     wait: Option<bool>,
+    /// Does nothing, and answers what it would do and how many Turns it
+    /// would end (`stops`): what a caller reads before it asks the Person.
+    #[serde(default)]
+    #[ts(optional)]
+    ask: Option<bool>,
 }
 
 /// What `take` asks.
@@ -926,6 +933,10 @@ pub struct Moving {
     /// Not yet: it waits until no Turn runs.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub held: bool,
+    /// Asked only (`ask`): how many Turns this Update would end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub stops: Option<u32>,
 }
 
 /// What `take` takes `newest` as: the choice dropped.
@@ -943,8 +954,11 @@ impl Updates {
     async fn restart(
         &self,
         _: Call,
-        RestartNow { force, wait }: RestartNow,
+        RestartNow { force, wait, ask }: RestartNow,
     ) -> Result<Moving, Refusal> {
+        if ask.unwrap_or(false) {
+            return self.asks();
+        }
         self.update_now(force.unwrap_or(false), wait.unwrap_or(false))
     }
 
@@ -983,53 +997,94 @@ impl Updates {
         self.update(force, wait).map(|(moving, _)| moving)
     }
 
+    /// What an Update has to go on now: the facts, the copy in place,
+    /// and the app's version ready with the one it runs. The app follows
+    /// the newest, not a version the Person chose.
+    fn standing<'a>(
+        &self,
+        restarting: &'a Restarting,
+    ) -> (Facts<'a>, Option<String>, Option<(String, String)>) {
+        let state = self.0.state.borrow();
+        let app = (state.app.as_ref())
+            .filter(|app| app.phase == AppPhase::Ready && state.chosen.is_none())
+            .and_then(|app| Some((app.running.clone(), app.version.clone()?)));
+        (self.facts(restarting), state.ready.clone(), app)
+    }
+
+    /// Why an Update does nothing, in words.
+    fn refusal(&self, refused: Refused) -> Refusal {
+        match refused {
+            Refused::Nothing => Refusal::conflict(format!(
+                "No other copy is ready: {} is the newest in place. banda update --check \
+                 looks for one.",
+                self.0.banda.version
+            )),
+            Refused::Never(why) => Refusal::conflict(why),
+            Refused::Working(turns) => {
+                let agents = match turns {
+                    1 => "An Agent works".to_owned(),
+                    _ => format!("{turns} Agents work"),
+                };
+                Refusal::conflict(format!(
+                    "{agents} on this machine: restarting stops them too. Nothing was \
+                     restarted: force restarts anyway."
+                ))
+            }
+        }
+    }
+
+    /// What the caller hears of an Update: the engine's move, now or
+    /// held, or the app's alone.
+    fn moving(
+        &self,
+        facts: &Facts<'_>,
+        ready: Option<String>,
+        app: Option<(String, String)>,
+    ) -> Moving {
+        let itself = matches!(facts.moves, restart::Moves::Itself);
+        let (from, to) = match (ready.filter(|_| itself), app) {
+            (Some(to), _) => (self.0.banda.version.clone(), to),
+            (None, Some(app)) => app,
+            (None, None) => unreachable!("restart::now moves the engine or the app"),
+        };
+        Moving {
+            from,
+            to,
+            held: false,
+            stops: None,
+        }
+    }
+
+    /// What an Update would do now, and how many Turns it would end,
+    /// with nothing done: what a caller asks before it asks the Person.
+    /// It refuses where there is nothing to update.
+    pub fn asks(&self) -> Result<Moving, Refusal> {
+        let Some(restarting) = &self.0.restarting else {
+            return Err(Refusal::invalid("This engine does not restart itself."));
+        };
+        let (facts, ready, app) = self.standing(restarting);
+        let stops = match restart::now(&facts, app.is_some(), false, false) {
+            Ok(_) => 0,
+            Err(Refused::Working(turns)) => turns,
+            Err(refused) => return Err(self.refusal(refused)),
+        };
+        Ok(Moving {
+            stops: Some(u32::try_from(stops).unwrap_or(u32::MAX)),
+            ..self.moving(&facts, ready, app)
+        })
+    }
+
     /// [`Self::update_now`], and what it did.
     fn update(&self, force: bool, wait: bool) -> Result<(Moving, restart::Does), Refusal> {
         let Some(restarting) = &self.0.restarting else {
             return Err(Refusal::invalid("This engine does not restart itself."));
         };
-        let facts = self.facts(restarting);
-        let running = &self.0.banda.version;
-        let (ready, app) = {
-            let state = self.0.state.borrow();
-            // The app follows the newest, not a version the Person chose.
-            let app = (state.app.as_ref())
-                .filter(|app| app.phase == AppPhase::Ready && state.chosen.is_none())
-                .and_then(|app| Some((app.running.clone(), app.version.clone()?)));
-            (state.ready.clone(), app)
-        };
-        let does = match restart::now(&facts, app.is_some(), force, wait) {
-            Ok(does) => does,
-            Err(Refused::Nothing) => {
-                return Err(Refusal::conflict(format!(
-                    "No other copy is ready: {running} is the newest in place. banda update \
-                     --check looks for one."
-                )));
-            }
-            Err(Refused::Never(why)) => return Err(Refusal::conflict(why)),
-            Err(Refused::Working(turns)) => {
-                let agents = match turns {
-                    1 => "An Agent works".to_owned(),
-                    _ => format!("{turns} Agents work"),
-                };
-                return Err(Refusal::conflict(format!(
-                    "{agents} on this machine: restarting stops them too. Nothing was \
-                     restarted: force restarts anyway."
-                )));
-            }
-        };
-        // What the caller hears: the engine's move, now or held, or the
-        // app's alone.
-        let itself = matches!(facts.moves, restart::Moves::Itself);
-        let (from, to) = match (ready.filter(|_| itself), app) {
-            (Some(to), _) => (running.clone(), to),
-            (None, Some(app)) => app,
-            (None, None) => unreachable!("restart::now moves the engine or the app"),
-        };
+        let (facts, ready, app) = self.standing(restarting);
+        let does = restart::now(&facts, app.is_some(), force, wait)
+            .map_err(|refused| self.refusal(refused))?;
         let moving = Moving {
-            from,
-            to,
             held: does.held,
+            ..self.moving(&facts, ready, app)
         };
         // The engine first: one that cannot move after all did nothing.
         if does.engine && self.move_now(restarting, false).is_none() {
@@ -1194,6 +1249,7 @@ impl Updates {
                 from,
                 to,
                 held: false,
+                stops: None,
             });
         }
         tracing::info!(%from, %to, "the engine moves onto the copy ready");
@@ -1211,6 +1267,7 @@ impl Updates {
             from,
             to,
             held: false,
+            stops: None,
         })
     }
 
@@ -1690,6 +1747,37 @@ mod tests {
         machine.turns.send_replace(0);
         let state = state_until(&machine, |state| !state.held).await;
         assert!(state.wants_app.is_some());
+    }
+
+    #[tokio::test]
+    async fn asked_first_it_says_how_many_agents_an_update_would_stop_and_does_nothing() {
+        // One that stops with its app, made first: the app's restart is
+        // what stops them.
+        let child = machine(Moves::Never("it restarts with Banda".to_owned()));
+        // An engine that goes on beside its app: the app's restart stops
+        // nobody, and the engine's move would.
+        let machine = machine(Moves::Itself);
+        machine.turns.send_replace(2);
+        let asked = machine.updates.asks().unwrap();
+        assert_eq!((asked.to.as_str(), asked.stops), ("0.1.0-dev.11", Some(2)));
+        std::fs::remove_dir_all(machine.engine.join("0.1.0-dev.11")).unwrap();
+        machine
+            .updates
+            .0
+            .state
+            .send_modify(|state| state.ready = None);
+        machine.updates.app_said(app(AppPhase::Ready));
+        let asked = machine.updates.asks().unwrap();
+        assert_eq!(asked.stops, Some(0), "only the app restarts");
+        // Nothing was done, and nothing is asked of the app.
+        let state = machine.updates.watch().borrow().clone();
+        assert_eq!((state.held, state.wants_app), (false, None));
+
+        child.turns.send_replace(1);
+        let refused = child.updates.asks().unwrap_err();
+        assert_eq!(refused.message, "it restarts with Banda");
+        child.updates.app_said(app(AppPhase::Ready));
+        assert_eq!(child.updates.asks().unwrap().stops, Some(1));
     }
 
     #[tokio::test]
