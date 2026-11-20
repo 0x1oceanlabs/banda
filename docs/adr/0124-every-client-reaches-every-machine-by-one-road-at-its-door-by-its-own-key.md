@@ -439,6 +439,13 @@ repository), with an adversarial check.
   in a go begun before the sleep is tried again at once, the door first,
   its waits short again. The first go of a run stays by ssh, which says
   the machine's build anew.
+- **The route in words (SE4, PR 2; Roma chose the mock's B).** In
+  Settings → Machines a live machine's row names only the slower road
+  ("live · same build · via ssh"), and its open row has a Route line: the
+  road, the last round trip of the window's own ping to that engine
+  (`Engine.roundTrip`), and for ssh why. Away, the open row and each
+  Pane's pill have Try again, which starts the next go at once, the door
+  first (`Hosts.start`). Not yet: a retry as the network comes back.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

@@ -430,6 +430,7 @@ export class Engine {
   #pinging: ReturnType<typeof setInterval> | undefined
   /** Each ping on its way, by its ID: when it went. */
   readonly #pings = new Map<number, number>()
+  #roundTrip: number | undefined
   #stale = false
   /** Each act waiting for the connection to open, failed as the engine
    * is stale. */
@@ -525,6 +526,12 @@ export class Engine {
    * before one. */
   get offset(): number | undefined {
     return this.#offset
+  }
+
+  /** How long the engine's last `pong` took to come after its ping, in
+   * ms; none before one. */
+  get roundTrip(): number | undefined {
+    return this.#roundTrip
   }
 
   /** Hears every change of status, starting with the current one. */
@@ -1169,8 +1176,10 @@ export class Engine {
       case "pong": {
         const went = this.#pings.get(frame.id)
         this.#pings.delete(frame.id)
-        if (went !== undefined)
+        if (went !== undefined) {
+          this.#roundTrip = Date.now() - went
           this.#offset = frame.time - (went + Date.now()) / 2
+        }
         break
       }
       case "result": {

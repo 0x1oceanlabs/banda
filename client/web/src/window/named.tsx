@@ -50,7 +50,8 @@ function Named({ project, pane }: { project: ProjectId; pane: PaneState }) {
  * (`useAwayFor`), so every pill and card says the same; a screen reader
  * hears the state as it changes, not each minute. Stopped, it has Start,
  * which starts Banda there: the Person's click alone, as no action does,
- * so no Agent reaches it. It takes the pointer only while it has Start,
+ * so no Agent reaches it. Away, it has Try again, which starts the next
+ * go at that machine at once. It takes the pointer only while it has one,
  * so it never blocks the Pane under it otherwise. It counts what waits
  * for that machine on this device, from every Thread (ADR 0105, Q3).
  */
@@ -66,10 +67,11 @@ export function MachinePill({
   const words = reachWords(shown.name, shown, seenNamed)
   if (!words) return null
   const stopped = shown.state.state === "stopped"
+  const away = shown.state.state === "away"
   return (
     <p
       data-machine-pill={shown.name}
-      className={cn(PILL, stopped && "pointer-events-auto")}
+      className={cn(PILL, (stopped || away) && "pointer-events-auto")}
     >
       <MachineIcon icon={shown.named.icon} />
       <span className="min-w-0 truncate">
@@ -88,6 +90,14 @@ export function MachinePill({
           <button type="button" className={PILL_BUTTON} onClick={onStart}>
             <PlayIcon className="size-3" />
             Start
+          </button>
+        </>
+      )}
+      {away && (
+        <>
+          <span aria-hidden>·</span>
+          <button type="button" className={PILL_BUTTON} onClick={onStart}>
+            Try again
           </button>
         </>
       )}

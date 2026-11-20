@@ -1132,7 +1132,8 @@ export class Hosts extends Context.Service<
      * host that is live at its door now; none for anything else. */
     readonly signed: (message: string) => Effect.Effect<string | undefined>
     /** Starts host `name` again at once when its engine is stopped there
-     * or it is refused; it fails for one not in `hosts.toml`. */
+     * or it is refused, and tries one that is away again at once, as the
+     * Person asks; it fails for one not in `hosts.toml`. */
     readonly start: (name: string) => Effect.Effect<void, Refused>
     /** This machine woke from sleep: each host that is away, or in a go
      * begun before the sleep, is tried again at once, its door on the
@@ -1426,6 +1427,17 @@ export class Hosts extends Context.Service<
               yield* Deferred.succeed(kept.next, undefined)
             return kept
           })
+        /** Tries host `name` again at once, its door on the tailnet first,
+         * when it is in one of `states`: the go or the wait it is in ends,
+         * and its waits are short again. */
+        const again = (name: string, states: Link["state"][]) =>
+          Effect.gen(function* () {
+            const one = reached.get(name)
+            const state = (yield* keptOf(name))?.link.state
+            if (!one || !state || !states.includes(state)) return
+            yield* Fiber.interrupt(one.fiber)
+            yield* reach(one.entry, false, true)
+          })
         /** Where host `name`'s engine listens once it does, or the refusal
          * of a go later than `past`. */
         const listening = (name: string, past: number) =>
@@ -1471,15 +1483,16 @@ export class Hosts extends Context.Service<
                 : undefined
             ),
           start: (name: string) =>
-            Effect.asVoid(wake(name, ["stopped", "refused"])),
+            Effect.flatMap(wake(name, ["stopped", "refused"]), (kept) =>
+              // As it was when asked: one just woken is in its go already.
+              kept.link.state === "away"
+                ? lock.withPermit(again(name, ["away"]))
+                : Effect.void
+            ),
           woke: lock.withPermit(
             Effect.gen(function* () {
-              for (const { entry, fiber } of [...reached.values()]) {
-                const state = (yield* keptOf(entry.name))?.link.state
-                if (state !== "away" && state !== "connecting") continue
-                yield* Fiber.interrupt(fiber)
-                yield* reach(entry, false, true)
-              }
+              for (const name of [...reached.keys()])
+                yield* again(name, ["away", "connecting"])
             })
           ),
           add: (machine) => change((text) => addOf(text, machine)),

@@ -2893,12 +2893,24 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   await expect(
     row.getByRole("button", { name: "Stop Banda on arc" })
   ).toHaveCount(0)
+  // Away, Try again starts the next go at once.
+  await expect(row.getByRole("button", { name: "Try again" })).toBeVisible()
   await settingsShot(page, "4-away")
+  await row.getByRole("button", { expanded: true }).scrollIntoViewIfNeeded()
+  await settingsShot(page, "4-away-why")
   arc.down(false)
+  await row.getByRole("button", { name: "Try again" }).click()
+  // Back by the ssh forward, the slower road, which the row names; its
+  // Route line says why.
   await expect(row.getByRole("button", { expanded: true })).toContainText(
-    "live · same build",
+    "live · same build · via ssh",
     { timeout: 60_000 }
   )
+  await expect(row).toContainText(
+    "Through an ssh forward: arc's door on the tailnet does not answer."
+  )
+  await row.getByText("Route", { exact: true }).scrollIntoViewIfNeeded()
+  await settingsShot(page, "5-route")
   // Back, it is heard again.
   await expect(battery).toHaveCount(withBattery ? 1 : 0)
   await expect(awakeRow).toHaveCount(withBattery ? 0 : 1)
