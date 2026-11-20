@@ -292,7 +292,9 @@ Each with the recommended answer first.
   question 5 (a profile per Project) and question 9 (no broker).
 - **Question 2: A**, to be looked at once more before slice 4, when the
   screencast has been seen in slices 2 and 3.
-- Questions 1, 3, 4, 6, 7, 8 and 10 wait for Roma.
+- **Questions 1, 3, 4, 6, 7, 8 and 10: A, as recommended.** For
+  question 10, tabs an Agent forgot hold a Project's Chromium until the
+  engine restarts; closing idle ones is an issue for later.
 
 ## Consequences
 
