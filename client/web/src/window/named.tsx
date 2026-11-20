@@ -14,7 +14,7 @@ import { seenNamed } from "@banda/ui/hooks/use-status"
 import { cn } from "@banda/ui/lib/utils"
 import { paneHost, type PaneState } from "@banda/ui/pane"
 import type { Filler, HeaderProps } from "@banda/ui/slots"
-import { PlayIcon } from "lucide-react"
+import { PlayIcon, RotateCwIcon } from "lucide-react"
 import { useContext } from "react"
 import {
   HostsContext,
@@ -94,12 +94,15 @@ export function MachinePill({
         </>
       )}
       {away && (
-        <>
-          <span aria-hidden>·</span>
-          <button type="button" className={PILL_BUTTON} onClick={onStart}>
-            Try again
-          </button>
-        </>
+        <button
+          type="button"
+          className={PILL_BUTTON}
+          aria-label="Try again"
+          title="Try again"
+          onClick={onStart}
+        >
+          <RotateCwIcon className="size-3" />
+        </button>
       )}
     </p>
   )

@@ -55,21 +55,23 @@ test("away, the pill has the machine's icon, says for how long, as its label doe
   const since = 10 * MINUTE
   const now = pill(shown(away, since), since + 30_000)
   expect(now.markup).toContain(ICON)
-  expect(now.words).toBe("arc is away·Try again")
+  expect(now.words).toBe("arc is away")
   const later = pill(shown(away, since), since + 2 * MINUTE)
-  expect(later.words).toBe("arc is away · 2 min·Try again")
+  expect(later.words).toBe("arc is away · 2 min")
   expect(pill(shown(away, since), since + 90 * MINUTE).words).toBe(
-    "arc is away · 1 h·Try again"
+    "arc is away · 1 h"
   )
   // Never heard since the window started, as after a restart while it is
   // away, it does not know since when (the mock's frame 6).
   expect(pill(shown(away, since, true), since + 90 * MINUTE).words).toBe(
-    "arc is away·Try again"
+    "arc is away"
   )
   // A screen reader hears that it is away, not each minute after.
   expect(later.markup).toContain('<span role="status">arc is away</span>')
   // Try again starts the next go at that machine at once.
-  expect(later.markup).toMatch(/<button type="button"[^>]*>Try again<\/button>/)
+  expect(later.markup).toMatch(
+    /<button type="button"[^>]*aria-label="Try again"/
+  )
   expect(later.markup).toContain("pointer-events-auto")
 })
 
@@ -270,12 +272,12 @@ test("the pill counts every message this device has waiting for its machine, fro
         </HostsContext>
       )
     )
-  expect(words()).toBe("arc is away · 2 min·Try again")
+  expect(words()).toBe("arc is away · 2 min")
   wait("t1")
-  expect(words()).toBe("arc is away · 2 min · 1 waiting·Try again")
+  expect(words()).toBe("arc is away · 2 min · 1 waiting")
   wait("t2")
   // Another machine's does not count here.
   wait("t3", "mini")
-  expect(words()).toBe("arc is away · 2 min · 2 waiting·Try again")
+  expect(words()).toBe("arc is away · 2 min · 2 waiting")
   kept.waiting.close()
 })

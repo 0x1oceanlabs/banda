@@ -443,8 +443,8 @@ repository), with an adversarial check.
   Settings → Machines a live machine's row names only the slower road
   ("live · same build · via ssh"), and its open row has a Route line: the
   road, the last round trip of the window's own ping to that engine
-  (`Engine.roundTrip`), and for ssh why. Away, the open row and each
-  Pane's pill have Try again, which starts the next go at once, the door
+  (`Engine.roundTrip`), and for ssh why. Away, the open row has Try again
+  and each Pane's pill a small button of the same name, which starts the next go at once, the door
   first (`Hosts.start`). Not yet: a retry as the network comes back.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
