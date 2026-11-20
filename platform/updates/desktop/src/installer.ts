@@ -111,9 +111,9 @@ export function electronInstaller(mine: Swapped): Installer {
         // Quit meanwhile, as the Person asked: that quit installs it.
         if (mine.quits()) return
         // An AppImage is installed by the time it returns, and the new one
-        // starts once this one is gone. Windows' installer shows its own
-        // window while it works, as Banda has none then, and starts Banda
-        // itself.
+        // starts once this one is gone. Windows' installer shows Banda's
+        // card while it works, as Banda has none then, and starts Banda
+        // itself (platform/updates/setup).
         autoUpdater.quitAndInstall(image !== undefined, !installed)
         if (installed) startAfterImage(installed)
       }, SAID)

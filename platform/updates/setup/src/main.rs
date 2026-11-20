@@ -8,7 +8,7 @@
 //!     --pid <installer> --size <KB> --extract <7z-out> --dir <install folder>
 //!
 //! `--png out.png` draws the card into a picture instead, on any system:
-//! `--step installing|closing|opening|open|stuck|refused`, `--light`,
+//! `--step installing|closing|opening|open|stuck`, `--light`,
 //! `--progress 0.6`, `--hover 0`, `--scale 2`.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
@@ -96,7 +96,6 @@ fn picture(args: &Args, icon: &Icon, png: &std::path::Path) -> ExitCode {
         "opening" => Step::Opening,
         "open" => Step::Open,
         "stuck" => Step::Stuck,
-        "refused" => Step::Refused(17134),
         other => {
             eprintln!("banda-setup: no step {other}");
             return ExitCode::from(2);

@@ -146,7 +146,8 @@ PR.
   bytes unpacked and copied. NSIS tells it the step and asks its
   questions by two window messages (`window.rs`): Banda is open (close
   it and install, or cancel), a part of it could not be stopped (try
-  again), this Windows is too old. Installed, it opens Banda and the card
+  again). A Windows older than Banda runs on is refused before the card,
+  in NSIS's box. Installed, it opens Banda and the card
   stays until Banda's window shows. A card that does not come up leaves
   NSIS's own windows, and a silent run shows none. `banda-setup --png`
   draws the card into a picture on any system.

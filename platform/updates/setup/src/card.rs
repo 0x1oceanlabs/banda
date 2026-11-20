@@ -62,13 +62,11 @@ pub enum Step {
     Open,
     /// Something of Banda runs that could not be stopped.
     Stuck,
-    /// This Windows is older than Banda runs on: its build.
-    Refused(u32),
 }
 
 impl Step {
     pub fn asks(self) -> bool {
-        matches!(self, Step::Open | Step::Stuck | Step::Refused(_))
+        matches!(self, Step::Open | Step::Stuck)
     }
 }
 
@@ -77,7 +75,6 @@ impl Step {
 enum Kind {
     Primary,
     Ghost,
-    Outline,
 }
 
 /// What a click on a button answers NSIS: 1 goes on, 2 stops.
@@ -105,7 +102,6 @@ impl Card<'_> {
             Step::Installing | Step::Closing | Step::Opening => self.name.to_owned(),
             Step::Open => format!("{} is open", self.name),
             Step::Stuck => format!("{} is still running", self.name),
-            Step::Refused(_) => format!("{} needs a newer Windows", self.name),
         }
     }
 
@@ -120,9 +116,6 @@ impl Card<'_> {
                 "A part of it could not be stopped, perhaps as it runs as admin. Close it, then try again."
                     .to_owned()
             }
-            Step::Refused(build) => {
-                format!("Windows 10 version 1809 or later. This one is build {build}.")
-            }
         }
     }
 
@@ -136,7 +129,6 @@ impl Card<'_> {
                 ("Try again", Kind::Primary, GO),
                 ("Cancel", Kind::Ghost, STOP),
             ],
-            Step::Refused(_) => vec![("Close", Kind::Outline, STOP)],
             _ => Vec::new(),
         }
     }
@@ -481,30 +473,13 @@ impl Painter {
                         fill(&mut pixmap, shape, ground);
                         ink = colors.on_primary;
                     }
-                    Kind::Ghost | Kind::Outline => {
-                        if *kind == Kind::Outline {
-                            // `inset 0 0 0 1px var(--input)`: the text at 12%.
-                            let mut edge = colors.text;
-                            edge.apply_opacity(0.12);
-                            fill(&mut pixmap, shape.clone(), edge);
-                            fill(
-                                &mut pixmap,
-                                rounded(
-                                    x + s(1.0),
-                                    y + s(1.0),
-                                    width - s(2.0),
-                                    s(BUTTON_HEIGHT - 2.0),
-                                    s(BUTTON_RADIUS - 1.0),
-                                ),
-                                colors.ground,
-                            );
-                        }
+                    Kind::Ghost => {
                         if hover {
                             // `--hover`: the text at 5%.
                             let mut wash = colors.text;
                             wash.apply_opacity(0.05);
                             fill(&mut pixmap, shape, wash);
-                        } else if *kind == Kind::Ghost {
+                        } else {
                             ink = colors.quiet;
                         }
                     }
@@ -803,7 +778,6 @@ mod tests {
             Step::Opening,
             Step::Open,
             Step::Stuck,
-            Step::Refused(17134),
         ] {
             let card = Card {
                 name: "Banda Dev",
