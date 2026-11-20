@@ -45,7 +45,7 @@ function pill(arc: Shown, now = 0) {
 
 const ICON = 'data-machine-icon="server"'
 
-test("away, the pill has the machine's icon and says for how long, as its label does, outside what is said as it changes", () => {
+test("away, the pill has the machine's icon, says for how long, as its label does, outside what is said as it changes, and has Try again", () => {
   const away: HostState = {
     name: "arc",
     ssh: "arc",
@@ -55,22 +55,22 @@ test("away, the pill has the machine's icon and says for how long, as its label 
   const since = 10 * MINUTE
   const now = pill(shown(away, since), since + 30_000)
   expect(now.markup).toContain(ICON)
-  expect(now.words).toBe("arc is away")
+  expect(now.words).toBe("arc is away·Try again")
   const later = pill(shown(away, since), since + 2 * MINUTE)
-  expect(later.words).toBe("arc is away · 2 min")
+  expect(later.words).toBe("arc is away · 2 min·Try again")
   expect(pill(shown(away, since), since + 90 * MINUTE).words).toBe(
-    "arc is away · 1 h"
+    "arc is away · 1 h·Try again"
   )
   // Never heard since the window started, as after a restart while it is
   // away, it does not know since when (the mock's frame 6).
   expect(pill(shown(away, since, true), since + 90 * MINUTE).words).toBe(
-    "arc is away"
+    "arc is away·Try again"
   )
   // A screen reader hears that it is away, not each minute after.
   expect(later.markup).toContain('<span role="status">arc is away</span>')
-  // Nothing to press: the pointer goes to the Pane under it.
-  expect(later.markup).not.toContain("<button")
-  expect(later.markup).not.toContain("pointer-events-auto")
+  // Try again starts the next go at that machine at once.
+  expect(later.markup).toMatch(/<button type="button"[^>]*>Try again<\/button>/)
+  expect(later.markup).toContain("pointer-events-auto")
 })
 
 test("stopped, the pill has Start, and takes the pointer only then; it says no time, however long", () => {
@@ -270,12 +270,12 @@ test("the pill counts every message this device has waiting for its machine, fro
         </HostsContext>
       )
     )
-  expect(words()).toBe("arc is away · 2 min")
+  expect(words()).toBe("arc is away · 2 min·Try again")
   wait("t1")
-  expect(words()).toBe("arc is away · 2 min · 1 waiting")
+  expect(words()).toBe("arc is away · 2 min · 1 waiting·Try again")
   wait("t2")
   // Another machine's does not count here.
   wait("t3", "mini")
-  expect(words()).toBe("arc is away · 2 min · 2 waiting")
+  expect(words()).toBe("arc is away · 2 min · 2 waiting·Try again")
   kept.waiting.close()
 })

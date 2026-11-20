@@ -18,8 +18,11 @@ export function stateWords(state: HostState): string {
       return "connecting"
     case "signin":
       return "sign in to Tailscale"
-    case "live":
-      return otherBuild(state) ? "live · other build" : "live · same build"
+    case "live": {
+      const build = otherBuild(state) ? "other build" : "same build"
+      // The slower road is named; its door on the tailnet says nothing.
+      return `live · ${build}${state.route === "ssh" ? " · via ssh" : ""}`
+    }
     case "away":
       return "away"
     case "stopped":
@@ -27,6 +30,24 @@ export function stateWords(state: HostState): string {
     case "refused":
       return "refused"
   }
+}
+
+/** How this window reaches live machine `name` (ADR 0124, decision 4):
+ * the road in a word with its last round trip of `took` ms, and where
+ * that road goes; none while it is not live or says no road. */
+export function routeWords(
+  state: HostState,
+  name: string,
+  took?: number
+): { road: string; about: string } | undefined {
+  if (state.state !== "live" || state.route === undefined) return undefined
+  const time = took === undefined ? "" : ` · ${Math.round(took)} ms`
+  return state.route === "tailnet"
+    ? { road: `tailnet${time}`, about: `At ${name}'s door on the tailnet.` }
+    : {
+        road: `ssh${time}`,
+        about: `Through an ssh forward: ${name}'s door on the tailnet does not answer.`,
+      }
 }
 
 /** A banda's build, as an engine says it and its own. */

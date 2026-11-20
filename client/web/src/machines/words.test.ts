@@ -6,6 +6,7 @@ import {
   factsWords,
   footWords,
   standingOf,
+  routeWords,
   stateWords,
 } from "./words"
 
@@ -21,6 +22,20 @@ const live = (version: string | null, build = "abc1234ff"): HostState => ({
 test("a machine's state, in Settings' words", () => {
   expect(stateWords(live("0.1.0-dev.421"))).toBe("live · same build")
   expect(stateWords(live("0.1.0-dev.418", "def"))).toBe("live · other build")
+  // Only the slower road is named on the row.
+  const by = (route: "tailnet" | "ssh") =>
+    ({ ...live("0.1.0-dev.421"), route }) as HostState
+  expect(stateWords(by("tailnet"))).toBe("live · same build")
+  expect(stateWords(by("ssh"))).toBe("live · same build · via ssh")
+  expect(routeWords(by("tailnet"), "arc", 18.4)).toEqual({
+    road: "tailnet · 18 ms",
+    about: "At arc's door on the tailnet.",
+  })
+  expect(routeWords(by("ssh"), "arc")).toEqual({
+    road: "ssh",
+    about: "Through an ssh forward: arc's door on the tailnet does not answer.",
+  })
+  expect(routeWords(live("0.1.0-dev.421"), "arc", 18)).toBeUndefined()
   expect(stateWords({ name: "arc", ssh: "arc", state: "connecting" })).toBe(
     "connecting"
   )

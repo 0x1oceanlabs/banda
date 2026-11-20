@@ -20,6 +20,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import type { MachineIcon as Icon, Named } from "@banda/contract/machines"
@@ -110,7 +111,12 @@ import {
   Told,
   type Wrote,
 } from "./machines"
-import { buildWords, factsWords, stateWords } from "../machines/words"
+import {
+  buildWords,
+  factsWords,
+  routeWords,
+  stateWords,
+} from "../machines/words"
 import type { SectionProps } from "@banda/ui/settings"
 import { MachineRowsPicker } from "./rows"
 import { RowFrame } from "@banda/ui/components/setting-row"
@@ -188,6 +194,23 @@ const shownBeside = (
   ...(here ? [here] : []),
   ...hosts.filter((one) => one.name !== except).map((one) => one.named),
 ]
+
+/** How often an open row reads its machine's last round trip. */
+const ROUND_TRIP_EVERY = 5000
+
+/** `engine`'s last round trip in ms while `on`, read again as its pings
+ * go on; none before one came. */
+function useRoundTrip(engine: Engine, on: boolean): number | undefined {
+  const watch = useCallback(
+    (changed: () => void) => {
+      if (!on) return () => {}
+      const timer = setInterval(changed, ROUND_TRIP_EVERY)
+      return () => clearInterval(timer)
+    },
+    [on]
+  )
+  return useSyncExternalStore(watch, () => (on ? engine.roundTrip : undefined))
+}
 
 export function MachinesSettings({ engine, lit, run }: SectionProps) {
   const kept = useContext(HostsContext)
@@ -768,6 +791,11 @@ function HostRow({
     })
   }
   const build = buildWords(state)
+  const route = routeWords(
+    state,
+    name,
+    useRoundTrip(kept.engine(key), open && live)
+  )
   const why =
     state.state === "away" || state.state === "refused" ? state.why : undefined
   // Whether Claude is signed in there, as its Harness says, read while
@@ -826,8 +854,19 @@ function HostRow({
       {open && (
         <div className="flex flex-col pb-1 pl-6">
           {why && (
-            <p className="px-4 pt-1 pb-2 text-meta text-muted-foreground">
-              {name}: {why}
+            <p className="flex items-center gap-3 px-4 pt-1 pb-2 text-meta text-muted-foreground">
+              <span className="min-w-0 flex-1">
+                {name}: {why}
+              </span>
+              {state.state === "away" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => kept.start(key)}
+                >
+                  Try again
+                </Button>
+              )}
             </p>
           )}
           {state.state === "signin" && (
@@ -951,6 +990,17 @@ function HostRow({
                   name={name}
                   onCheck={() => setRound((now) => now + 1)}
                 />
+              </RowFrame>
+            )}
+            {route && (
+              <RowFrame
+                dataKey={`${key}.route`}
+                title="Route"
+                about={route.about}
+              >
+                <span className="text-meta text-muted-foreground tabular-nums">
+                  {route.road}
+                </span>
               </RowFrame>
             )}
             {build && (

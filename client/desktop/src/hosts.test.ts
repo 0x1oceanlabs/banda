@@ -1380,6 +1380,15 @@ it.live(
         // A live one stays as it is.
         yield* hosts.woke
         expect((yield* hosts.current)[0]).toMatchObject({ state: "live" })
+        // Away again, its door silent and ssh gone: the Person's Try
+        // again starts the next go at once, a minute early.
+        yield* Effect.sync(() => door.close())
+        yield* reaches((host) => host.state === "away")
+        const before = fake.runs("follower").length
+        yield* hosts.start("devbox")
+        yield* reaches((host) => host.state === "connecting")
+        yield* reaches((host) => host.state === "away")
+        expect(fake.runs("follower").length).toBeGreaterThan(before)
       }).pipe(
         Effect.scoped,
         Effect.provide(
