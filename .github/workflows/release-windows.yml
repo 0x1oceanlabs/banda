@@ -306,7 +306,12 @@ jobs:
           # until it ends, as a Person answers its question.
           function Install($name, [switch]$answer) {
             $run = Start-Process $installer -PassThru
-            if (-not (Wait-Until { (Card $run) -ne [IntPtr]::Zero } 30)) { throw 'the installer showed no card' }
+            if (-not (Wait-Until { (Card $run) -ne [IntPtr]::Zero } 30)) {
+              Shot "$name-no-card"
+              "the installer has ended: $($run.HasExited)"
+              Get-CimInstance Win32_Process | ? { $_.Name -like 'banda*' -or $_.ProcessId -eq $run.Id } | Format-List ProcessId, ParentProcessId, Name, CommandLine
+              throw 'the installer showed no card'
+            }
             Start-Sleep 2
             Shot "$name-1"
             for ($i = 0; $i -lt 300 -and -not $run.HasExited; $i++) {
@@ -317,6 +322,16 @@ jobs:
             if (-not $run.HasExited) { Shot "$name-stuck"; throw "the installer ($name) did not end in five minutes" }
             if ($run.ExitCode) { throw "the installer ($name) ended with code $($run.ExitCode)" }
           }
+
+          # The card alone, as the installer starts it, with no installer.
+          $alone = Start-Process target/release/banda-setup.exe -PassThru `
+            -ArgumentList '--icon', 'client/desktop/icons/banda-dev.svg', '--name', '"Banda Dev"' `
+            -RedirectStandardError "$shots\alone.err"
+          $found = Wait-Until { [Win]::FindWindow('BandaSetup-0', $null) -ne [IntPtr]::Zero } 15
+          Shot alone
+          Fact "the card alone came up: $found, and still runs: $(-not $alone.HasExited)"
+          if (-not $alone.HasExited) { Stop-Process -Id $alone.Id }
+          Get-Content "$shots\alone.err" -ErrorAction SilentlyContinue
 
           Install first
           if (-not (Wait-Until { Banda } 120)) { throw 'the card opened no Banda' }
