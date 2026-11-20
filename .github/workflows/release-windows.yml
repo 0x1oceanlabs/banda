@@ -310,7 +310,7 @@ jobs:
               Write-Warning "no picture of $name`: $_"
             }
           }
-          function Card($run) { [Win]::FindWindow("BandaSetup-$($run.Id)", $null) }
+          function Card($run) { [Win]::FindWindow("BandaSetup-$($run.Id)", [NullString]::Value) }
           # Banda's programs from its folder: the window and its engine.
           function Banda {
             Get-CimInstance Win32_Process |
@@ -341,7 +341,7 @@ jobs:
           $alone = Start-Process target/release/banda-setup.exe -PassThru `
             -ArgumentList '--icon', 'client/desktop/icons/banda-dev.svg', '--name', '"Banda Dev"' `
             -RedirectStandardError "$shots\alone.err"
-          $found = Wait-Until { [Win]::FindWindow('BandaSetup-0', $null) -ne [IntPtr]::Zero } 15
+          $found = Wait-Until { [Win]::FindWindow('BandaSetup-0', [NullString]::Value) -ne [IntPtr]::Zero } 15
           Shot alone
           Fact "the card alone came up: $found, and still runs: $(-not $alone.HasExited)"
           if (-not $alone.HasExited) { Stop-Process -Id $alone.Id }
