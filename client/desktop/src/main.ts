@@ -32,7 +32,7 @@
 import { existsSync } from "node:fs"
 import { userInfo } from "node:os"
 import { join, resolve } from "node:path"
-import { app, nativeTheme, powerMonitor, type WebContents } from "electron"
+import { app, nativeTheme, net, powerMonitor, type WebContents } from "electron"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import { Engine, none, serve, tellPage, text } from "@banda/desktop-kit"
@@ -55,7 +55,7 @@ import { listApp, listedImage, listShortcut } from "./entry"
 import { hasIcon } from "./tray"
 import { statusLayer } from "./status"
 import { forwardAnswer, reaching, signedHello } from "./forward"
-import { Hosts, terminalArgs } from "./hosts"
+import { Hosts, onBack, terminalArgs } from "./hosts"
 import { problemsAnswers, startLog, watchProblems } from "./problems"
 import { Editors } from "./editors"
 import { roadLayer } from "./road"
@@ -260,9 +260,9 @@ if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
   app.quit()
 } else {
   app.on("second-instance", () => windows?.inFront())
-  powerMonitor.on("resume", () =>
-    runtime.runFork(Hosts.use((hosts) => hosts.woke))
-  )
+  const woke = () => runtime.runFork(Hosts.use((hosts) => hosts.woke))
+  powerMonitor.on("resume", woke)
+  void app.whenReady().then(() => onBack(() => net.isOnline(), woke))
   listApp()
   void app.whenReady().then(ready)
 }
