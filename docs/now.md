@@ -9,7 +9,7 @@ starts, ends or freezes a track changes this page.
 | Track | It builds | It is done when | Its plan |
 | --- | --- | --- | --- |
 | **1. Story 1** | one Banda on every machine: SE1 to SE13 | the story runs with a Thread at work, moved from the phone | [the roadmap](research/2026-11-08-roadmap-in-slices.md) |
-| **2. Story 2** | an Agent writes an App: 2-0 to 2c; then the engine's part of story 1 | Threads is an ordinary App in its own folder | [the roadmap](research/2026-11-08-roadmap-in-slices.md) |
+| **2. Story 2** | an Agent writes an App, and the engine's part of story 1: both in. Now one word, Task ([ADR 0138](adr/0138-the-app-stays-agents-and-what-a-person-gives-an-agent-is-a-task.md)), and an App's screen read by an Agent ([ADR 0139](adr/0139-an-app-s-screen-is-read-by-an-agent-as-its-person-reads-it.md)) | an Agent reads an App's screen and acts by it, and the window and the Agent both say Task | [the three tracks](research/2026-11-13-three-tracks.md#track-2-story-2-then-the-engines-part-of-story-1) |
 | **3. The window** | the window's structure: WS1 to WS11 | its plan's slices are in | [the window's plan](research/2026-11-13-window-plan.md), [its rules](window.md) |
 
 - The order inside each track, the weeks, and which track owns which file
