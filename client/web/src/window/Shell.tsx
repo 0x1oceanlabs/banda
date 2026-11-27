@@ -19,17 +19,13 @@ import {
   useStore,
 } from "@banda/core/react"
 import { Bar } from "../bar/Bar"
-import { tomlOf } from "@banda/contract/settings"
-import { useWidgets } from "../bar/layout/Widgets"
-import type { Layout } from "../bar/layout/arrange"
-import { PARTS } from "../bar/layout/placed"
+import { useArrangeBar, useWidgets } from "../bar/layout/Widgets"
 import { Watches } from "../calls/Watches"
 import { quiet } from "../calls/quiet"
 import { besideOf, callAfter, sightOf } from "../calls/sight"
 import {
   followCalls,
   itemsOf,
-  listedIn,
   newStores,
   nowOf,
   workingHere,
@@ -71,33 +67,26 @@ import {
 import { RemovingProject } from "../settings/RemoveProject"
 import { QuitDialog } from "./Quit"
 import { useWokeNote } from "../calls/woke"
-import { paneRowsOf } from "./items"
 import { attachChips, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
 import { tilingShows } from "./shows"
 import { useNarrow } from "./narrow"
 import { Asked } from "../tiling/AskedPanes"
-import { floorsOf, type Reveal, shownOf } from "../tiling/layout"
+import { type Reveal, shownOf } from "../tiling/layout"
 import { useTiling } from "../tiling/useTiling"
 import {
   current,
-  displayOf,
   type Entry,
   entries,
-  find,
   focused,
   across,
   focusEntry,
   go,
-  heightsOf,
   left,
   projectIn,
   samePane,
-  share,
   step,
-  widthIn,
 } from "../tiling/model"
-import { targetsOf } from "../tiling/actions"
 import { useFlowHere } from "../tiling/flow"
 import { Drawer, useDrawer } from "./Drawer"
 import { Peek, usePeek } from "./Peek"
@@ -105,7 +94,6 @@ import { Sheet, useSheet, useSheetTilesGo } from "./Sheet"
 import { useMadeGoesHome } from "./made"
 import { usePlacing, writeFlow } from "./placing"
 import { Overview } from "../tiling/Overview"
-import type { Frame } from "../tiling/PaneFrame"
 import {
   keepLooked,
   keepSidebar,
@@ -115,15 +103,10 @@ import {
   loadSidebarWidth,
 } from "../tiling/store"
 import { Workspaces } from "../tiling/Workspaces"
-import {
-  closing,
-  focusedIn,
-  openingFrom,
-  placed,
-  strayedIn,
-} from "../tiling/opening"
+import { closing, focusedIn, placed, strayedIn } from "../tiling/opening"
 import { runAction, type Shell as Parts, useWindowApi } from "./actions"
 import { useAsked } from "./asked"
+import { useFrame } from "./frame"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
@@ -177,7 +160,7 @@ export function Shell({
   const { placing, gone, strict, projectOf } = placingNow
   const tiling = useTiling({ engine, machine, modules, home, flow, row, gone })
   const { ready, aside, workspaces, standing, drawnNow, changing } = tiling
-  const { change, update } = tiling
+  const { change } = tiling
   const inView = current(workspaces).id
   // Gone from it, or out of solo, the row is over: as drawn, at once.
   if (row !== undefined && (!solo || row !== inView)) setRow(undefined)
@@ -585,33 +568,7 @@ export function Shell({
   // look's `[bar]` puts them (ADR 0024). Where the Person is they read
   // from Here, so a move of the focus draws only those it concerns.
   const bar = useWidgets(modules, { engine, projects })
-  // A widget moved with the mod writes the parts of `[bar]` it changed, one
-  // after another, as they are one file (ADR 0064).
-  const arrangeBar = useCallback(
-    (after: Layout) => {
-      const changed = PARTS.filter(
-        (part) =>
-          after[part].length !== bar.listed[part].length ||
-          after[part].some((id, i) => bar.listed[part][i] !== id)
-      )
-      void changed.reduce(
-        (before, part) =>
-          before.then(() =>
-            parts
-              .writeSetting(
-                "look.toml",
-                `bar.${part}`,
-                tomlOf([...after[part]])
-              )
-              .then((wrong) => {
-                if (wrong.length > 0) console.warn(...wrong)
-              })
-          ),
-        Promise.resolve()
-      )
-    },
-    [bar.listed, parts]
-  )
+  const arrangeBar = useArrangeBar(bar.listed, parts.writeSetting)
   // A Project the menu added, as the engine answered it: the list may not
   // know it yet. The menu offers no scratch Space's.
   const added = useCallback(
@@ -657,63 +614,7 @@ export function Shell({
     },
     [newThreadIn, parts, here]
   )
-  const frame: Frame = useMemo(
-    () => ({
-      // A tile takes the focus as the DOM gives it, on the workspace on
-      // screen; by its turn, the Person may have gone to another.
-      focus: (entry) =>
-        change((w) =>
-          current(w).columns.some((c) => c.entries.some((e) => e.id === entry))
-            ? focusEntry(w, entry)
-            : undefined
-        ),
-      // A Pane that comes as the Sheet comes so, asked for from a tile too.
-      open: (project, pane, ...asked) =>
-        sheetsOf(pane)
-          ? parts.open(pane, project)
-          : change((w) =>
-              openingFrom(w, project, pane, parts.placing(), ...asked)
-            ),
-      update,
-      close: (entry) => change(() => closing(entry)),
-      run: parts.run,
-      arrange: (plan) => change(() => plan),
-      popOut,
-      // As the window draws it now, when the menu opens.
-      stand: (entry) => {
-        const state = drawnNow()
-        const spot = find(state, entry)
-        if (!spot) return undefined
-        const workspace = state.list[spot.workspace]
-        const column = workspace?.columns[spot.column]
-        if (!workspace || !column) return undefined
-        const look = columnsOf()
-        const floor = floorsOf(workspace.id, look)
-        const shown = column.entries[spot.entry]
-        const listed = shown && listedIn(stores.items.get(), shown, showsOf)
-        return {
-          width: share(widthIn(workspace, column, look, floor)) ?? 0.5,
-          full: column.full === true,
-          deck: displayOf(column, look) === "deck",
-          panes: column.entries.length,
-          height: heightsOf(column)[spot.entry] ?? 1,
-          left: spot.column > 0,
-          right: spot.column < workspace.columns.length - 1,
-          workspace: spot.workspace + 1,
-          targets: targetsOf(state, spot, parts.projectOf),
-          away: awayNow.current.has(entry),
-          presets: look.presets,
-          heights: look.heights,
-          floor: floor?.(column) ?? 0,
-          // What its Item's item actions offer here (ADR 0087, decision 12).
-          items: listed
-            ? paneRowsOf(listed, shown.project, parts.projects())
-            : [],
-        }
-      },
-    }),
-    [change, update, parts, popOut, stores, drawnNow]
-  )
+  const frame = useFrame({ tiling, parts, stores, popOut, away: awayNow })
   // What is asked from outside the window, it does, as for its own.
   useAsked(parts, frame.open)
   return (

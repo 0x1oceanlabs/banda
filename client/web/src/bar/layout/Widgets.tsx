@@ -1,8 +1,9 @@
 import type { Problem } from "@banda/contract/look"
+import { tomlOf } from "@banda/contract/settings"
 import { sameData, type Shown } from "@banda/core"
 import { HostsContext, useHostsBy } from "@banda/core/react"
 import type { WidgetMachine, WidgetProps } from "@banda/ui/module"
-import { type ReactNode, useContext, useMemo } from "react"
+import { type ReactNode, useCallback, useContext, useMemo } from "react"
 import { useLookBar, useLookSettings } from "../../look"
 import { runs, widgets } from "../../registry"
 import type { Layout } from "./arrange"
@@ -85,5 +86,37 @@ export function useBarProblems(): Problem[] {
       placed(bar, (id) => (widgets.has(id) ? "shown" : undefined), settings)
         .problems,
     [bar, settings]
+  )
+}
+
+/**
+ * What a widget moved with the mod writes (ADR 0064): the parts of `[bar]`
+ * it changed, one after another, as they are one file. `write` is the
+ * device's writing of a setting.
+ */
+export function useArrangeBar(
+  listed: Layout,
+  write: (file: string, key: string, value: string) => Promise<string[]>
+): (after: Layout) => void {
+  return useCallback(
+    (after) => {
+      const changed = PARTS.filter(
+        (part) =>
+          after[part].length !== listed[part].length ||
+          after[part].some((id, i) => listed[part][i] !== id)
+      )
+      void changed.reduce(
+        (before, part) =>
+          before.then(() =>
+            write("look.toml", `bar.${part}`, tomlOf([...after[part]])).then(
+              (wrong) => {
+                if (wrong.length > 0) console.warn(...wrong)
+              }
+            )
+          ),
+        Promise.resolve()
+      )
+    },
+    [listed, write]
   )
 }
