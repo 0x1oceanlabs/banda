@@ -9,6 +9,6 @@ version = "0.1.0"
 api = 1
 from-banda = true
 
-# What it needs of Banda (ADR 0082, decision 2): nothing it could
-# declare here is built yet.
+# What it needs of Banda (ADR 0082, decision 2): it hears no other part,
+# and the rest it could declare here is not built yet.
 [needs]
