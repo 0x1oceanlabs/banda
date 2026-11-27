@@ -42,8 +42,17 @@ export function toastTold(
     testId: String(id),
     duration: LIFE[told.kind],
     closeButton: told.close === true,
-    className: opens ? "cursor-pointer" : "",
-    classNames: { description: "line-clamp-3 whitespace-pre-line" },
+    className: [
+      "grid! grid-cols-[auto_minmax(0,1fr)] items-start! [&>[data-content]]:col-start-2 [&>[data-content]]:min-w-0",
+      opens ? "cursor-pointer" : "",
+    ].join(" "),
+    classNames: {
+      description: "line-clamp-3 whitespace-pre-line wrap-anywhere",
+      actionButton:
+        "col-start-2 ml-0! h-auto! min-h-6 max-w-full justify-self-end py-1! text-left whitespace-normal! wrap-anywhere",
+      cancelButton:
+        "col-start-2 ml-0! h-auto! min-h-6 max-w-full justify-self-end py-1! text-left whitespace-normal! wrap-anywhere",
+    },
     icon: markOf(told.kind),
     description: (
       <>
