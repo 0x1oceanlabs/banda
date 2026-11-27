@@ -147,13 +147,13 @@ pub enum BarEmpty {
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum Count {
-    /// Threads that ask the Person, or failed: they need an answer.
+    /// Tasks that ask the Person, or failed: they need an answer.
     Asking,
-    /// Threads that finished and the Person has not seen.
+    /// Tasks that finished and the Person has not seen.
     Done,
-    /// Both of those: every Thread that waits for the Person.
+    /// Both of those: every Task that waits for the Person.
     Waiting,
-    /// Threads at work.
+    /// Tasks at work.
     Working,
 }
 
@@ -170,7 +170,7 @@ pub enum MachineRows {
     Off,
 }
 
-/// How the sidebar arranges Threads: every key is optional.
+/// How the sidebar arranges Tasks: every key is optional.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SidebarSettings {
@@ -205,7 +205,7 @@ pub struct SidebarSettings {
 pub struct InboxSettings {
     /// Your turn's order: the oldest call first, or the newest.
     pub order: Option<InboxOrder>,
-    /// Open in the Inbox: Threads seen, with no turn running.
+    /// Open in the Inbox: Tasks seen, with no turn running.
     pub open: Option<bool>,
     /// The Working shelf in the Inbox, under Open.
     pub working: Option<bool>,

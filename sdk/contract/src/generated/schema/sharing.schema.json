@@ -10,7 +10,7 @@
       "x-class": "machine"
     },
     "usage": {
-      "description": "Send usage counts: one summary a day of how many Threads, Turns and\nPanes, by kind, and the country of the system's language. Never\nwords, paths or names.",
+      "description": "Send usage counts: one summary a day of how many Tasks, Turns and\nPanes, by kind, and the country of the system's language. Never\nwords, paths or names.",
       "type": "boolean",
       "x-class": "machine"
     }

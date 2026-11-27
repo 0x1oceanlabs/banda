@@ -3,7 +3,7 @@
 id = "pulls"
 kind = "app"
 name = "Pull requests"
-about = "The GitHub pull requests linked to a Project's Threads (ADR 0076): Create PR's, an Agent's own `gh pr create`, its tools' and the Person's. It reads them through `gh`, one reader for the Project while something follows it, and works out what each needs and whose turn it is."
+about = "The GitHub pull requests linked to a Project's Tasks (ADR 0076): Create PR's, an Agent's own `gh pr create`, its tools' and the Person's. It reads them through `gh`, one reader for the Project while something follows it, and works out what each needs and whose turn it is."
 version = "0.1.0"
 # The major of the App API it is written to (ADR 0062, ADR 0082).
 api = 1

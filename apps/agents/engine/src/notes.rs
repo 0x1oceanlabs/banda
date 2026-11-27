@@ -13,7 +13,7 @@ pub const NOTE: usize = 140;
 
 /// What `notify` tells the Agent.
 pub const NOTED: &str = "Kept: your Person sees it when this turn ends, where they \
-will notice it, and not while they look at your Thread. Don't repeat it in your reply.";
+will notice it, and not while they look at your Task. Don't repeat it in your reply.";
 
 /// `text` trimmed, when it is one line of at most `most` characters; why
 /// a `what` is not, when it is not.

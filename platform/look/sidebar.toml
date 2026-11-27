@@ -1,5 +1,5 @@
 #:schema ./schemas/sidebar.schema.json
-# How Banda's sidebar arranges your Threads. Every key is optional: what
+# How Banda's sidebar arranges your Tasks. Every key is optional: what
 # you leave out is Banda's default, written below. Check a change with:
 # banda settings check
 
@@ -8,7 +8,7 @@
 
 # [inbox]
 # order = "oldest"                   # Your turn: "oldest" or "newest" first
-# open = true                        # Open: Threads seen, with no turn running
+# open = true                        # Open: Tasks seen, with no turn running
 # working = true                     # the Working shelf
 
 # [sort]

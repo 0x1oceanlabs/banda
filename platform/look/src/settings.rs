@@ -61,7 +61,7 @@ pub struct Settings {
     pub shadow: Shadows,
     #[serde(default)]
     pub bar: Bar,
-    /// The drawer, a quick Thread over the workspace (ADR 0025, decision 8).
+    /// The drawer, a quick Task over the workspace (ADR 0025, decision 8).
     #[serde(default)]
     pub drawer: Drawer,
     /// The overview of every workspace (ADR 0025, decision 7).
@@ -314,7 +314,7 @@ pub(crate) fn owned(ids: &[&str]) -> Vec<String> {
     ids.iter().map(|&id| id.to_owned()).collect()
 }
 
-/// The drawer: a Thread that drops from the top over the workspace.
+/// The drawer: a Task that drops from the top over the workspace.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Drawer {
@@ -322,7 +322,7 @@ pub struct Drawer {
     /// to 1.
     #[schemars(range(min = 0, max = 1))]
     pub height: Option<f64>,
-    /// The Harness its Thread starts on, as `"claude"`; this computer's
+    /// The Harness its Task starts on, as `"claude"`; this computer's
     /// first one when left out.
     pub harness: Option<String>,
 }

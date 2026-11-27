@@ -106,7 +106,7 @@ login_input: CallMethod<LoginInput, null>,
  */
 login_cancel: CallMethod<LoginId, null>, 
 /**
- * Removes an Account from choices and moves its Threads to the
+ * Removes an Account from choices and moves its Tasks to the
  * default after their current Turn. Keeps profiles and history;
  * refuses removing the default.
  */

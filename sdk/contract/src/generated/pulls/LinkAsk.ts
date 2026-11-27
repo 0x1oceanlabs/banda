@@ -9,6 +9,6 @@ export type LinkAsk = {
  */
 pull: string, 
 /**
- * The Thread; an Agent's own when it asks, so it leaves it out.
+ * The Task; an Agent's own when it asks, so it leaves it out.
  */
 thread?: string, };

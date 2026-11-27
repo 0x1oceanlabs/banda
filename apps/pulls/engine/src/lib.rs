@@ -77,17 +77,17 @@ banda_kernel::methods! {
         stream watch(Nothing) -> Listed, Read;
         /// Reads every open pull request of the Project again now.
         call refresh(Nothing) -> (), Read;
-        /// Links a pull request to a Thread, by its URL or `#42` in the
+        /// Links a pull request to a Task, by its URL or `#42` in the
         /// Project's own repository on GitHub: Banda shows what it needs
-        /// on the bar. An Agent links one to its own Thread.
+        /// on the bar. An Agent links one to its own Task.
         command link(LinkAsk) -> Pull, Write, tool "link_pull_request";
-        /// Lets go of a pull request in a Thread; what made it does not
+        /// Lets go of a pull request in a Task; what made it does not
         /// link it again.
         command unlink(LinkAsk) -> (), Write, tool "unlink_pull_request";
-        /// The pull requests a Thread links, with what each needs: an
-        /// Agent's own Thread's when it asks. Not to check on CI: Banda
+        /// The pull requests a Task links, with what each needs: an
+        /// Agent's own Task's when it asks. Not to check on CI: Banda
         /// watches them.
-        call list_thread(ThreadAsk) -> Vec<Pull>, Read, tool "list_thread_pull_requests";
+        call list_thread(ThreadAsk) -> Vec<Pull>, Read, tool "list_task_pull_requests", was "list_thread_pull_requests";
     }
 }
 

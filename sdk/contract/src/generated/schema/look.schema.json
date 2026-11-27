@@ -75,7 +75,7 @@
       "x-class": "device"
     },
     "drawer": {
-      "description": "The drawer, a quick Thread over the workspace (ADR 0025, decision 8).",
+      "description": "The drawer, a quick Task over the workspace (ADR 0025, decision 8).",
       "$ref": "#/$defs/Drawer",
       "x-class": "device"
     },
@@ -403,7 +403,7 @@
       "additionalProperties": false
     },
     "Drawer": {
-      "description": "The drawer: a Thread that drops from the top over the workspace.",
+      "description": "The drawer: a Task that drops from the top over the workspace.",
       "type": "object",
       "properties": {
         "height": {
@@ -414,7 +414,7 @@
           "maximum": 1
         },
         "harness": {
-          "description": "The Harness its Thread starts on, as `\"claude\"`; this computer's\nfirst one when left out.",
+          "description": "The Harness its Task starts on, as `\"claude\"`; this computer's\nfirst one when left out.",
           "type": "string"
         }
       },
@@ -745,7 +745,7 @@
           "$ref": "#/$defs/Toasts"
         },
         "detail": {
-          "description": "What the Thread said, in the words; false shows only its title.",
+          "description": "What the Task said, in the words; false shows only its title.",
           "type": "boolean"
         },
         "quiet": {
@@ -754,15 +754,15 @@
           "$ref": "#/$defs/Quiet"
         },
         "done": {
-          "description": "Whether a Thread that finished tells you.",
+          "description": "Whether a Task that finished tells you.",
           "type": "boolean"
         },
         "asking": {
-          "description": "Whether a Thread that asks you something tells you.",
+          "description": "Whether a Task that asks you something tells you.",
           "type": "boolean"
         },
         "failed": {
-          "description": "Whether a Thread that failed tells you.",
+          "description": "Whether a Task that failed tells you.",
           "type": "boolean"
         },
         "problems": {

@@ -30,7 +30,7 @@
   "x-class": "shared",
   "$defs": {
     "Flow": {
-      "description": "How an Agent's windows stand, its Flow (ADR 0079): where its Thread\nopens, and what a pick of it shows.",
+      "description": "How an Agent's windows stand, its Flow (ADR 0079): where its Task\nopens, and what a pick of it shows.",
       "oneOf": [
         {
           "description": "Where the window has it: beside the Pane in front, and a pick goes\nto wherever its Pane is. `off` before ADR 0079 (grace).",
@@ -142,7 +142,7 @@
           "const": "group"
         },
         {
-          "description": "Last on its Project's workspace, in the row, as a Thread opens (ADR\n0102).",
+          "description": "Last on its Project's workspace, in the row, as a Task opens (ADR\n0102).",
           "type": "string",
           "const": "project"
         },
@@ -172,7 +172,7 @@
           "$ref": "#/$defs/Via"
         },
         "from": {
-          "description": "What is in front: \"pane\", any Pane; or \"group\", a Thread or a Pane\nin a Group.",
+          "description": "What is in front: \"pane\", any Pane; or \"group\", a Task or a Pane\nin a Group.",
           "$ref": "#/$defs/Front"
         },
         "opens": {
@@ -209,7 +209,7 @@
           "const": "pane"
         },
         {
-          "description": "It is a Thread, or a Pane in a Group.",
+          "description": "It is a Task, or a Pane in a Group.",
           "type": "string",
           "const": "group"
         }

@@ -25,7 +25,7 @@
 # display = "stack"                  # "stack" or "deck": how a new column shows its Panes
 
 # A rule for one kind of Pane, in a table named by the kind: this one is
-# for a terminal, `terminal.terminal`. A Thread is `agents.thread`, the
+# for a terminal, `terminal.terminal`. A Task is `agents.thread`, the
 # browser `browser.browser`, the Diff `git.diff`, Files `files.tree` and a
 # file `files.file`; `banda call workspaces.list` names the kind of each
 # Pane now open. A kind with no rule opens as its App and the Flow say.
@@ -46,14 +46,14 @@
 # Lines that say where it opens by how you ask for it and from what, each
 # a `when` table, read in order before `opens`. `via` is "click", in the
 # Pane in front, a path or a link; or "key", a key, a menu, the sidebar or
-# banda. `from` is "pane", any Pane in front; or "group", a Thread or a
+# banda. `from` is "pane", any Pane in front; or "group", a Task or a
 # Pane in a Group. `opens` is a place as above, or "beside-group", right
 # of the whole Group; "project-start", first on its Project's workspace,
 # in the row; "here", last on the workspace on screen. What a line leaves
 # out, it does not ask. A line goes before Banda's own, so "project" in a
-# line sends a Pane clicked in a Thread to its Project's workspace, where
-# `opens` of the rule leaves it to the Thread's Group. What an Agent opens
-# goes into its Thread's Group whatever a line says.
+# line sends a Pane clicked in a Task to its Project's workspace, where
+# `opens` of the rule leaves it to the Task's Group. What an Agent opens
+# goes into its Task's Group whatever a line says.
 # [[rule.terminal.terminal.when]]
 # via = "click"
 # from = "group"

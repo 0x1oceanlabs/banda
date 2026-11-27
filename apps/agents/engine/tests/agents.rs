@@ -5961,7 +5961,7 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
     assert_eq!(send["kind"], "command");
     let description = send["description"].as_str().unwrap();
     assert!(
-        description.starts_with("Writes into a Thread of this Project"),
+        description.starts_with("Writes into a Task of this Project"),
         "{description}"
     );
     let given: Vec<_> = send["schema"]["properties"]
@@ -5973,25 +5973,26 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
     let thread = json!({
         "type": "string",
         "format": "uuid",
-        "description": "The Thread's ID, as `threads` lists it."
+        "description": "The Task's ID, as `tasks` lists it."
     });
     assert_eq!(
         tools,
         json!([
             {
-                "name": "threads",
+                "name": "tasks",
                 "method": "agents.threads",
                 "kind": "call",
-                "description": "The Threads of this Project, the latest first: each one's ID, \
+                "description": "The Tasks of this Project, the latest first: each one's ID, \
                     title and Harness, what it was last asked, how its latest turn stands, and \
                     the Questions it waits on.",
-                "schema": { "type": "object", "properties": {} }
+                "schema": { "type": "object", "properties": {} },
+                "was": ["threads"]
             },
             {
                 "name": "read",
                 "method": "agents.thread",
                 "kind": "call",
-                "description": "One Thread of this Project as its Person reads it: its messages \
+                "description": "One Task of this Project as its Person reads it: its messages \
                     and replies, its turns and what each may do now, and its settings.",
                 "schema": {
                     "type": "object",
@@ -6273,7 +6274,7 @@ async fn an_agent_writes_to_another_thread_and_its_answer_comes_back() {
     assert!(asks);
     assert_eq!(world.posted_answers(&b).await, [Value::Null, Value::Null]);
     let from = format!(
-        "message: You said: The Agent of Thread \"hello\" ({}), another Agent of this Project",
+        "message: You said: The Agent of Task \"hello\" ({}), another Agent of this Project",
         a.as_str().unwrap()
     );
     assert!(said[5].starts_with(&from), "{}", said[5]);
@@ -6291,7 +6292,7 @@ async fn an_agent_writes_to_another_thread_and_its_answer_comes_back() {
     let said_in_a = texts(&view);
     assert_eq!(said_in_a[3], said[5], "the answer is B's last reply");
     let from = format!(
-        "message: You said: The Agent of Thread \"hi there\" ({}), another Agent of this Project, answers",
+        "message: You said: The Agent of Task \"hi there\" ({}), another Agent of this Project, answers",
         b.as_str().unwrap()
     );
     assert!(said_in_a[5].starts_with(&from), "{}", said_in_a[5]);

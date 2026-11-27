@@ -8,7 +8,7 @@
 # version and system. Each problem once a day.
 problems = false
 
-# Send usage counts: one summary a day of how many Threads, Turns and
+# Send usage counts: one summary a day of how many Tasks, Turns and
 # Panes, by kind, and the country of the system's language. Never words,
 # paths or names.
 usage = false

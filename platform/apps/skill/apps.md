@@ -39,7 +39,7 @@ can isolate them.
    `banda call clients.find`. Fix, raise `version`, and install again:
    installing over itself keeps what it holds.
 6. `banda app list` shows it as installed. Its tools (`clients_add`, …)
-   are in your session now, and in every Thread's. Tell your Person in a
+   are in your session now, and in every Task's. Tell your Person in a
    sentence or two what it does, that they can ask any Agent for it
    ("add Anna to my clients"), and that what it keeps is each Project's
    own.
@@ -170,7 +170,7 @@ runs in the window.
   where it is wrong: `children[0] (Tabel): there is no such node`.
 - Show it to your Person: the `open_pane` tool with the kind `apps.view`
   and args `{"app": "clients", "view": "home"}` opens it beside your
-  Thread.
+  Task.
 - It is read again whenever the App emits an event: emit one in each
   command that changes what a screen shows, as `add` and `note` do.
 

@@ -74,7 +74,7 @@ pub struct WhenSettings {
     /// "key", a key, a menu, the sidebar or banda.
     #[schemars(with = "Option<Via>")]
     pub via: Option<Spanned<toml::Value>>,
-    /// What is in front: "pane", any Pane; or "group", a Thread or a Pane
+    /// What is in front: "pane", any Pane; or "group", a Task or a Pane
     /// in a Group.
     #[schemars(with = "Option<Front>")]
     pub from: Option<Spanned<toml::Value>>,

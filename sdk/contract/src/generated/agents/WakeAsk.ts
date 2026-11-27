@@ -2,10 +2,10 @@
 import type { ThreadId } from "./ThreadId";
 
 /**
- * What `agents.wake` is asked: a Thread.
+ * What `agents.wake` is asked: a Task.
  */
 export type WakeAsk = { 
 /**
- * The Thread's ID, as `threads` lists it; an Agent's own by default.
+ * The Task's ID, as `tasks` lists it; an Agent's own by default.
  */
 thread?: ThreadId, };

@@ -10,12 +10,12 @@
       "x-class": "shared"
     },
     "start": {
-      "description": "How a new Thread starts: on which account (ADR 0093, decision 7),\nand with what on each Harness, by the Harness's ID: `[start.claude]`.\nThe Agents section sets it from the composer's bar.",
+      "description": "How a new Task starts: on which account (ADR 0093, decision 7),\nand with what on each Harness, by the Harness's ID: `[start.claude]`.\nThe Agents section sets it from the composer's bar.",
       "$ref": "#/$defs/Starts",
       "x-class": "machine"
     },
     "models": {
-      "description": "The models in each Harness's menu, by the Harness's ID, as its\nThreads offer them: `claude = [\"default\", \"opus\", \"sonnet\"]` (ADR\n0114, decision 7). The stars in \"All models\" set it; with none\nnamed, the menu holds the first three the Harness offers.",
+      "description": "The models in each Harness's menu, by the Harness's ID, as its\nTasks offer them: `claude = [\"default\", \"opus\", \"sonnet\"]` (ADR\n0114, decision 7). The stars in \"All models\" set it; with none\nnamed, the menu holds the first three the Harness offers.",
       "type": "object",
       "additionalProperties": {
         "type": "array",
@@ -26,7 +26,7 @@
       "x-class": "machine"
     },
     "seen-after": {
-      "description": "How many seconds the focus stays on a Thread it only came to, by\nthe Strip's scroll or a key that moves the focus, before its mark\ncounts as seen: 0 at once. A click or a key in it counts at once (ADR 0096,\ndecision 3).",
+      "description": "How many seconds the focus stays on a Task it only came to, by\nthe Strip's scroll or a key that moves the focus, before its mark\ncounts as seen: 0 at once. A click or a key in it counts at once (ADR 0096,\ndecision 3).",
       "type": "number",
       "format": "double",
       "x-class": "device"
@@ -51,15 +51,15 @@
       ]
     },
     "Starts": {
-      "description": "`agents.toml`'s `[start]`: the accounts a new Thread starts on, and\nwhat it starts with on each Harness.",
+      "description": "`agents.toml`'s `[start]`: the accounts a new Task starts on, and\nwhat it starts with on each Harness.",
       "type": "object",
       "properties": {
         "account": {
-          "description": "The account a new Thread starts on, by its entry's ID in\nharnesses.toml: `account = \"work\"`. By default the first one on.",
+          "description": "The account a new Task starts on, by its entry's ID in\nharnesses.toml: `account = \"work\"`. By default the first one on.",
           "type": "string"
         },
         "fallback": {
-          "description": "The account a new Thread starts on while `account` is out, a limit\nwindow spent, when it has room itself; of any Harness:\n`fallback = \"personal\"`. By default none.",
+          "description": "The account a new Task starts on while `account` is out, a limit\nwindow spent, when it has room itself; of any Harness:\n`fallback = \"personal\"`. By default none.",
           "type": "string"
         }
       },
@@ -68,7 +68,7 @@
       }
     },
     "Start": {
-      "description": "What a new Thread on a Harness starts with, over the Harness's own:\nwhat it leaves out, the Harness chooses.",
+      "description": "What a new Task on a Harness starts with, over the Harness's own:\nwhat it leaves out, the Harness chooses.",
       "type": "object",
       "properties": {
         "mode": {
@@ -85,7 +85,7 @@
       }
     },
     "Mode": {
-      "description": "How freely an Agent acts in a Thread (ADR 0003, decision 9). A Harness\nthat has modes of its own enforces the mode; for any other, the engine\nanswers the Harness's Questions by it.",
+      "description": "How freely an Agent acts in a Task (ADR 0003, decision 9). A Harness\nthat has modes of its own enforces the mode; for any other, the engine\nanswers the Harness's Questions by it.",
       "oneOf": [
         {
           "description": "It asks before it changes anything.",

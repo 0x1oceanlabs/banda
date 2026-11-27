@@ -52,18 +52,18 @@ pub struct NotifySettings {
     pub system: Option<System>,
     /// When a call becomes a toast in the window.
     pub window: Option<Toasts>,
-    /// What the Thread said, in the words; false shows only its title.
+    /// What the Task said, in the words; false shows only its title.
     pub detail: Option<bool>,
     /// Whether the desktop's Do Not Disturb keeps Banda quiet too: no
     /// toast, no notice and no sound while it is on. Banda's own Quiet,
     /// the bell at the sidebar's foot, is apart from it.
     #[schemars(title = "Do Not Disturb")]
     pub quiet: Option<Quiet>,
-    /// Whether a Thread that finished tells you.
+    /// Whether a Task that finished tells you.
     pub done: Option<bool>,
-    /// Whether a Thread that asks you something tells you.
+    /// Whether a Task that asks you something tells you.
     pub asking: Option<bool>,
-    /// Whether a Thread that failed tells you.
+    /// Whether a Task that failed tells you.
     pub failed: Option<bool>,
     /// Whether something new that broke in Banda itself tells you, with
     /// no sound (ADR 0039).

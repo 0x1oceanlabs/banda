@@ -158,7 +158,7 @@ fn logged(fence: &banda_kernel::Fence) {
             ?movable,
             "the fence holds partly: these links in what it keeps read-only lead through one \
              this user can move, or into no folder there is, so an Agent could lead them \
-             elsewhere; new Threads start Supervised"
+             elsewhere; new Tasks start Supervised"
         ),
         Fence::Holds {
             layers,
@@ -167,7 +167,7 @@ fn logged(fence: &banda_kernel::Fence) {
         } => tracing::warn!(
             ?layers,
             "the fence holds, but this user is in the docker group, which reaches past it: \
-             new Threads start Supervised"
+             new Tasks start Supervised"
         ),
         Fence::Holds { layers, .. } if !fence.holds_whole() => {
             tracing::warn!(

@@ -259,7 +259,7 @@ impl Mcp {
             return Ok(skill(&arguments));
         }
         let tools = &self.connected().await.map_err(lost)?.tools;
-        let Some(tool) = tools.iter().find(|tool| tool.name == name).cloned() else {
+        let Some(tool) = named(tools, name).cloned() else {
             let text = format!("Banda has no tool \"{name}\". Nothing was done.");
             return Ok(said(text, true));
         };
@@ -367,6 +367,13 @@ fn refused(refusal: &Refusal) -> Value {
     said(text, true)
 }
 
+/// The tool an Agent calls as `name`: the one of that name, or else one
+/// that had it (ADR 0138, decision 5).
+fn named<'a>(tools: &'a [Tool], name: &str) -> Option<&'a Tool> {
+    let had = |tool: &&Tool| tool.was.iter().any(|was| was == name);
+    (tools.iter().find(|tool| tool.name == name)).or_else(|| tools.iter().find(had))
+}
+
 /// The answer to a tool call the engine broke off on, when its method is
 /// not a command: with no receipt to answer a resend from, it was not sent
 /// again, and its Agent looks before it asks again.
@@ -405,6 +412,20 @@ fn skill(arguments: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tool_answers_to_the_name_it_had_unless_another_has_it_now() {
+        let tool = |name: &str, was: &[&str]| {
+            let tool = json!({ "name": name, "method": format!("a.{name}"), "description": "", "schema": {}, "was": was });
+            serde_json::from_value::<Tool>(tool).unwrap()
+        };
+        let tools = [tool("tasks", &["threads"]), tool("read", &[])];
+        assert_eq!(named(&tools, "tasks").unwrap().name, "tasks");
+        assert_eq!(named(&tools, "threads").unwrap().name, "tasks");
+        assert!(named(&tools, "thread").is_none());
+        let taken = [tool("tasks", &["threads"]), tool("threads", &[])];
+        assert_eq!(named(&taken, "threads").unwrap().name, "threads");
+    }
 
     #[test]
     fn an_answer_says_its_text_and_shows_its_pictures() {

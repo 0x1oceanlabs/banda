@@ -1,6 +1,6 @@
 #:schema ./schemas/machine.schema.json
 # This machine's name and icon, as every window shows it beside its
-# Projects and Threads, whether Banda starts at login here, and when it
+# Projects and Tasks, whether Banda starts at login here, and when it
 # stays awake. Settings → Machines writes it, here or from another machine
 # through this one's engine. Check a change with: banda settings check
 

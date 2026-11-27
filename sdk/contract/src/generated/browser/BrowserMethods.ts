@@ -15,7 +15,7 @@ import type { WaitFor } from "./WaitFor";
 export type BrowserMethods = { 
 /**
  * The tabs you may use: those your Project's Agents opened, and
- * those your Person lent your Thread. Each with its id, which the
+ * those your Person lent your Task. Each with its id, which the
  * other browser tools take, its address and title, whether an
  * Agent drives it now, and whether it is lent. Your Project's tabs
  * load in a browser profile of their own, signed out of your

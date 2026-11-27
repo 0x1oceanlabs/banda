@@ -294,8 +294,8 @@ banda_kernel::methods! {
         /// ones you opened, which alone you move and close.
         call panes(Nothing) -> Vec<SeenWorkspace>, Read, tool "panes";
         /// Opens a Pane of your Project for your Person to see: one of its
-        /// Threads (`agents.thread`, args `{"thread": "<id>"}` alone, an ID
-        /// `threads` lists; `send` starts a Thread), the Diff (`git.diff`,
+        /// Tasks (`agents.thread`, args `{"thread": "<id>"}` alone, an ID
+        /// `tasks` lists; `send` starts a Task), the Diff (`git.diff`,
         /// args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
         /// `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with
         /// `"file": "<path>"` to show one), a file (`files.file`, args
@@ -307,12 +307,12 @@ banda_kernel::methods! {
         /// "<name>"}`, with `"args": {…}` when the view takes any).
         /// Only the args that choose what a Pane shows are yours to give;
         /// the rest are your Person's. Beside a Pane `panes` lists; left
-        /// out, right of your Thread, in its Group, when your Thread is
+        /// out, right of your Task, in its Group, when your Task is
         /// shown, else last on your Project's workspace, or beside your
-        /// Project's Panes when it has none. A Thread opens as a Group of
+        /// Project's Panes when it has none. A Task opens as a Group of
         /// its own; left out, last on your Project's workspace or beside
-        /// your Project's Panes, never in your Thread's. One shown already,
-        /// a Thread's by its ID, stays where it is, and is named. It takes
+        /// your Project's Panes, never in your Task's. One shown already,
+        /// a Task's by its ID, stays where it is, and is named. It takes
         /// no focus; the Person sees a mark on it until they look.
         command open_pane(OpenPane) -> Opened, Write, tool "open_pane";
         /// Moves a Pane you opened beside another that `panes` lists. When
@@ -460,14 +460,14 @@ pub struct OpenPane {
     /// `browser.browser` or `apps.view`.
     pub kind: String,
     /// The kind's own, an object, only those that choose what it shows:
-    /// a Thread's ID alone for a Thread's Pane, a web address alone for a
+    /// a Task's ID alone for a Task's Pane, a web address alone for a
     /// browser, a folder of your Project for Files.
     #[schemars(with = "serde_json::Map<String, Value>")]
     pub args: Value,
     /// A Pane `panes` lists, to open it beside. Left out, right of your
-    /// Thread, in its Group, when your Thread is shown, else last on your
+    /// Task, in its Group, when your Task is shown, else last on your
     /// Project's workspace, or beside your Project's Panes when it has
-    /// none; a Thread, last on that workspace or beside those Panes.
+    /// none; a Task, last on that workspace or beside those Panes.
     #[serde(default)]
     #[ts(optional)]
     pub beside: Option<Beside>,

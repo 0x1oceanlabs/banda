@@ -424,11 +424,11 @@ impl Agents {
 
 banda_kernel::methods! {
     Agents(Call) as "AgentsMethods" in "agents/" {
-        /// The Threads of this Project, the latest first: each one's ID, title
+        /// The Tasks of this Project, the latest first: each one's ID, title
         /// and Harness, what it was last asked, how its latest turn stands,
         /// and the Questions it waits on.
-        call threads(Nothing) -> ThreadList, Read, tool "threads";
-        /// One Thread of this Project as its Person reads it: its messages and
+        call threads(Nothing) -> ThreadList, Read, tool "tasks", was "threads";
+        /// One Task of this Project as its Person reads it: its messages and
         /// replies, its turns and what each may do now, and its settings.
         call thread(OneThread) -> ThreadView, Read, tool "read";
         /// One sub-agent of a Thread, read only, as its Pane and its row
@@ -480,11 +480,11 @@ banda_kernel::methods! {
         /// once, then each Thread's as it changes, no more than once a
         /// second; a Thread's comes with nothing as its turn ends.
         stream doing(Nothing) -> ThreadsDoing, Read;
-        /// Writes into a Thread of this Project, or starts a new Thread on a
-        /// Harness. Its Agent reads that the message is from your Thread's
+        /// Writes into a Task of this Project, or starts a new Task on a
+        /// Harness. Its Agent reads that the message is from your Task's
         /// Agent, not its Person; when the turn it asks for ends, its last
-        /// reply comes back to your Thread by itself. A message waits its
-        /// turn in a Thread that works; a Person's with `steer` joins the
+        /// reply comes back to your Task by itself. A message waits its
+        /// turn in a Task that works; a Person's with `steer` joins the
         /// turn that runs.
         command send(Send) -> Sent, Write, tool "send";
         /// A waiting message's new text.
@@ -521,11 +521,11 @@ banda_kernel::methods! {
         /// A file a message points at, kept in the Project: one dropped on
         /// the Thread, or a long text pasted.
         command keep(Keep) -> Kept, Write;
-        /// Shows your Person a finished HTML page in your Thread, above
+        /// Shows your Person a finished HTML page in your Task, above
         /// your reply: a mockup, a chart, a diagram, how a feature works,
         /// an animation, a sound. Don't announce or describe it after;
         /// say only what it doesn't. The frame is your reply's width, on
-        /// the Thread's own background, and fits the page's height up to
+        /// the Task's own background, and fits the page's height up to
         /// 20000px. Leave html, body and the outer element with no
         /// background colour, no outer card, border, banner title or side
         /// padding; Banda adds an 8px gutter for focus rings and shadows.
@@ -567,7 +567,7 @@ banda_kernel::methods! {
         /// notification say it in place of what they asked. Call it last,
         /// once a turn worth telling of is done; a second call replaces
         /// the first. It shows nothing until the turn ends, and nothing
-        /// while they look at your Thread.
+        /// while they look at your Task.
         command notify(Notify) -> String, Write, tool "notify";
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
@@ -576,22 +576,22 @@ banda_kernel::methods! {
         /// window on another machine shows it (ADR 0106, decision 6). An
         /// Agent is given none.
         call visual_link(OneVisual) -> VisualLink, Read;
-        /// Puts off your own Thread: it leaves your Person's list for
+        /// Puts off your own Task: it leaves your Person's list for
         /// `after` (`30m`, `2h`, `1d`, a year at most), or until `until`,
         /// in milliseconds since the epoch. Give one of them: with
         /// neither, it leaves the list only until this turn ends.
         /// Anything that needs your Person wakes it early, and so does
         /// their message. It does not wake you or start a turn. Use it
         /// when you wait on something slow and have nothing for your
-        /// Person meanwhile. A Thread that asks may be put off: it comes
+        /// Person meanwhile. A Task that asks may be put off: it comes
         /// back with the same question, and a new one wakes it early. One
         /// your Person put off to go on by itself cannot be. A Person
-        /// puts off any Thread, and also Someday, which never wakes by
+        /// puts off any Task, and also Someday, which never wakes by
         /// itself (ADR 0074; ADR 0098, decisions 11 and 12).
         command later(LaterAsk) -> (), Write, tool "later";
-        /// Brings your own put-off Thread back to your Person's list now,
+        /// Brings your own put-off Task back to your Person's list now,
         /// as when what you waited on came early. One awake stays so. A
-        /// Person wakes any Thread (ADR 0074).
+        /// Person wakes any Task (ADR 0074).
         command wake(WakeAsk) -> (), Write, tool "wake";
         /// Marks that its Person saw a Thread wake by itself, or dismissed
         /// that it did (ADR 0074): its row no longer says it woke, and,
@@ -752,7 +752,7 @@ enum Written {
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "agents/")]
 struct OneThread {
-    /// The Thread's ID, as `threads` lists it.
+    /// The Task's ID, as `tasks` lists it.
     thread: ThreadId,
 }
 
@@ -770,15 +770,15 @@ struct OneCrew {
     crew: CrewId,
 }
 
-/// A message in a Thread, or the first one of a new Thread on a Harness.
+/// A message in a Task, or the first one of a new Task on a Harness.
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "agents/")]
 struct Send {
-    /// The Thread to write into, as `threads` lists it.
+    /// The Task to write into, as `tasks` lists it.
     #[serde(default)]
     #[ts(optional = nullable)]
     thread: Option<ThreadId>,
-    /// Or the Harness a new Thread starts on, as `threads` names them.
+    /// Or the Harness a new Task starts on, as `tasks` names them.
     #[serde(default)]
     #[ts(optional = nullable)]
     harness: Option<String>,
@@ -791,8 +791,8 @@ struct Send {
     #[ts(as = "Option<Vec<ImageId>>", optional)]
     #[schemars(skip)]
     images: Vec<ImageId>,
-    /// What a new Thread starts with, instead of its Harness's defaults;
-    /// or the Thread's settings from this turn on.
+    /// What a new Task starts with, instead of its Harness's defaults;
+    /// or the Task's settings from this turn on.
     #[serde(default)]
     #[ts(optional = nullable)]
     #[schemars(skip)]
@@ -804,7 +804,7 @@ struct Send {
     #[schemars(skip)]
     steer: bool,
     /// Where the Person writes it from: their window's machine, and
-    /// whether that is the Thread's (ADR 0122). A window says it.
+    /// whether that is the Task's (ADR 0122). A window says it.
     #[serde(default)]
     #[ts(optional = nullable)]
     #[schemars(skip)]
@@ -848,7 +848,7 @@ pub struct Kept {
     pub path: String,
 }
 
-/// A page to show in your Thread.
+/// A page to show in your Task.
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "agents/")]
 struct ShowVisual {

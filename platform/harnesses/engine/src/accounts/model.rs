@@ -267,12 +267,12 @@ pub struct UpdateAccount {
     pub enabled: Option<bool>,
 }
 
-/// Which account a new Thread starts on.
+/// Which account a new Task starts on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "harnesses/")]
 pub enum StartRole {
-    /// Where a new Thread starts.
+    /// Where a new Task starts.
     Account,
     /// Where it starts while the default is out of its limits.
     Fallback,

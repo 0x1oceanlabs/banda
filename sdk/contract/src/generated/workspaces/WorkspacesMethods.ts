@@ -150,8 +150,8 @@ unarrange: CommandMethod<Nothing, Done>,
 panes: CallMethod<Nothing, Array<SeenWorkspace>>, 
 /**
  * Opens a Pane of your Project for your Person to see: one of its
- * Threads (`agents.thread`, args `{"thread": "<id>"}` alone, an ID
- * `threads` lists; `send` starts a Thread), the Diff (`git.diff`,
+ * Tasks (`agents.thread`, args `{"thread": "<id>"}` alone, an ID
+ * `tasks` lists; `send` starts a Task), the Diff (`git.diff`,
  * args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
  * `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with
  * `"file": "<path>"` to show one), a file (`files.file`, args
@@ -163,12 +163,12 @@ panes: CallMethod<Nothing, Array<SeenWorkspace>>,
  * "<name>"}`, with `"args": {…}` when the view takes any).
  * Only the args that choose what a Pane shows are yours to give;
  * the rest are your Person's. Beside a Pane `panes` lists; left
- * out, right of your Thread, in its Group, when your Thread is
+ * out, right of your Task, in its Group, when your Task is
  * shown, else last on your Project's workspace, or beside your
- * Project's Panes when it has none. A Thread opens as a Group of
+ * Project's Panes when it has none. A Task opens as a Group of
  * its own; left out, last on your Project's workspace or beside
- * your Project's Panes, never in your Thread's. One shown already,
- * a Thread's by its ID, stays where it is, and is named. It takes
+ * your Project's Panes, never in your Task's. One shown already,
+ * a Task's by its ID, stays where it is, and is named. It takes
  * no focus; the Person sees a mark on it until they look.
  */
 open_pane: CommandMethod<OpenPane, Opened>, 

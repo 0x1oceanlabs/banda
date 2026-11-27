@@ -3,6 +3,6 @@ import type { ThreadId } from "./ThreadId";
 
 export type OneThread = { 
 /**
- * The Thread's ID, as `threads` lists it.
+ * The Task's ID, as `tasks` lists it.
  */
 thread: ThreadId, };

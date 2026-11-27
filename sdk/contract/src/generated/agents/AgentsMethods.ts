@@ -65,13 +65,13 @@ import type { Written } from "./Written";
 
 export type AgentsMethods = { 
 /**
- * The Threads of this Project, the latest first: each one's ID, title
+ * The Tasks of this Project, the latest first: each one's ID, title
  * and Harness, what it was last asked, how its latest turn stands,
  * and the Questions it waits on.
  */
 threads: CallMethod<Nothing, ThreadList>, 
 /**
- * One Thread of this Project as its Person reads it: its messages and
+ * One Task of this Project as its Person reads it: its messages and
  * replies, its turns and what each may do now, and its settings.
  */
 thread: CallMethod<OneThread, ThreadView>, 
@@ -143,11 +143,11 @@ touching: StreamMethod<Nothing, Touching>,
  */
 doing: StreamMethod<Nothing, ThreadsDoing>, 
 /**
- * Writes into a Thread of this Project, or starts a new Thread on a
- * Harness. Its Agent reads that the message is from your Thread's
+ * Writes into a Task of this Project, or starts a new Task on a
+ * Harness. Its Agent reads that the message is from your Task's
  * Agent, not its Person; when the turn it asks for ends, its last
- * reply comes back to your Thread by itself. A message waits its
- * turn in a Thread that works; a Person's with `steer` joins the
+ * reply comes back to your Task by itself. A message waits its
+ * turn in a Task that works; a Person's with `steer` joins the
  * turn that runs.
  */
 send: CommandMethod<Send, Sent>, 
@@ -212,11 +212,11 @@ image: CallMethod<OneImage, ImageData>,
  */
 keep: CommandMethod<Keep, Kept>, 
 /**
- * Shows your Person a finished HTML page in your Thread, above
+ * Shows your Person a finished HTML page in your Task, above
  * your reply: a mockup, a chart, a diagram, how a feature works,
  * an animation, a sound. Don't announce or describe it after;
  * say only what it doesn't. The frame is your reply's width, on
- * the Thread's own background, and fits the page's height up to
+ * the Task's own background, and fits the page's height up to
  * 20000px. Leave html, body and the outer element with no
  * background colour, no outer card, border, banner title or side
  * padding; Banda adds an 8px gutter for focus rings and shadows.
@@ -266,7 +266,7 @@ answer_issue: CommandMethod<AnswerIssue, null>,
  * notification say it in place of what they asked. Call it last,
  * once a turn worth telling of is done; a second call replaces
  * the first. It shows nothing until the turn ends, and nothing
- * while they look at your Thread.
+ * while they look at your Task.
  */
 notify: CommandMethod<Notify, string>, 
 /**
@@ -281,24 +281,24 @@ visual: CallMethod<OneVisual, VisualPage>,
  */
 visual_link: CallMethod<OneVisual, VisualLink>, 
 /**
- * Puts off your own Thread: it leaves your Person's list for
+ * Puts off your own Task: it leaves your Person's list for
  * `after` (`30m`, `2h`, `1d`, a year at most), or until `until`,
  * in milliseconds since the epoch. Give one of them: with
  * neither, it leaves the list only until this turn ends.
  * Anything that needs your Person wakes it early, and so does
  * their message. It does not wake you or start a turn. Use it
  * when you wait on something slow and have nothing for your
- * Person meanwhile. A Thread that asks may be put off: it comes
+ * Person meanwhile. A Task that asks may be put off: it comes
  * back with the same question, and a new one wakes it early. One
  * your Person put off to go on by itself cannot be. A Person
- * puts off any Thread, and also Someday, which never wakes by
+ * puts off any Task, and also Someday, which never wakes by
  * itself (ADR 0074; ADR 0098, decisions 11 and 12).
  */
 later: CommandMethod<LaterAsk, null>, 
 /**
- * Brings your own put-off Thread back to your Person's list now,
+ * Brings your own put-off Task back to your Person's list now,
  * as when what you waited on came early. One awake stays so. A
- * Person wakes any Thread (ADR 0074).
+ * Person wakes any Task (ADR 0074).
  */
 wake: CommandMethod<WakeAsk, null>, 
 /**

@@ -63,7 +63,7 @@ pub fn only_the_person(parts: &[&str], value: Option<&str>) -> Option<&'static s
     }
 }
 
-const MODE_WORDS: &str = "Only your Person chooses how freely a new Thread's Agent acts. Give \
+const MODE_WORDS: &str = "Only your Person chooses how freely a new Task's Agent acts. Give \
                           them the line, to set it themselves.";
 
 /// Keeps what the Person chose as a Harness's new Threads' mode, in

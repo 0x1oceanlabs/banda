@@ -5,15 +5,15 @@ import type { ThreadId } from "./ThreadId";
 import type { WrittenFrom } from "./WrittenFrom";
 
 /**
- * A message in a Thread, or the first one of a new Thread on a Harness.
+ * A message in a Task, or the first one of a new Task on a Harness.
  */
 export type Send = { 
 /**
- * The Thread to write into, as `threads` lists it.
+ * The Task to write into, as `tasks` lists it.
  */
 thread?: ThreadId | null, 
 /**
- * Or the Harness a new Thread starts on, as `threads` names them.
+ * Or the Harness a new Task starts on, as `tasks` names them.
  */
 harness?: string | null, 
 /**
@@ -25,8 +25,8 @@ text?: string,
  */
 images?: Array<ImageId>, 
 /**
- * What a new Thread starts with, instead of its Harness's defaults;
- * or the Thread's settings from this turn on.
+ * What a new Task starts with, instead of its Harness's defaults;
+ * or the Task's settings from this turn on.
  */
 settings?: Settings | null, 
 /**
@@ -36,6 +36,6 @@ settings?: Settings | null,
 steer?: boolean, 
 /**
  * Where the Person writes it from: their window's machine, and
- * whether that is the Thread's (ADR 0122). A window says it.
+ * whether that is the Task's (ADR 0122). A window says it.
  */
 from?: WrittenFrom | null, };
