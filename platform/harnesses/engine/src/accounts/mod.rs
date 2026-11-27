@@ -385,8 +385,18 @@ impl Accounts {
     }
 
     pub(crate) async fn account(&self, call: Call, harness: String) -> Result<Accounted, Refusal> {
+        self.account_in(call.project(), harness).await
+    }
+
+    /// [`Accounts::account`] in `project`, the machine's: what a setup
+    /// asks, which no call waits for.
+    pub(crate) async fn account_in(
+        &self,
+        project: &ModuleProject,
+        harness: String,
+    ) -> Result<Accounted, Refusal> {
         // Read before the Harness is: a change after it is a later event.
-        let at = call.project().at().await?;
+        let at = project.at().await?;
         if let Ok(gateway) = self.gateway(&harness) {
             let account = Account {
                 ways: Vec::new(),
@@ -397,7 +407,7 @@ impl Accounts {
             };
             return Ok(Accounted { at, account });
         }
-        let (harness, asker, _asking) = self.asker(&call, &harness).await?;
+        let (harness, asker, _asking) = self.asker(project, &harness).await?;
         let mut account = asker.process.account(&harness).await?;
         if let Some(cli) = &account.cli {
             account.ways.extend(elsewhere(&harness, &cli.path));
@@ -451,6 +461,18 @@ impl Accounts {
         call: Call,
         args: LoginAccount,
     ) -> Result<LoginStatus, Refusal> {
+        self.login_in(call.project(), call.participant(), args)
+            .await
+    }
+
+    /// [`Accounts::login_account`] in `project`, the machine's, as `by`
+    /// asked: what a setup starts, which no call waits for.
+    pub(crate) async fn login_in(
+        &self,
+        project: &ModuleProject,
+        by: Participant,
+        args: LoginAccount,
+    ) -> Result<LoginStatus, Refusal> {
         let selected = self
             .harnesses
             .get(&args.harness)
@@ -465,11 +487,11 @@ impl Accounts {
                 "A gateway signs in with its key: set_key gives it a new one.",
             ));
         }
-        let (harness, asker, held) = self.asker(&call, &args.harness).await?;
+        let (harness, asker, held) = self.asker(project, &args.harness).await?;
         let ways = asker.process.ways();
         let codes = elsewhere_ways(&harness).iter().any(|w| w.id == DEVICE_CODE);
         let way = if args.way.as_deref() == Some(DEVICE_CODE) && codes {
-            let (_, cli) = crate::cli::find(&*call.project().environment(), &harness).await?;
+            let (_, cli) = crate::cli::find(&*project.environment(), &harness).await?;
             let cli = cli.ok_or_else(|| Refusal::conflict("This Account names no Codex CLI."))?;
             elsewhere(&harness, &cli.path)
                 .into_iter()
@@ -486,7 +508,7 @@ impl Accounts {
         };
         let (status, cancel) = self.logins.reserve(&harness.id)?;
         if let Some(program) = way.terminal {
-            let started = call.project().environment().pty(
+            let started = project.environment().pty(
                 &program,
                 banda_kernel::PtySize {
                     rows: 30,
@@ -499,7 +521,7 @@ impl Accounts {
                     process.holding(held),
                     pty,
                     cancel,
-                    self.finish(&call, &harness.id),
+                    self.finish(project, by, &harness.id),
                 ),
                 Err(error) => {
                     self.logins.forget(&status.login);
@@ -516,11 +538,64 @@ impl Accounts {
                     asker.process.sign_in(&way.id).await.map_err(Into::into)
                 },
                 cancel,
-                self.finish(&call, &harness.id),
+                self.finish(project, by, &harness.id),
             );
         }
         Ok(status)
     }
+    /// Runs `line`, the installer of `harness`'s CLI, in a terminal to its
+    /// end, as a sign-in runs: watched, cancelled and bounded the same
+    /// way, and every process of the Harness let go of as it ends, so the
+    /// next look finds its CLI (ADR 0140, decision 3).
+    pub(crate) fn install(
+        &self,
+        project: &ModuleProject,
+        by: Participant,
+        harness: &str,
+        line: &str,
+    ) -> Result<LoginStatus, Refusal> {
+        let (status, cancel) = self.logins.reserve(harness)?;
+        let size = banda_kernel::PtySize {
+            rows: 30,
+            cols: 100,
+        };
+        let program = crate::kinds::installer(line);
+        match project.environment().pty(&program, size) {
+            Ok((process, pty)) => self.logins.terminal(
+                &status.login,
+                process,
+                pty,
+                cancel,
+                self.finish(project, by, harness),
+            ),
+            Err(error) => {
+                self.logins.forget(&status.login);
+                return Err(Refusal::conflict(format!(
+                    "The installer could not start: {error}"
+                )));
+            }
+        }
+        Ok(status)
+    }
+
+    /// A sign-in's or an install's status as it changes.
+    pub(crate) fn job(
+        &self,
+        id: &str,
+    ) -> Result<tokio::sync::watch::Receiver<LoginStatus>, Refusal> {
+        self.logins.watch(id)
+    }
+
+    /// Stops a sign-in or an install that runs; one that ended stays so.
+    pub(crate) fn cancel_job(&self, id: &str) {
+        let _ = self.logins.cancel(id);
+    }
+
+    /// Lets go of an ended job's report.
+    pub(crate) fn forget_job(&self, id: &str) {
+        self.logins.forget(id);
+    }
+
     pub(crate) fn login_status(&self, args: LoginId) -> Result<LoginStatus, Refusal> {
         self.logins.status(&args.login)
     }
@@ -569,10 +644,15 @@ impl Accounts {
     /// What the engine does as a sign-in of `harness` ends, before it says
     /// so: lets go of the Harness's processes and says its account changed,
     /// so nothing waits for a window to finish it (ADR 0108, decision 5).
-    fn finish(&self, call: &Call, harness: &str) -> impl Future<Output = ()> + Send + 'static {
+    fn finish(
+        &self,
+        project: &ModuleProject,
+        by: Participant,
+        harness: &str,
+    ) -> impl Future<Output = ()> + Send + 'static {
         let hosts = self.hosts.clone();
-        let project = call.project().downgrade();
-        let (by, subject) = (call.participant(), harness.to_owned());
+        let project = project.downgrade();
+        let subject = harness.to_owned();
         async move {
             let Some(project) = project.upgrade() else {
                 return;
@@ -592,7 +672,7 @@ impl Accounts {
         harness: String,
         way: String,
     ) -> Result<(), Refusal> {
-        let (harness, asker, _asking) = self.asker(&call, &harness).await?;
+        let (harness, asker, _asking) = self.asker(call.project(), &harness).await?;
         let process = &asker.process;
         // One in a terminal ran there, the Harness's own or one for
         // another machine's window: only the account changed.
@@ -611,7 +691,7 @@ impl Accounts {
     }
 
     pub(crate) async fn sign_out(&self, call: Call, harness: String) -> Result<(), Refusal> {
-        let (harness, asker, _asking) = self.asker(&call, &harness).await?;
+        let (harness, asker, _asking) = self.asker(call.project(), &harness).await?;
         asker.process.sign_out().await?;
         self.changed(&call, &harness.id).await
     }
@@ -619,9 +699,12 @@ impl Accounts {
     /// Harness entry `id` with the module's process of it, started if need
     /// be, held busy while the guard lives. A start that failed is refused
     /// as [`Failed`] says: `conflict` only when it lasts.
-    async fn asker(&self, call: &Call, id: &str) -> Result<(Harness, Arc<Asker>, Held), Refusal> {
+    async fn asker(
+        &self,
+        project: &ModuleProject,
+        id: &str,
+    ) -> Result<(Harness, Arc<Asker>, Held), Refusal> {
         let harness = self.harnesses.get(id).map_err(Refusal::invalid)?;
-        let project = call.project();
         let asker = (self.hosts)
             .get(project.id(), project.environment(), &harness)
             .await?;

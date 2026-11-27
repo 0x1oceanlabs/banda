@@ -51,6 +51,16 @@ PR.
   3): the result alone on stdout, a list one JSON object a line narrowed
   by flags, IDs on stdin for `-`, a refusal as JSON on stderr
   (`engine/src/account.rs`).
+- **A Harness is set up in steps the engine runs** (ADR 0140): `setup
+  {harness}` says its steps, install then sign in, each done, waiting,
+  running, asking or failed; `setup_start` runs what is not done, in
+  order, and answers at once; `setup_watch` is it as it changes and
+  `setup_cancel` stops it. One per Harness at a time, with no call or
+  window waiting (`engine/src/setup.rs`). The install is its vendor's own
+  installer, a line of `kinds.rs`'s row for this system, run in a terminal
+  as a sign-in is; the sign-in is the one above. A step is done when the
+  engine finds it so: the CLI found, someone signed in. A Harness Banda
+  does not know has no steps.
 - It asks through a Harness process of its own, with no session, in a
   pool keyed by the machine's ID, let go after five minutes with nothing
   asked.

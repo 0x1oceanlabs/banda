@@ -21,6 +21,7 @@ use crate::accounts::{
 };
 use crate::limits::Reader;
 use crate::model::{HarnessView, Limits, LimitsLook};
+use crate::setup::Setup;
 use crate::usage::UsageNow;
 use crate::{FILE, Harnesses};
 use banda_kernel::{
@@ -37,7 +38,8 @@ pub const SETTINGS: [banda_look::SettingsFile; 1] = [FILE];
 
 pub struct HarnessesModule {
     harnesses: Harnesses,
-    accounts: Accounts,
+    accounts: Arc<Accounts>,
+    setups: crate::setup::Setups,
     limits: Reader,
     usage: crate::usage::Reader,
 }
@@ -47,7 +49,8 @@ impl HarnessesModule {
         Self {
             limits: Reader::new(harnesses.clone()),
             usage: crate::usage::Reader::new(harnesses.clone()),
-            accounts: Accounts::new(harnesses.clone()),
+            accounts: Arc::new(Accounts::new(harnesses.clone())),
+            setups: Default::default(),
             harnesses,
         }
     }
@@ -60,7 +63,15 @@ impl HarnessesModule {
         store: Arc<dyn AccountStore>,
         secrets: Secrets,
     ) -> Self {
-        self.accounts = self.accounts.with_store(owned, store, secrets);
+        let accounts = Accounts::new(self.harnesses.clone());
+        self.accounts = Arc::new(accounts.with_store(owned, store, secrets));
+        self
+    }
+
+    /// Installs `harness` with `line`, a stand-in of its vendor's
+    /// installer: only a test does.
+    pub fn installing_with(self, harness: &str, line: &str) -> Self {
+        self.setups.installing_with(harness, line);
         self
     }
 
@@ -133,6 +144,19 @@ banda_kernel::methods! {
         /// engine read the Account again as it ended. Ask account_status
         /// to confirm the Harness's report.
         command login_finish(LoginId) -> (), Write, tool "login_finish";
+        /// How a Harness is set up, and where that stands (ADR 0140): its
+        /// steps in order, install then sign in, each done, waiting,
+        /// running, asking for the Person or failed. None for a Harness
+        /// Banda cannot set up.
+        call setup(OneHarness) -> Setup, Read;
+        /// Runs what is not done of a Harness's setup, in order, with its
+        /// vendor's own installer, and answers at once; setup_watch says
+        /// how it goes. The sign-in waits for the Person in their browser.
+        call setup_start(OneHarness) -> Setup, Manage;
+        /// A Harness's setup as it changes.
+        stream setup_watch(OneHarness) -> Setup, Read;
+        /// Stops a setup that runs.
+        call setup_cancel(OneHarness) -> (), Manage;
         /// Signs in with one of the Harness's ways. A way in a terminal ran
         /// there already: the Person signed in in it.
         command sign_in(SignIn) -> (), Manage;
@@ -382,6 +406,40 @@ impl HarnessesModule {
             .map_err(Into::into)
     }
 
+    async fn setup(
+        &self,
+        call: Call,
+        OneHarness { harness }: OneHarness,
+    ) -> Result<Setup, Refusal> {
+        let (accounts, list) = (&self.accounts, &self.harnesses);
+        (self.setups.now(accounts, list, call.project(), &harness)).await
+    }
+    async fn setup_start(
+        &self,
+        call: Call,
+        OneHarness { harness }: OneHarness,
+    ) -> Result<Setup, Refusal> {
+        let (accounts, by) = (self.accounts.clone(), call.participant());
+        (self.setups)
+            .start(accounts, &self.harnesses, call.project(), by, &harness)
+            .await
+    }
+    async fn setup_watch(
+        &self,
+        _: Call,
+        OneHarness { harness }: OneHarness,
+    ) -> Result<Stream, Refusal> {
+        self.harnesses.get(&harness).map_err(Refusal::invalid)?;
+        Ok(self.setups.watch(&harness))
+    }
+    async fn setup_cancel(
+        &self,
+        _: Call,
+        OneHarness { harness }: OneHarness,
+    ) -> Result<(), Refusal> {
+        self.setups.cancel(&harness);
+        Ok(())
+    }
     async fn sign_in(&self, call: Call, SignIn { harness, way }: SignIn) -> Result<(), Refusal> {
         self.accounts.sign_in(call, harness, way).await
     }
