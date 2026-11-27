@@ -46,8 +46,8 @@ pub fn examples(banda: &Banda, locale: Option<&str>) -> Examples {
         threads: [("claude".to_owned(), 4), ("codex".to_owned(), 1)].into(),
         turns: 31,
         panes: [
-            ("agents.thread".to_owned(), 6),
-            ("terminal.terminal".to_owned(), 3),
+            ("apps.view".to_owned(), 6),
+            ("harnesses.usage".to_owned(), 3),
         ]
         .into(),
         projects: 2,

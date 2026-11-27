@@ -102,8 +102,8 @@ An example:
     "locale": "de_DE",
     "os": "linux",
     "panes": {
-      "agents.thread": 6,
-      "terminal.terminal": 3
+      "apps.view": 6,
+      "harnesses.usage": 3
     },
     "projects": 2,
     "threads": {
