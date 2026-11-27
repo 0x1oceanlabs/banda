@@ -1798,6 +1798,10 @@ impl Module for Agents {
         "agents"
     }
 
+    fn manifest(&self) -> &'static str {
+        include_str!("../../app.toml")
+    }
+
     fn migrations(&self) -> &'static [&'static str] {
         store::MIGRATIONS
     }
@@ -1877,8 +1881,9 @@ impl Module for Agents {
         ));
         // What git did from a Thread's card, and the tabs its Person lent
         // it, its Agent reads next, each once.
-        for (name, filter) in notices::heard() {
-            tokio::spawn(notices::follow(project.listen(name, filter).await?));
+        for name in notices::HEARD {
+            let heard = project.listen(name, project.hears(name)?).await?;
+            tokio::spawn(notices::follow(heard));
         }
         // A put-off Thread's failed turn goes on as its time comes.
         let heard = project.listen(time_comes::LISTENER, time_comes::put_off());

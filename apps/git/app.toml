@@ -10,6 +10,13 @@ api = 1
 from-banda = true
 settings = []
 
-# What it needs of Banda (ADR 0082, decision 2): nothing it could
-# declare here is built yet.
+# What it needs of Banda (ADR 0082, decision 2): the facts of other parts
+# it hears, each listener by its name. The rest it could declare here is
+# not built yet.
 [needs]
+
+# A turn's start and end, for the checkpoints of the work tree, and what
+# lets go of them.
+[needs.listens.checkpoints]
+from = "agents"
+kinds = ["turn.started", "turn.ended", "thread.rewound", "thread.deleted"]

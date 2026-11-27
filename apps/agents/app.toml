@@ -13,6 +13,27 @@ from-banda = true
 # The settings files it owns, in ~/.config/banda.
 settings = ["agents.toml"]
 
-# What it needs of Banda (ADR 0082, decision 2): nothing it could
-# declare here is built yet.
+# What it needs of Banda (ADR 0082, decision 2): the facts of other parts
+# it hears, each listener by its name. The rest it could declare here is
+# not built yet.
 [needs]
+
+# A step git's card asked for was done: a notice for the Task's Agent.
+[needs.listens.card-steps]
+from = "git"
+kinds = ["git.acted"]
+
+# A tab the Person lent a Task, or the end of its lend: a notice too.
+[needs.listens.lent-tabs]
+from = "browser"
+kinds = ["browser.lent"]
+
+# An account of this machine's changed or was removed: its Tasks' Harness
+# processes are let go, and those of a removed one retire.
+[needs.listens.removed-accounts]
+from = "harnesses"
+kinds = ["account_changed"]
+
+[needs.listens.accounts]
+from = "harnesses"
+kinds = ["account_changed"]

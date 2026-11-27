@@ -92,6 +92,8 @@ const WINDOW: &str = "window";
 struct Part {
     id: String,
     manifest: PathBuf,
+    /// The parts its manifest says it hears, one for each listener.
+    hears: Vec<String>,
     /// Its window part as the window's tests copy it, when it has one.
     window: Option<PathBuf>,
     /// Its engine part's crate's name, when it has one.
@@ -155,6 +157,14 @@ fn apps() {
                 panic!("two folders are the App {:?}", part.id);
             }
             parts.push(part);
+        }
+    }
+    for part in &parts {
+        if let Some(from) = (part.hears.iter()).find(|from| parts.iter().all(|p| p.id != **from)) {
+            panic!(
+                "{}/{}/{MANIFEST}: it hears {from}, which is no part of this build",
+                part.bucket, part.id
+            );
         }
     }
     let window = root.join("client/web");
@@ -365,12 +375,31 @@ fn part(bucket: &str, kind: &str, folder: &Path) -> Part {
     if table.get("api").and_then(toml::Value::as_integer) != Some(API) {
         panic!("{shown}: this engine hosts the App API's major {API}, so it says api = {API}");
     }
-    match table.get("needs") {
-        Some(toml::Value::Table(needs)) if needs.is_empty() => {}
-        _ => panic!(
-            "{shown}: [needs] is there and empty, as nothing it could hold is built yet (ADR 0082, decision 2)"
-        ),
+    let Some(toml::Value::Table(needs)) = table.get("needs") else {
+        panic!("{shown}: [needs] is there, empty when it needs nothing (ADR 0082, decision 2)");
+    };
+    if let Some(need) = needs.keys().find(|need| *need != "listens") {
+        panic!("{shown}: [needs] holds listens alone, as {need} is not built yet");
     }
+    let hears = match needs.get("listens") {
+        None => Vec::new(),
+        Some(toml::Value::Table(listens)) => (listens.iter())
+            .map(|(listener, heard)| {
+                let from = heard.get("from").and_then(toml::Value::as_str);
+                let kinds = heard.get("kinds").and_then(toml::Value::as_array);
+                let named = kinds.is_some_and(|kinds| {
+                    !kinds.is_empty() && kinds.iter().all(toml::Value::is_str)
+                });
+                match from {
+                    Some(from) if named && from != name => from.to_owned(),
+                    _ => panic!(
+                        "{shown}: [needs.listens.{listener}] says from, another part's id, and kinds, its facts'"
+                    ),
+                }
+            })
+            .collect(),
+        Some(_) => panic!("{shown}: [needs.listens] holds a table for each listener"),
+    };
 
     let cargo = folder.join("engine/Cargo.toml");
     let engine = cargo.is_file().then(|| {
@@ -398,6 +427,7 @@ fn part(bucket: &str, kind: &str, folder: &Path) -> Part {
     };
     Part {
         manifest,
+        hears,
         window: Some(folder.join("window.json")).filter(|path| path.is_file()),
         engine,
         files,

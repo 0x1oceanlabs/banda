@@ -97,6 +97,10 @@ impl Module for Pulls {
         "pulls"
     }
 
+    fn manifest(&self) -> &'static str {
+        include_str!("../../app.toml")
+    }
+
     fn migrations(&self) -> &'static [&'static str] {
         store::MIGRATIONS
     }
@@ -123,9 +127,13 @@ impl Module for Pulls {
     /// made as the engine stopped is linked as it starts again.
     async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
         let live = self.live(&project);
-        let links = project.listen(heard::LINKS, heard::agents()).await?;
+        let links = project
+            .listen(heard::LINKS, project.hears(heard::LINKS)?)
+            .await?;
         tokio::spawn(heard::follow_agents(links, live.clone()));
-        let pushes = project.listen(heard::PUSHES, heard::git()).await?;
+        let pushes = project
+            .listen(heard::PUSHES, project.hears(heard::PUSHES)?)
+            .await?;
         tokio::spawn(heard::follow_git(pushes, live));
         Ok(())
     }

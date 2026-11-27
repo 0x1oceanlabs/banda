@@ -80,13 +80,27 @@ enum Whose {
     Platform,
 }
 
-/// What a part needs of Banda, as it will declare it (ADR 0082, decision
-/// 2): the facts it hears, the methods and intents it calls, its
-/// capabilities and what it asks of a device. None is built yet, so the
-/// table is empty, and a need in it is refused.
+/// What a part needs of Banda, as it declares it (ADR 0082, decision 2):
+/// the facts it hears, and, to come, the methods and intents it calls,
+/// its capabilities and what it asks of a device. Those are not built
+/// yet, and a need of them is refused.
+#[derive(Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Needs {
+    /// What each of its listeners hears of another part, by the
+    /// listener's name: the kernel refuses it one it does not declare
+    /// (`ModuleProject::hears`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    listens: BTreeMap<String, Listens>,
+}
+
+/// The facts one listener hears: the part's they are, and their kinds.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Needs {}
+struct Listens {
+    from: String,
+    kinds: Vec<String>,
+}
 
 /// One module, as `banda modules` prints it.
 #[derive(Serialize)]
@@ -177,7 +191,7 @@ pub fn installed(apps: &std::path::Path) -> Vec<Offer> {
             settings: Vec::new(),
             legacy_prefixes: Vec::new(),
             was: Vec::new(),
-            needs: Some(Needs {}),
+            needs: Some(Needs::default()),
             unstable: BTreeMap::new(),
         },
     };

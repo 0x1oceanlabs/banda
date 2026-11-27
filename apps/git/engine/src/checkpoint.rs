@@ -16,29 +16,17 @@ use std::path::Path;
 /// Where every checkpoint is kept.
 const ROOT: &str = "refs/banda/checkpoints";
 
-/// The agents module's facts a checkpoint is made or let go on.
+/// The facts a checkpoint is made or let go on, a Task's turns, which
+/// git's `app.toml` declares its listener hears.
 const STARTED: &str = "turn.started";
 const ENDED: &str = "turn.ended";
 const REWOUND: &str = "thread.rewound";
 const DELETED: &str = "thread.deleted";
 
 /// The name of git's listener of the turns, which the kernel keeps its
-/// place in the log by (ADR 0082, decision 6).
+/// place in the log by (ADR 0082, decision 6), and its `app.toml` declares
+/// what it hears by.
 pub const LISTENER: &str = "checkpoints";
-
-/// What git hears from the agents module.
-pub fn heard() -> EventFilter {
-    EventFilter {
-        module: Some("agents".into()),
-        subject: None,
-        kinds: Some(vec![
-            STARTED.into(),
-            ENDED.into(),
-            REWOUND.into(),
-            DELETED.into(),
-        ]),
-    }
-}
 
 /// Which side of a turn a checkpoint is.
 #[derive(Clone, Copy)]

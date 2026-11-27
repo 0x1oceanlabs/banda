@@ -221,7 +221,7 @@ allows only falls.
 
 | What is held | The test | Its detail |
 | --- | --- | --- |
-| The kernel names no module; no module reads another's tables; what the platform's Rust and an App still name of another App; which crates depend on an App's | `kernel/tests/architecture.rs`, `engine/src/apps.rs` | [`kernel/README.md`](../kernel/README.md#checks) |
+| The kernel names no module; no module reads another's tables; what the platform's Rust still names of an App; no App names another, and hears one only as its `app.toml` declares; which crates depend on an App's | `kernel/tests/architecture.rs`, `kernel/src/listens.rs`, `engine/src/apps.rs` | [`kernel/README.md`](../kernel/README.md#checks) |
 | No code of the engine makes a process but `banda-environments`, and who makes a `Program` | `kernel/tests/architecture.rs` | [`kernel/README.md`](../kernel/README.md#checks) |
 | The Tiling's model brings no store, runtime, file's reader nor randomness, so it builds for a client | `platform/tiling/tests/leaf.rs` | [`platform/workspaces/README.md`](../platform/workspaces/README.md) |
 | The fence makes real namespaces | the fence's tests, CI's `fence` part | [`kernel/README.md`](../kernel/README.md#checks) |

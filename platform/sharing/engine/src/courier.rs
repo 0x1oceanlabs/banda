@@ -28,9 +28,7 @@ use crate::post::Post;
 use crate::settings::{self, Shares};
 use crate::usage::{self, DAY_MS};
 use crate::{Clock, Ids, KEPT_MS, Never};
-use banda_kernel::{
-    Effect, Error, Event, EventFilter, Listener, ModuleProject, Outcome, Retry, Tx,
-};
+use banda_kernel::{Effect, Error, Event, Listener, ModuleProject, Outcome, Retry, Tx};
 use banda_problems::model::Problem;
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -70,12 +68,8 @@ struct Posting {
 /// Starts hearing the problems module, from where its own cursor stood
 /// before the kernel kept one, and queues what waited to be sent then.
 pub(crate) async fn start(courier: Courier, project: ModuleProject) -> Result<(), Error> {
-    let filter = EventFilter {
-        module: Some("problems".to_owned()),
-        subject: None,
-        kinds: Some(vec!["recorded".to_owned(), "again".to_owned()]),
-    };
     let carried = project.read(heard_at).await?;
+    let filter = project.hears(LISTENER)?;
     let heard = project.listen_from(LISTENER, filter, carried).await?;
     project.write(carry).await?;
     tokio::spawn(courier.run(heard));

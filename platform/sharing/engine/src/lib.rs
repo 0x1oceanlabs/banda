@@ -233,6 +233,10 @@ impl Module for Sharing {
         "sharing"
     }
 
+    fn manifest(&self) -> &'static str {
+        include_str!("../../app.toml")
+    }
+
     fn scope(&self) -> Scope {
         Scope::Machine
     }

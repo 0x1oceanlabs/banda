@@ -204,6 +204,10 @@ impl Module for Git {
         "git"
     }
 
+    fn manifest(&self) -> &'static str {
+        include_str!("../../app.toml")
+    }
+
     fn migrations(&self) -> &'static [&'static str] {
         &[]
     }
@@ -221,7 +225,7 @@ impl Module for Git {
     /// that ended as the engine stopped gets its "after" as it starts
     /// again.
     async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
-        let heard = project.listen(checkpoint::LISTENER, checkpoint::heard());
+        let heard = project.listen(checkpoint::LISTENER, project.hears(checkpoint::LISTENER)?);
         tokio::spawn(checkpoint::follow(heard.await?));
         Ok(())
     }
