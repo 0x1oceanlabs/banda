@@ -21,3 +21,8 @@ settings = ["sharing.toml"]
 [needs.listens.exceptions]
 from = "problems"
 kinds = ["recorded", "again"]
+
+# The Tasks started and their turns, which the day's usage counts.
+[needs.listens.day]
+from = "agents"
+kinds = ["thread.started", "turn.started"]

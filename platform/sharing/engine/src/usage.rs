@@ -18,6 +18,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// The name the module's `app.toml` declares the facts it counts by: the
+/// Threads started and the Turns, of the part that keeps them.
+const COUNTED: &str = "day";
+
 /// A day, in ms.
 pub(crate) const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
@@ -76,8 +80,10 @@ fn locale_of(said: &str) -> Option<String> {
 /// Counts the day `day`, in days since the epoch.
 pub(crate) async fn count(project: &ModuleProject, day: i64) -> Result<Counts, Error> {
     let (from, to) = (day * DAY_MS, (day + 1) * DAY_MS);
+    // Whose facts they are, the module's manifest says, with their kinds.
+    let counted = project.hears(COUNTED)?.module.unwrap_or_default();
     let tally = |kind: &str, by: Option<&str>| Tally {
-        module: "agents".to_owned(),
+        module: counted.clone(),
         kind: kind.to_owned(),
         by: by.map(str::to_owned),
         from,

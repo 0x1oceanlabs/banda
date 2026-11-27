@@ -241,10 +241,6 @@ const PLATFORM_NAMES: &[(&str, usize)] = &[
     ("platform/look/src/settings.rs", 2),
     // agents.toml, for the account a new Thread starts with.
     ("platform/settings/src/accounts.rs", 6),
-    // The Pane kinds whose count is shared.
-    ("platform/sharing/engine/src/events.rs", 2),
-    // The agents module's events, heard for the usage shared.
-    ("platform/sharing/engine/src/usage.rs", 1),
     // A Thread's Pane kind, for the words an Agent's Pane never keeps.
     ("platform/workspaces/engine/src/lib.rs", 1),
     // A Thread's Pane kind, and the old agents.diff made git.diff.
