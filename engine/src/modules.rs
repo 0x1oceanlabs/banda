@@ -254,6 +254,12 @@ pub fn elsewhere_kinds() -> BTreeSet<String> {
     kinds_in(APPS, |pane| pane.elsewhere)
 }
 
+/// Every kind of Pane the window parts in the list of Apps have; read as
+/// `grouped_kinds` is.
+pub fn pane_kinds() -> BTreeSet<String> {
+    kinds_in(APPS, |_| true)
+}
+
 fn grouped_in(parts: &[Part]) -> BTreeSet<String> {
     kinds_in(parts, |pane| pane.grouped)
 }

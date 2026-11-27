@@ -40,13 +40,20 @@ pub struct Listens {
     pub kinds: Vec<String>,
 }
 
+/// What `module`'s manifest declares it hears, by each listener's name.
+fn read(module: &dyn Module) -> Result<BTreeMap<String, Listens>, Refusal> {
+    let manifest: Manifest = toml::from_str(module.manifest()).map_err(|error| {
+        Refusal::invalid(format!("{}'s manifest is not read: {error}", module.name()))
+    })?;
+    Ok(manifest.needs.listens)
+}
+
 /// The facts `module`'s listener `name` hears of another part, as its
 /// manifest declares them. Refused when it declares none by that name.
 pub(crate) fn declared(module: &dyn Module, name: &str) -> Result<EventFilter, Refusal> {
     let id = module.name();
-    let manifest: Manifest = toml::from_str(module.manifest())
-        .map_err(|error| Refusal::invalid(format!("{id}'s manifest is not read: {error}")))?;
-    let Some(listens) = manifest.needs.listens.get(name) else {
+    let listens = read(module)?;
+    let Some(listens) = listens.get(name) else {
         return Err(Refusal::forbidden(format!(
             "{id} declares no listener {name}: what it hears of another part, its app.toml says in [needs.listens.{name}]."
         )));
@@ -80,6 +87,25 @@ pub(crate) fn admits(module: &dyn Module, name: &str, filter: &EventFilter) -> R
     } else {
         Err(Refusal::forbidden(format!(
             "{id}'s listener {name} hears more of {from} than its app.toml declares in [needs.listens.{name}]."
+        )))
+    }
+}
+
+/// Whether `module` may count `from`'s facts of `kind`
+/// ([`ModuleProject::tally`](crate::ModuleProject::tally)): its own, or
+/// those its manifest declares under one name or another.
+pub(crate) fn counts(module: &dyn Module, from: &str, kind: &str) -> Result<(), Refusal> {
+    let id = module.name();
+    if from == id || module.was().contains(&from) {
+        return Ok(());
+    }
+    let declared = (read(module)?.values())
+        .any(|listens| listens.from == from && listens.kinds.iter().any(|k| k == kind));
+    if declared {
+        Ok(())
+    } else {
+        Err(Refusal::forbidden(format!(
+            "{id} counts {from}'s {kind}, which its app.toml does not declare in [needs.listens]."
         )))
     }
 }
