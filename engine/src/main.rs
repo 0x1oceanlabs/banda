@@ -36,6 +36,10 @@
 //! - `banda problems` prints what broke in Banda, one JSON object per
 //!   line; `banda problems report <fingerprint>` prints one Problem's
 //!   report, for an Agent or an issue (ADR 0039).
+//! - `banda pair <machine>` pairs this program as a device on another
+//!   machine of `hosts.toml`, by the Person's ssh login there, and `banda
+//!   --host <machine> status | call | follow` acts there as that device,
+//!   at its door (ADR 0124; `there.rs`).
 //! - `banda mcp` speaks MCP on stdio for an Agent in a Thread: the agents
 //!   module hands it to each session, with the Agent's pass (ADR 0019).
 //!
@@ -78,6 +82,7 @@ mod serve;
 mod service;
 mod status;
 mod tell;
+mod there;
 mod window;
 
 use banda_kernel::{CommandId, EventFilter, ProjectId, Refusal};
@@ -98,6 +103,11 @@ use std::process::ExitCode;
     about = "Banda: a tiling workspace for working with Agents."
 )]
 struct Cli {
+    /// Another machine of hosts.toml, for status, call and follow: this
+    /// banda acts there as a device of its own, paired once with `banda
+    /// pair`.
+    #[arg(long, global = true, value_name = "MACHINE")]
+    host: Option<String>,
     #[command(subcommand)]
     command: Command,
 }
@@ -152,6 +162,9 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Pairs this banda as a device on another machine of hosts.toml, by
+    /// your ssh login there, for `banda --host <machine>`.
+    Pair { machine: String },
     /// Calls one API method and prints its answer as JSON.
     Call {
         /// For example projects.list or agents.send.
@@ -645,6 +658,21 @@ impl Failure {
 fn main() -> ExitCode {
     banda_kernel::set_version(env!("BANDA_VERSION"));
     let mut cli = parse();
+    if let Some(machine) = cli.host.take() {
+        // What reads this machine's own files, or starts and stops its
+        // engine, has no meaning there yet.
+        let there = matches!(
+            cli.command,
+            Command::Call { .. } | Command::Follow { .. } | Command::Status { follow: false, .. }
+        );
+        if !there {
+            let refusal = Refusal::invalid(
+                "banda --host does status, call and follow on another machine; nothing was done.",
+            );
+            return Failure::Refused(refusal).end(false);
+        }
+        there::set(machine);
+    }
     // The engine's launchd job starts itself again first, with the login
     // shell's PATH, before anything else runs (macOS); from here on `job`
     // says whether this is the job.
@@ -891,6 +919,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         }
         Command::Account { what } => account::account(&places, what).await,
         Command::Devices { what } => devices::devices(&places, what).await,
+        Command::Pair { machine } => there::pair(&places, &machine).await,
         Command::Secret { what } => account::secret(&places, what).await,
         Command::Act { id, args } => act::act(&places, id, args).await,
         Command::Files { path, project } => files::open(&places, path, project).await,

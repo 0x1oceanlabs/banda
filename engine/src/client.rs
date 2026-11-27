@@ -8,7 +8,8 @@
 //! that connects to the engine says hello there with that pass, and works
 //! only in the pass's Project. It does nothing without a pass, nor when
 //! `BANDA_STATE` names another engine. With no `BANDA_ENGINE`, it says
-//! hello as the owner.
+//! hello as the owner. With `--host`, it goes to another machine's door,
+//! as a device of its own there (`there.rs`).
 
 use crate::Failure;
 use crate::places::{self, Places};
@@ -21,8 +22,12 @@ use futures::{SinkExt, StreamExt};
 use serde_json::Value;
 use tokio_tungstenite::tungstenite::Message;
 
-type Socket =
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+/// What a connection's bytes go over: a socket of this machine, or the
+/// pipes of an ssh that carries another machine's door (`there.rs`).
+pub trait Pipe: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send {}
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send> Pipe for T {}
+
+type Socket = tokio_tungstenite::WebSocketStream<Box<dyn Pipe>>;
 
 /// An Agent's pass, and where the engine that gave it listens.
 pub struct Pass {
@@ -89,6 +94,9 @@ impl Client {
     /// hands this program, when it hands one, else as the owner, to the
     /// engine that runs or the one this starts (`control.rs`).
     pub async fn connect(places: &Places) -> Result<Client, Failure> {
+        if let Some(machine) = crate::there::named() {
+            return crate::there::connect(places, machine).await;
+        }
         if let Some(pass) = Pass::from_env()? {
             pass.meant(places)?;
             return Client::connect_as(&pass).await;
@@ -121,36 +129,148 @@ impl Client {
     /// owner's secret, or an Agent's pass. `nowhere` says that no engine
     /// answers there.
     pub(crate) async fn hello(url: &str, token: String, nowhere: &str) -> Result<Client, Failure> {
-        let (socket, _) = tokio_tungstenite::connect_async(url)
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        let nowhere = || Failure::broken(nowhere);
+        let request = url.into_client_request().map_err(|_| nowhere())?;
+        let at = request.uri().authority().ok_or_else(nowhere)?.as_str();
+        let pipe = tokio::net::TcpStream::connect(at)
             .await
-            .map_err(|_| Failure::broken(nowhere))?;
-        let mut client = Client {
-            socket,
-            next_id: 1,
-            fence: None,
-            named: None,
-            machine: None,
-            apps: Vec::new(),
-        };
+            .map_err(|_| nowhere())?;
+        let pipe: Box<dyn Pipe> = Box::new(pipe);
+        let (socket, _) = tokio_tungstenite::client_async(request, pipe)
+            .await
+            .map_err(|_| nowhere())?;
+        let mut client = Client::over(socket);
         client
             .send(&ClientFrame::Hello {
                 protocol: PROTOCOL,
                 token,
             })
             .await?;
+        client.welcomed().await.map(|_| client)
+    }
+
+    fn over(socket: Socket) -> Client {
+        Client {
+            socket,
+            next_id: 1,
+            fence: None,
+            named: None,
+            machine: None,
+            apps: Vec::new(),
+        }
+    }
+
+    /// Connects to another machine's door over `pipe`, and says hello as
+    /// the device `kept` names, by `key` (ADR 0124, decision 3). The door
+    /// must prove the host key kept, in its challenge and in its welcome,
+    /// before and after this device says who it is. `nowhere` says that
+    /// no door answers there.
+    pub(crate) async fn at_door(
+        pipe: Box<dyn Pipe>,
+        kept: &crate::there::Kept,
+        key: &ring::signature::Ed25519KeyPair,
+        nowhere: &str,
+    ) -> Result<Client, Failure> {
+        use banda_kernel::devices::{
+            DeviceFrame, DoorFrame, Protocols, challenge_message, hello_message, welcome_message,
+        };
+        use base64::Engine as _;
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use ring::rand::SecureRandom;
+        use ring::signature::{ED25519, UnparsedPublicKey};
+        let another = || {
+            Failure::Refused(Refusal::forbidden(
+                "The door there does not prove the host key this device paired with. Nothing \
+                 was said to it. If Banda was set up anew there, pair again: banda pair <machine>",
+            ))
+        };
+        let host = URL_SAFE_NO_PAD
+            .decode(&kept.host_key)
+            .map_err(|_| another())?;
+        let proves = |message: String, sig: &str| {
+            let sig = URL_SAFE_NO_PAD.decode(sig).map_err(|_| another())?;
+            UnparsedPublicKey::new(&ED25519, &host)
+                .verify(message.as_bytes(), &sig)
+                .map_err(|_| another())
+        };
+        // The door answers no one's name: any Host serves.
+        let (socket, _) = tokio_tungstenite::client_async("ws://door/ws", pipe)
+            .await
+            .map_err(|_| Failure::broken(nowhere))?;
+        let mut client = Client::over(socket);
+        let challenge: DoorFrame = client.read().await?;
+        let DoorFrame::Challenge {
+            nonce: door_nonce,
+            host_key,
+            time,
+            protocol,
+            sig,
+        } = challenge
+        else {
+            return Err(Failure::broken("The door did not say its challenge."));
+        };
+        if host_key != kept.host_key {
+            return Err(another());
+        }
+        proves(
+            challenge_message(&door_nonce, &host_key, time, protocol),
+            &sig,
+        )?;
+        if !(protocol.min..=protocol.max).contains(&PROTOCOL) {
+            return Err(Failure::Refused(Refusal::new(
+                Code::Protocol,
+                format!(
+                    "The engine there speaks protocols {} to {}, this banda {PROTOCOL}: update \
+                     the older of the two.",
+                    protocol.min, protocol.max
+                ),
+            )));
+        }
+        let mut mine = [0u8; 32];
+        ring::rand::SystemRandom::new()
+            .fill(&mut mine)
+            .map_err(Failure::broken)?;
+        let nonce = URL_SAFE_NO_PAD.encode(mine);
+        // A program has no page, and so no origin: the empty line.
+        let said = hello_message(&door_nonce, &host_key, "", &nonce);
+        let hello = DeviceFrame::Hello {
+            protocol: Protocols {
+                min: PROTOCOL,
+                max: PROTOCOL,
+            },
+            device: kept.device,
+            nonce: nonce.clone(),
+            sig: URL_SAFE_NO_PAD.encode(key.sign(said.as_bytes())),
+        };
+        client.write(&hello).await?;
+        match client.welcomed().await? {
+            Some(proved) if proved.host_key == kept.host_key => {
+                proves(welcome_message(&nonce, proved.device), &proved.sig)?;
+                Ok(client)
+            }
+            _ => Err(another()),
+        }
+    }
+
+    /// Reads the engine's answer to a hello: its welcome, kept, and who the
+    /// two ends proved to be at a door; or its goodbye, as a refusal.
+    async fn welcomed(&mut self) -> Result<Option<banda_kernel::devices::Proved>, Failure> {
+        let client = self;
         match client.receive().await? {
             EngineFrame::Welcome {
                 fence,
                 named,
                 machine,
                 apps,
+                door,
                 ..
             } => {
                 client.fence = fence;
                 client.named = named;
                 client.machine = machine;
                 client.apps = apps;
-                Ok(client)
+                Ok(door)
             }
             EngineFrame::Goodbye { reason, .. } => Err(Failure::Refused(reason)),
             _ => Err(Failure::broken("The engine did not say welcome.")),
@@ -193,6 +313,10 @@ impl Client {
     }
 
     async fn send(&mut self, frame: &ClientFrame) -> Result<(), Failure> {
+        self.write(frame).await
+    }
+
+    async fn write(&mut self, frame: &impl serde::Serialize) -> Result<(), Failure> {
         let text = serde_json::to_string(frame).map_err(Failure::broken)?;
         self.socket
             .send(Message::text(text))
@@ -201,6 +325,10 @@ impl Client {
     }
 
     async fn receive(&mut self) -> Result<EngineFrame, Failure> {
+        self.read().await
+    }
+
+    async fn read<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Failure> {
         loop {
             match self.socket.next().await {
                 Some(Ok(Message::Text(text))) => {

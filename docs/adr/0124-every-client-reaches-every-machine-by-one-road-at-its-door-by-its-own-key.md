@@ -470,6 +470,20 @@ list`, its `doors`), and keeps the first address with the host key, the
   link: it is away until Banda runs there. The engine's own code for a
   follower over ssh (`start --with-parent` with `BANDA_OVER_SSH`) stays
   for windows from before this, and goes later.
+- **The CLI is a device (SE4, PR 3).** `banda pair <machine>` pairs this
+  program on a machine of `hosts.toml` by the Person's ssh login there
+  (`banda start`, then `banda devices add --kind cli`, with no origin, as
+  a program has no page), with a key of its own in `cli.key` in the
+  state, and keeps the host key the machine said, the device it is there
+  and the door's port (`cli-hosts.json`). `banda --host <machine> status
+  | call | follow` reaches that door through `ssh -W`, the door's bytes
+  on ssh's own pipes, so no port opens on this machine, and says hello
+  as that device; the door must prove the host key kept, in its
+  challenge and its welcome. A machine that says the host key another
+  paired machine said is not paired. Under an Agent's pass both are
+  refused. Not yet: the door on the tailnet with no ssh (TLS for the
+  CLI's WebSocket), pairing by a door's address and a code, the other
+  commands there, and `banda` on a Mac's PATH.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The
