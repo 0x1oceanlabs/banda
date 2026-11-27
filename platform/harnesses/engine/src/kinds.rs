@@ -61,6 +61,47 @@ pub(crate) struct Row {
     /// Whether an account's home of its own shadows its Harness's, to share
     /// its sessions ([`crate::shadow`]; ADR 0078, decision 3).
     pub shadows: bool,
+    /// Who makes it, as a setup's step says: "from Anthropic".
+    pub vendor: &'static str,
+    /// What a Person signs in to it with, as a setup's step says: "your
+    /// Claude account".
+    pub account: &'static str,
+    /// Its vendor's own installer, which puts its CLI in the Person's
+    /// folders with no administrator's right (ADR 0140, decision 3).
+    pub install: Install,
+}
+
+/// A vendor's installer, as one line of the system's shell: `sh` on Linux
+/// and macOS, PowerShell on Windows.
+pub(crate) struct Install {
+    pub unix: &'static str,
+    pub windows: &'static str,
+}
+
+impl Install {
+    /// The line for this system.
+    pub(crate) const fn here(&self) -> &'static str {
+        if cfg!(windows) {
+            self.windows
+        } else {
+            self.unix
+        }
+    }
+}
+
+/// The program that runs `line`, an installer's, in this system's shell:
+/// the Person's own, outside the fence, as they asked for it.
+pub(crate) fn installer(line: &str) -> banda_kernel::Program {
+    let (shell, args): (&str, &[&str]) = if cfg!(windows) {
+        (
+            "powershell.exe",
+            &["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"],
+        )
+    } else {
+        ("sh", &["-c"])
+    };
+    let args = args.iter().copied().chain([line]).map(str::to_owned);
+    banda_kernel::Program::terminal(shell, args.collect())
 }
 
 impl Row {
@@ -90,6 +131,12 @@ pub(crate) const CLAUDE: Row = Row {
     sessions: Some("BANDA_CLAUDE_SESSIONS"),
     shells: None,
     shadows: false,
+    vendor: "Anthropic",
+    account: "Claude",
+    install: Install {
+        unix: "curl -fsSL https://claude.ai/install.sh | bash",
+        windows: "irm https://claude.ai/install.ps1 | iex",
+    },
 };
 
 pub(crate) const CODEX: Row = Row {
@@ -104,6 +151,12 @@ pub(crate) const CODEX: Row = Row {
     sessions: None,
     shells: Some(CODEX_CONFIG),
     shadows: true,
+    vendor: "OpenAI",
+    account: "ChatGPT",
+    install: Install {
+        unix: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+        windows: "irm https://chatgpt.com/codex/install.ps1 | iex",
+    },
 };
 
 impl Kind {

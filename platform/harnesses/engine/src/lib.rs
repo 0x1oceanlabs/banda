@@ -20,6 +20,7 @@ pub mod model;
 mod module;
 mod record;
 mod serving;
+mod setup;
 mod shadow;
 
 pub use accounts::account_changed;
@@ -27,6 +28,7 @@ pub use accounts::secrets::{Kept, Secrets};
 pub use list::claude_sessions;
 pub use list::{Cli, Credentials, FILE, Harness, Harnesses, LimitsSettings, Place};
 pub use module::{HarnessesModule, LimitsNow, SETTINGS};
+pub use setup::{Setup, SetupStep, StepState};
 
 pub mod usage;
 

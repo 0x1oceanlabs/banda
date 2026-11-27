@@ -24,6 +24,7 @@ import type { OneHarness } from "./OneHarness";
 import type { RemoveAccount } from "./RemoveAccount";
 import type { SetModels } from "./SetModels";
 import type { SetStart } from "./SetStart";
+import type { Setup } from "./Setup";
 import type { SignIn } from "./SignIn";
 import type { UpdateAccount } from "./UpdateAccount";
 import type { UsageNow } from "./UsageNow";
@@ -117,6 +118,27 @@ remove_account: CommandMethod<RemoveAccount, string>,
  * to confirm the Harness's report.
  */
 login_finish: CommandMethod<LoginId, null>, 
+/**
+ * How a Harness is set up, and where that stands (ADR 0140): its
+ * steps in order, install then sign in, each done, waiting,
+ * running, asking for the Person or failed. None for a Harness
+ * Banda cannot set up.
+ */
+setup: CallMethod<OneHarness, Setup>, 
+/**
+ * Runs what is not done of a Harness's setup, in order, with its
+ * vendor's own installer, and answers at once; setup_watch says
+ * how it goes. The sign-in waits for the Person in their browser.
+ */
+setup_start: CallMethod<OneHarness, Setup>, 
+/**
+ * A Harness's setup as it changes.
+ */
+setup_watch: StreamMethod<OneHarness, Setup>, 
+/**
+ * Stops a setup that runs.
+ */
+setup_cancel: CallMethod<OneHarness, null>, 
 /**
  * Signs in with one of the Harness's ways. A way in a terminal ran
  * there already: the Person signed in in it.
