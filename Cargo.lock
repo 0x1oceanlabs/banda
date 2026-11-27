@@ -671,6 +671,7 @@ dependencies = [
  "apple-native-keyring-store",
  "async-trait",
  "banda-environments",
+ "banda-git-cli",
  "banda-kernel",
  "banda-look",
  "dirs",

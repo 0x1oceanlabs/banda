@@ -71,7 +71,7 @@ const SIGN_IN: usize = 2;
 
 /// What a test names in place of a Harness, for Git's installer and for
 /// where Git is looked for.
-const GIT_LINE: &str = "git";
+const GIT_LINE: &str = banda_git_cli::NAME;
 const GIT_AT: &str = "git-at";
 
 /// The machine's setups: one per Harness at a time.
@@ -94,7 +94,7 @@ impl Git {
     fn found(&self) -> bool {
         match &self.at {
             Some(at) => at.is_file(),
-            None => crate::kinds::git().is_some(),
+            None => banda_git_cli::found().is_some(),
         }
     }
 }
@@ -121,7 +121,8 @@ impl Setups {
     fn git(&self) -> Git {
         let lines = self.stand_ins.lock().unwrap();
         Git {
-            line: (lines.get(GIT_LINE).cloned()).unwrap_or_else(|| crate::kinds::GIT.to_owned()),
+            line: (lines.get(GIT_LINE).cloned())
+                .unwrap_or_else(|| banda_git_cli::INSTALL.to_owned()),
             at: lines.get(GIT_AT).map(std::path::PathBuf::from),
         }
     }
@@ -297,7 +298,7 @@ async fn look(accounts: &Accounts, project: &ModuleProject, harness: &Harness, g
     let signed_in = installed && signed_in(accounts, project, harness).await;
     setup.steps = vec![
         step(
-            "git",
+            banda_git_cli::NAME,
             "Git",
             "Keeps the history of what Agents change in your files".to_owned(),
             git.found(),
