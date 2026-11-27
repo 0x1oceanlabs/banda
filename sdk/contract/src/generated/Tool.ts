@@ -28,4 +28,9 @@ description: string,
 /**
  * The JSON Schema of its params.
  */
-schema: JsonValue, };
+schema: JsonValue, 
+/**
+ * The names it had, which an Agent's call still reaches and no list
+ * shows (ADR 0138, decision 5).
+ */
+was?: Array<string>, };

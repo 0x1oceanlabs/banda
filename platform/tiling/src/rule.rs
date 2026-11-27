@@ -8,7 +8,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// How an Agent's windows stand, its Flow (ADR 0079): where its Thread
+/// How an Agent's windows stand, its Flow (ADR 0079): where its Task
 /// opens, and what a pick of it shows.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
@@ -58,7 +58,7 @@ pub enum Opens {
     /// In the Group of the Pane in front, which starts one when it is in
     /// none (ADR 0065).
     Group,
-    /// Last on its Project's workspace, in the row, as a Thread opens (ADR
+    /// Last on its Project's workspace, in the row, as a Task opens (ADR
     /// 0102).
     Project,
     /// Right of the whole Group of the Pane in front (ADR 0134, decision
@@ -78,7 +78,7 @@ pub enum Opens {
 pub enum Front {
     /// There is one.
     Pane,
-    /// It is a Thread, or a Pane in a Group.
+    /// It is a Task, or a Pane in a Group.
     Group,
 }
 

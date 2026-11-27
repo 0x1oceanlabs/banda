@@ -45,7 +45,7 @@ pub enum SiteRule {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct AgentsSettings {
     /// Whether Agents may use Banda's browser tools. Turning this off
-    /// refuses new calls, including from Threads already open.
+    /// refuses new calls, including from Tasks already open.
     pub enabled: Option<bool>,
     /// Whether Agents may request images of pages. Off when left out.
     /// Password and card fields are masked; other visible content is sent.

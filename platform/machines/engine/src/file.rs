@@ -26,7 +26,7 @@ pub const FILE: SettingsFile =
     SettingsFile::of::<MachineFile>().class(banda_look::Class::Machine, &[]);
 
 /// This machine's name and icon, as every window shows it beside its
-/// Projects and Threads, whether Banda starts at login here, and when it
+/// Projects and Tasks, whether Banda starts at login here, and when it
 /// stays awake. Each key is optional: Banda finds what is left out.
 #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]

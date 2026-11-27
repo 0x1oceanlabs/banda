@@ -119,7 +119,9 @@ keeps the mode they chose).
 - **Tools** it offers Agents: a `methods!` line marked `tool "<name>"`
   is one, with its `///` as its description and the JSON Schema of its
   params, from `schemars` (ADR 0019, decision 3). The agents module's
-  `threads`, `thread` and `send` are `threads`, `read` and `send`.
+  `threads`, `thread` and `send` are `tasks`, `read` and `send`. A
+  `was "<name>"` after it keeps a name the tool had answering, in no
+  list (ADR 0138, decision 5): `tasks` was `threads`.
 - **Panes.** They reach the engine only through the API.
 
 **Modules connect only by commands and events.** Here is an example, once

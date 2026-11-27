@@ -172,7 +172,7 @@ export function LendButton({
 
 /**
  * The chip of a tab lent to the Thread of `agent`: its mark and name in
- * its Agent's state colour, and a card with Take back and Go to Thread.
+ * its Agent's state colour, and a card with Take back and Go to Task.
  */
 export function LentChip({
   agent,
@@ -227,7 +227,7 @@ export function LentChip({
         <div className="flex justify-end gap-1.5">
           <Button variant="outline" size="sm" onClick={onThread}>
             <ArrowRightIcon />
-            Go to Thread
+            Go to Task
           </Button>
           <Button size="sm" onClick={onBack}>
             <Undo2Icon />

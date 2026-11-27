@@ -316,6 +316,7 @@ impl Folder {
                 },
                 description: method.about.clone(),
                 schema: method.params.clone(),
+                was: Vec::new(),
             })
             .collect()
     }

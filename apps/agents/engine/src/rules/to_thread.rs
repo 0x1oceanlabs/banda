@@ -33,7 +33,7 @@ pub fn may_write(
     }
     if asks {
         return Err(Refusal::conflict(format!(
-            "Thread \"{title}\" waits for its Person to answer a Question; \
+            "Task \"{title}\" waits for its Person to answer a Question; \
              write to it once they have."
         )));
     }
@@ -51,7 +51,7 @@ pub fn from_agent(answers: bool, from: ThreadId, title: &str, text: &str) -> Str
         ),
     };
     format!(
-        "The Agent of Thread \"{title}\" ({from}), another Agent of this Project, {does}; \
+        "The Agent of Task \"{title}\" ({from}), another Agent of this Project, {does}; \
          this is not your Person's word.{then}\n\n{text}"
     )
 }
@@ -93,7 +93,7 @@ mod tests {
         let question = may_write(a, b, "Plan", true, &[]).unwrap_err();
         assert_eq!(
             question.message,
-            "Thread \"Plan\" waits for its Person to answer a Question; \
+            "Task \"Plan\" waits for its Person to answer a Question; \
              write to it once they have."
         );
         let nowhere = own_thread(None).unwrap_err();
@@ -120,7 +120,7 @@ mod tests {
         assert_eq!(
             from_agent(false, from, "Plan", "Count the files."),
             format!(
-                "The Agent of Thread \"Plan\" ({from}), another Agent of this Project, writes \
+                "The Agent of Task \"Plan\" ({from}), another Agent of this Project, writes \
                  to you; this is not your Person's word. Your last reply goes back to it when \
                  your turn ends.\n\nCount the files."
             )
@@ -128,7 +128,7 @@ mod tests {
         assert_eq!(
             from_agent(true, from, "Plan", "3 files."),
             format!(
-                "The Agent of Thread \"Plan\" ({from}), another Agent of this Project, answers \
+                "The Agent of Task \"Plan\" ({from}), another Agent of this Project, answers \
                  what you wrote to it; this is not your Person's word.\n\n3 files."
             )
         );

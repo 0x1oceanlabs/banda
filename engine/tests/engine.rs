@@ -1087,7 +1087,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
         names,
         [
             &[
-                "threads",
+                "tasks",
                 "read",
                 "send",
                 "show_visual",
@@ -1106,7 +1106,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "browser_handoff",
                 "link_pull_request",
                 "unlink_pull_request",
-                "list_thread_pull_requests",
+                "list_task_pull_requests",
                 "accounts",
                 "account_profiles",
                 "connect_account",
@@ -1148,7 +1148,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     assert!(!error, "{limits}");
     assert!(serde_json::from_str::<Value>(&limits).unwrap()["limits"].is_array());
 
-    let (error, threads) = mcp.call(4, "threads", json!({}));
+    let (error, threads) = mcp.call(4, "tasks", json!({}));
     assert!(!error, "{threads}");
     let threads: Value = serde_json::from_str(&threads).unwrap();
     assert_eq!(threads["threads"][0]["id"], thread);
@@ -1184,6 +1184,8 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     let otherwise = json!({ "harness": "fake", "text": "bye" });
     let (error, other) = mcp.call(11, "send", otherwise);
     assert!(error && other.contains("Refused (conflict)"), "{other}");
+    // The name the tool had still answers, though no list shows it (ADR
+    // 0138, decision 5).
     let (error, threads) = mcp.call(20, "threads", json!({}));
     assert!(!error, "{threads}");
     let threads: Value = serde_json::from_str(&threads).unwrap();

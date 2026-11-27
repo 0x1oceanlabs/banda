@@ -10,14 +10,14 @@ export type OpenPane = {
 kind: string, 
 /**
  * The kind's own, an object, only those that choose what it shows:
- * a Thread's ID alone for a Thread's Pane, a web address alone for a
+ * a Task's ID alone for a Task's Pane, a web address alone for a
  * browser, a folder of your Project for Files.
  */
 args: JsonValue, 
 /**
  * A Pane `panes` lists, to open it beside. Left out, right of your
- * Thread, in its Group, when your Thread is shown, else last on your
+ * Task, in its Group, when your Task is shown, else last on your
  * Project's workspace, or beside your Project's Panes when it has
- * none; a Thread, last on that workspace or beside those Panes.
+ * none; a Task, last on that workspace or beside those Panes.
  */
 beside?: Beside, };

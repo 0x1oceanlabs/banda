@@ -601,7 +601,7 @@ banda_kernel::methods! {
         /// set` does (and does through this under your pass: behind the
         /// fence the files are read-only). It refuses what only your
         /// Person changes: which program a Harness runs and with what, how
-        /// freely a new Thread's Agent acts, what Agents may do in the
+        /// freely a new Task's Agent acts, what Agents may do in the
         /// browser, what Banda sends, this machine's name and icon, and
         /// keys, which `keys_bind` binds. Tell your Person what changed.
         call settings_set(SetSetting) -> String, Write, tool "settings_set";

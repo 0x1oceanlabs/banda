@@ -56,7 +56,7 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Whether Agents may use Banda's browser tools. Turning this off\nrefuses new calls, including from Threads already open.",
+          "description": "Whether Agents may use Banda's browser tools. Turning this off\nrefuses new calls, including from Tasks already open.",
           "type": "boolean"
         },
         "screenshots": {

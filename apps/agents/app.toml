@@ -5,7 +5,7 @@
 id = "agents"
 kind = "app"
 name = "Agents"
-about = "Threads with Agents on their Harnesses: what each says and does, and what it asks the Person; and a short run of a Thread's Harness apart from it, as for a commit's message."
+about = "Tasks with Agents on their Harnesses: what each says and does, and what it asks the Person; and a short run of a Task's Harness apart from it, as for a commit's message."
 version = "0.1.0"
 # The major of the App API it is written to (ADR 0062, ADR 0082).
 api = 1

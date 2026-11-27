@@ -2,11 +2,11 @@
 import type { ThreadId } from "./ThreadId";
 
 /**
- * What `agents.later` is asked: a Thread, and until when.
+ * What `agents.later` is asked: a Task, and until when.
  */
 export type LaterAsk = { 
 /**
- * The Thread's ID, as `threads` lists it; an Agent's own by default.
+ * The Task's ID, as `tasks` lists it; an Agent's own by default.
  */
 thread?: ThreadId, 
 /**
@@ -15,7 +15,7 @@ thread?: ThreadId,
 after?: string, 
 /**
  * Or when it comes back, in milliseconds since the epoch. With
- * neither, a Thread at work sleeps until its turn ends.
+ * neither, a Task at work sleeps until its turn ends.
  */
 until?: number, 
 /**

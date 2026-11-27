@@ -14,11 +14,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use ts_rs::TS;
 
-/// What `agents.later` is asked: a Thread, and until when.
+/// What `agents.later` is asked: a Task, and until when.
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "agents/")]
 pub struct LaterAsk {
-    /// The Thread's ID, as `threads` lists it; an Agent's own by default.
+    /// The Task's ID, as `tasks` lists it; an Agent's own by default.
     #[serde(default)]
     #[ts(optional)]
     pub thread: Option<ThreadId>,
@@ -27,7 +27,7 @@ pub struct LaterAsk {
     #[ts(optional)]
     pub after: Option<String>,
     /// Or when it comes back, in milliseconds since the epoch. With
-    /// neither, a Thread at work sleeps until its turn ends.
+    /// neither, a Task at work sleeps until its turn ends.
     #[serde(default)]
     #[ts(optional, type = "number")]
     pub until: Option<i64>,
@@ -57,11 +57,11 @@ pub struct SeeWokeAsk {
     pub seen: WokeSeen,
 }
 
-/// What `agents.wake` is asked: a Thread.
+/// What `agents.wake` is asked: a Task.
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "agents/")]
 pub struct WakeAsk {
-    /// The Thread's ID, as `threads` lists it; an Agent's own by default.
+    /// The Task's ID, as `tasks` lists it; an Agent's own by default.
     #[serde(default)]
     #[ts(optional)]
     pub thread: Option<ThreadId>,

@@ -46,16 +46,16 @@ pub struct AgentsSettings {
     /// What Enter does with a message written while the Agent works.
     /// Ctrl+Enter (⌘+Enter on a Mac) does the other.
     pub enter: Option<Enter>,
-    /// How a new Thread starts: on which account (ADR 0093, decision 7),
+    /// How a new Task starts: on which account (ADR 0093, decision 7),
     /// and with what on each Harness, by the Harness's ID: `[start.claude]`.
     /// The Agents section sets it from the composer's bar.
     pub start: Option<Starts>,
     /// The models in each Harness's menu, by the Harness's ID, as its
-    /// Threads offer them: `claude = ["default", "opus", "sonnet"]` (ADR
+    /// Tasks offer them: `claude = ["default", "opus", "sonnet"]` (ADR
     /// 0114, decision 7). The stars in "All models" set it; with none
     /// named, the menu holds the first three the Harness offers.
     pub models: Option<BTreeMap<String, Vec<String>>>,
-    /// How many seconds the focus stays on a Thread it only came to, by
+    /// How many seconds the focus stays on a Task it only came to, by
     /// the Strip's scroll or a key that moves the focus, before its mark
     /// counts as seen: 0 at once. A click or a key in it counts at once (ADR 0096,
     /// decision 3).
@@ -84,18 +84,18 @@ pub struct Agents {
     pub fallback: Option<String>,
 }
 
-/// `agents.toml`'s `[start]`: the accounts a new Thread starts on, and
+/// `agents.toml`'s `[start]`: the accounts a new Task starts on, and
 /// what it starts with on each Harness.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
 pub struct Starts {
-    /// The account a new Thread starts on, by its entry's ID in
+    /// The account a new Task starts on, by its entry's ID in
     /// harnesses.toml: `account = "work"`. By default the first one on.
     pub account: Option<String>,
-    /// The account a new Thread starts on while `account` is out, a limit
+    /// The account a new Task starts on while `account` is out, a limit
     /// window spent, when it has room itself; of any Harness:
     /// `fallback = "personal"`. By default none.
     pub fallback: Option<String>,
-    /// What a new Thread on each Harness starts with, by its ID.
+    /// What a new Task on each Harness starts with, by its ID.
     #[serde(flatten)]
     pub harnesses: BTreeMap<String, Start>,
 }
@@ -155,7 +155,7 @@ impl OneFile for AgentsSettings {
     }
 }
 
-/// What a new Thread on a Harness starts with, over the Harness's own:
+/// What a new Task on a Harness starts with, over the Harness's own:
 /// what it leaves out, the Harness chooses.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
 pub struct Start {
@@ -164,7 +164,7 @@ pub struct Start {
     pub mode: Option<Mode>,
     /// The Agent makes a plan before it changes anything.
     pub plan: Option<bool>,
-    /// The Harness's options by their IDs, as its Threads offer them:
+    /// The Harness's options by their IDs, as its Tasks offer them:
     /// `model = "opus"`.
     #[serde(flatten)]
     pub options: BTreeMap<String, OptionValue>,

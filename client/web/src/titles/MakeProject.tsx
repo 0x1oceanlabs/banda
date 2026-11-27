@@ -97,7 +97,7 @@ export function MakeProject({
           <DialogHeader>
             <DialogTitle>Make a Project from this Task</DialogTitle>
             <DialogDescription>
-              The Thread, its files and history stay together.
+              The Task, its files and history stay together.
             </DialogDescription>
           </DialogHeader>
           <label className="flex flex-col gap-2 text-ui">

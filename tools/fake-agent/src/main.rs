@@ -1393,7 +1393,9 @@ async fn turn(
         )?;
         return Ok(StopReason::EndTurn);
     }
-    if words.contains("ask") {
+    // The word itself: "Task", in Banda's line of who writes, holds it too.
+    let asked_to = |word: &str| word.trim_matches(|c: char| !c.is_alphanumeric()) == "ask";
+    if words.split_whitespace().any(asked_to) {
         let tool = "check-1";
         say(
             &cx,

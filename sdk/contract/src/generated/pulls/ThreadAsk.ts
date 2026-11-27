@@ -5,6 +5,6 @@
  */
 export type ThreadAsk = { 
 /**
- * The Thread; an Agent's own when it asks, so it leaves it out.
+ * The Task; an Agent's own when it asks, so it leaves it out.
  */
 thread?: string, };

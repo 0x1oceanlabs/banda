@@ -25,19 +25,19 @@ watch: StreamMethod<Nothing, Listed>,
  */
 refresh: CallMethod<Nothing, null>, 
 /**
- * Links a pull request to a Thread, by its URL or `#42` in the
+ * Links a pull request to a Task, by its URL or `#42` in the
  * Project's own repository on GitHub: Banda shows what it needs
- * on the bar. An Agent links one to its own Thread.
+ * on the bar. An Agent links one to its own Task.
  */
 link: CommandMethod<LinkAsk, Pull>, 
 /**
- * Lets go of a pull request in a Thread; what made it does not
+ * Lets go of a pull request in a Task; what made it does not
  * link it again.
  */
 unlink: CommandMethod<LinkAsk, null>, 
 /**
- * The pull requests a Thread links, with what each needs: an
- * Agent's own Thread's when it asks. Not to check on CI: Banda
+ * The pull requests a Task links, with what each needs: an
+ * Agent's own Task's when it asks. Not to check on CI: Banda
  * watches them.
  */
 list_thread: CallMethod<ThreadAsk, Array<Pull>>, };

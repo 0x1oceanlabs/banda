@@ -1,12 +1,12 @@
 ---
 name: banda
-description: Banda is the workspace this Agent works in, a tiling window of Projects, Threads and Panes. Read it to know where things are and to change Banda for the Person, such as its look, its sidebar, or its keys, shortcuts and keybindings.
+description: Banda is the workspace this Agent works in, a tiling window of Projects, Tasks and Panes. Read it to know where things are and to change Banda for the Person, such as its look, its sidebar, or its keys, shortcuts and keybindings.
 ---
 
 # Banda
 
 Banda is a tiling workspace for working with Agents. If you run in one of
-its Threads, you are one of those Agents, and the Person sees your work in a
+its Tasks, you are one of those Agents, and the Person sees your work in a
 Pane of Banda's window.
 
 ## Words
@@ -14,14 +14,14 @@ Pane of Banda's window.
 - **Project**: one body of work and its folder, any folder on this machine.
   Banda keeps its data and log outside it, in
   `~/.local/share/banda/projects/<id>/`.
-- **Thread**: one session with a Harness in a Project. Each Thread has its
+- **Task**: one session with a Harness in a Project. Each Task has its
   own Agent.
-- **Harness**: the agent program a Thread runs on, such as Claude Code or
+- **Harness**: the agent program a Task runs on, such as Claude Code or
   Codex.
-- **Pane**: one tile of the window, such as a Thread or a terminal.
+- **Pane**: one tile of the window, such as a Task or a terminal.
 - **Workspace**: one screen of Panes. Its **Strip** lays them out in
   columns that scroll sideways.
-- **Sidebar**: every Thread of every Project, at the window's left edge.
+- **Sidebar**: every Task of every Project, at the window's left edge.
 - **Bar**: the line across the window's top, with Banda's **Mark**, which
   says what the work calls the Person for.
 
@@ -35,7 +35,7 @@ Banda is changed through text files, the same way the Person changes it.
    `banda settings reset <file> <key>`: they keep every comment and other
    key, and refuse a value the file would not take. A Harness is named by
    its ID: `banda settings set harnesses.toml harness.codex.enabled false`.
-   What a new Thread on a Harness starts with is agents.toml's `start`
+   What a new Task on a Harness starts with is agents.toml's `start`
    table: `banda settings set agents.toml start.claude.model '"opus"'`,
    and `plan` or any option the composer offers. `banda settings rename
    <file> <key> <to>` gives a key another name in its table. For more
@@ -45,7 +45,7 @@ Banda is changed through text files, the same way the Person changes it.
    there by hand. The engine refuses, with the line to give your Person,
    what only they change: which Harnesses there are and what each runs
    (a `harness.<id>` entry whole, and its `id`, `command`, `args`, `env`,
-   `cli`, `of`, `carried` and `record`), the `mode` a new Thread starts
+   `cli`, `of`, `carried` and `record`), the `mode` a new Task starts
    in, what Agents may do in the browser (browser.toml's `[agents]`),
    what Banda sends (sharing.toml), and this machine's name and icon
    (machine.toml). A key is bound with `banda keys bind`, as the topic
@@ -96,7 +96,7 @@ as asked.
 
 `banda menu [route]` opens the Banda menu in the window, as Alt+Space
 does: `banda menu actions` at its Actions, each with its key;
-`banda menu project.<name>` in a Project, its Threads and a new one there;
+`banda menu project.<name>` in a Project, its Tasks and a new one there;
 `banda menu project.add` at "Add Project" (`project.add.folder` at its path
 field, `project.add.new` at a new Project's name);
 `banda menu views` at the sidebar's ways to group; `banda menu
@@ -172,7 +172,7 @@ so `git push` over ssh signs as they do. For anything else out of reach,
 give your Person the command to run in a terminal Pane, which runs
 outside the fence.
 `banda status` says whether the fence holds; where it does not, as on
-macOS and Windows, a new Thread starts Supervised.
+macOS and Windows, a new Task starts Supervised.
 
 ## GitHub in a Project not trusted
 
@@ -187,13 +187,13 @@ ask them to trust the Project in Banda.
 
 Banda's `browser_*` tools open and drive tabs in Banda's browser, in
 your Project's own profile, apart from the Person's: you see only the
-tabs your Project's Agents opened, and those the Person lent your Thread.
+tabs your Project's Agents opened, and those the Person lent your Task.
 Read `banda skill browser` before you use them.
 
 ## Showing the Person a Visual
 
 Show a visual the Person asks for, and data with a trend or a
-comparison, as a Visual in your Thread: lay the page out with
+comparison, as a Visual in your Task: lay the page out with
 `preview_visual`, fix what its picture and console show, then show it
 with `show_visual` and the height it answered. A visual already in a
 file is shown by passing that file's HTML. Never start a server for
@@ -201,10 +201,10 @@ one, and never describe it after: say only what it doesn't. A picture
 to post, send or use elsewhere is a `.png` file and its path, not a
 Visual. Ordinary coding work needs neither tool.
 
-## Putting off your Thread
+## Putting off your Task
 
 When you wait on something slow, as CI or a long build, and have nothing
-for your Person meanwhile, put off your own Thread with the `later` tool:
+for your Person meanwhile, put off your own Task with the `later` tool:
 `after` is how long, as `30m`, `2h` or `1d`. It leaves their list until
 then, and anything that needs them wakes it early, a question of yours
 too; `wake` brings it back sooner, as when what you waited on came
@@ -233,12 +233,12 @@ in `~/.config/banda-local/`, as their data and state too:
 |---|---|
 | `look.toml` | the theme, colours, corners, gaps, motion and sounds |
 | `themes/<name>/` | the Person's own themes |
-| `sidebar.toml` | how the sidebar arranges Threads |
+| `sidebar.toml` | how the sidebar arranges Tasks |
 | `browser.toml` | where the browser's tabs are, and its search |
 | `agents.toml` | what Enter does with a message written while the Agent works |
 | `tiling.toml` | how the Tiling behaves: the Flow, `flow`; a column's widths, `[columns]` with `default`, `alone`, `presets`, `heights` and `display`; and rules by kind of Pane, `[rule.terminal.terminal]` with `width = "1/3"` and `opens`, which is `"beside"`, `"below"`, `"group"`, `"beside-group"`, `"project"`, `"project-start"` or `"here"`, and lines by how a Pane is asked for, `[[rule.terminal.terminal.when]]` with `via` (`"click"` or `"key"`), `from` (`"pane"` or `"group"`) and `opens`, read in order before the rule's own `opens`. The engine places by it for the window, an Agent and `banda` alike |
 | `keys.toml` | the Person's keys, `[binds]`: `"Alt+M" = "column.maximize"`, or `"none"` to free a key; `mod`, the keys held for every Banda key, `"Ctrl+Alt"` where the desktop holds Alt; Ctrl+Alt+Shift+K brings Banda's own back. Bind with `banda keys` or the `keys_*` tools: the topic `keys` |
-| `harnesses.toml` | the Harnesses Threads start with |
+| `harnesses.toml` | the Harnesses Tasks start with |
 | `machine.toml` | this machine's name and icon, as every window shows it; `banda machine` prints them |
 | `schemas/` | each file's JSON Schema, written by Banda for editors |
 
@@ -303,7 +303,7 @@ add: in Settings → Agents → Add account, or in their own terminal with
 ask for a key in a chat, and never run `banda secret get`: it is for the
 account's own Harness.
 
-Removing an Account moves its Threads to the current default after their
+Removing an Account moves its Tasks to the current default after their
 active Turn. Choose another default before removing that one. Removal
 keeps history, the old session source and profile folders; it does not
 sign out. An Account's old ID stays reserved for its sessions.

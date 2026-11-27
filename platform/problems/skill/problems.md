@@ -33,12 +33,12 @@ A released Banda's page frames name its bundles, `assets/App.js`, not
 its source files: say where it likely broke from the message and the
 logs, and say that you guess.
 
-### `checkout` is this Thread's folder: fix it here
+### `checkout` is this Task's folder: fix it here
 
 Fix it there, as the repository's `AGENTS.md` says: find the cause from
 the frames, fix it at its root, add a test that broke before the fix,
 and run the checks. Do not draft an issue unless the Person asks for one.
-When `checkout` is another folder, say so: a Thread in that folder's
+When `checkout` is another folder, say so: a Task in that folder's
 Project can fix it.
 
 ### `checkout` is null: find its issue
@@ -58,5 +58,5 @@ Project can fix it.
 `draft_issue` shows your Person a card with Send, Edit and Cancel. Never
 open an issue or comment yourself, with `gh` or otherwise: the Person
 sends it, or not.
-A report holds no Thread's words, no paths outside Banda's code, and the
+A report holds no Task's words, no paths outside Banda's code, and the
 Panes by their kinds alone; keep it so.

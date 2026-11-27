@@ -261,7 +261,7 @@ pub async fn unpack(
 fn not_free(project: &ModuleProject) -> Refusal {
     Refusal::conflict(format!(
         "{} has changes that are not committed: commit or stash them there, then move the \
-         Thread.",
+         Task.",
         project.name()
     ))
 }

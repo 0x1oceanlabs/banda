@@ -72,7 +72,7 @@ pub struct WrittenFrom {
     pub here: bool,
 }
 
-/// How freely an Agent acts in a Thread (ADR 0003, decision 9). A Harness
+/// How freely an Agent acts in a Task (ADR 0003, decision 9). A Harness
 /// that has modes of its own enforces the mode; for any other, the engine
 /// answers the Harness's Questions by it.
 #[derive(

@@ -4,7 +4,7 @@
 
 Banda sends nothing unless you turn it on, in the first run's question or in Settings → Sharing (ADR 0039). Then it sends these two events to PostHog in the US, and nothing else. Each is kept on your computer first, and Settings → Sharing → "Sent by Banda" shows its exact JSON. A Banda run from a checkout, CI and the tests never send, nor a run with `BANDA_SHARING=0`.
 
-What never goes: a Thread's title or words, prompts, answers, paths, addresses, a Project's name, git, the time of day, your IP.
+What never goes: a Task's title or words, prompts, answers, paths, addresses, a Project's name, git, the time of day, your IP.
 
 ## Every event
 

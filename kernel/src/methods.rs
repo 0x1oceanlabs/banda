@@ -28,7 +28,9 @@
 //!
 //! A line that ends `, tool "<name>"` is also a tool an Agent calls
 //! through `banda mcp` (ADR 0019, decision 3): its description is the
-//! method's `///`, and its input the JSON Schema of its params. A tool's
+//! method's `///`, and its input the JSON Schema of its params. Each
+//! `, was "<name>"` after it is a name the tool had: no list shows it, and
+//! a call by it still runs (ADR 0138, decision 5). A tool's
 //! answer that holds `pictures` shows them to the Agent as images, beside
 //! the rest of it as text (ADR 0037, decision 3).
 
@@ -98,6 +100,11 @@ pub struct Tool {
     pub description: String,
     /// The JSON Schema of its params.
     pub schema: serde_json::Value,
+    /// The names it had, which an Agent's call still reaches and no list
+    /// shows (ADR 0138, decision 5).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional = nullable)]
+    pub was: Vec<String>,
 }
 
 impl Tool {
@@ -112,7 +119,14 @@ impl Tool {
             kind,
             description: words(doc),
             schema: schema.to_value(),
+            was: Vec::new(),
         }
+    }
+
+    /// The same tool, with the names it had.
+    pub fn was(mut self, was: &[&str]) -> Tool {
+        self.was = was.iter().map(|name| (*name).to_owned()).collect();
+        self
     }
 }
 
@@ -274,7 +288,8 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 ///
 /// After its right, a line takes marks: `read`, for a call or a stream
 /// that only reads with a right other than `Read`; `tool "<name>"`, for
-/// one an Agent calls; `pass`, for a machine's method a pass reaches
+/// one an Agent calls, and after it `was "<name>"` for each name the tool
+/// had, which a call still reaches; `pass`, for a machine's method a pass reaches
 /// though it is no tool, as a Harness process asks for what is its own
 /// (ADR 0078, decision 1). A `read` on a command, or on a line whose right
 /// is `Read`, does not compile: it would say nothing true.
@@ -397,17 +412,29 @@ macro_rules! methods {
     (@kind call) => { $crate::Kind::Call };
     (@kind command) => { $crate::Kind::Command };
     (@kind stream) => { $crate::Kind::Stream };
-    // A line's marks, after its right: `read`, `tool "<name>"` and `pass`.
+    // A line's marks, after its right: `read`, `tool "<name>"`, each
+    // `was "<name>"` after it, and `pass`.
     (@tool_name) => { None };
     (@tool_name tool $tool:literal $($marks:tt)*) => { Some($tool) };
     (@tool_name read $($marks:tt)*) => { $crate::methods!(@tool_name $($marks)*) };
     (@tool_name pass $($marks:tt)*) => { $crate::methods!(@tool_name $($marks)*) };
+    (@tool_name was $($marks:tt)*) => {
+        compile_error!("A line's `was \"<name>\"` follows its `tool \"<name>\"`: it is a name the tool had.")
+    };
     (@tool_name $mark:tt $($marks:tt)*) => {
         compile_error!(concat!(
-            "A method's marks are `read`, `tool \"<name>\"` and `pass`, not ",
+            "A method's marks are `read`, `tool \"<name>\"`, `was \"<name>\"` after it, and `pass`, not ",
             stringify!($mark),
             "."
         ))
+    };
+    // The names a tool had: each `was "<name>"` after its `tool`.
+    (@was [$($had:literal),*]) => { &[$($had),*] as &[&str] };
+    (@was [$($had:literal),*] was $was:literal $($marks:tt)*) => {
+        $crate::methods!(@was [$($had,)* $was] $($marks)*)
+    };
+    (@was [$($had:literal),*] $mark:tt $($marks:tt)*) => {
+        $crate::methods!(@was [$($had),*] $($marks)*)
     };
     (@pass) => { false };
     (@pass pass $($marks:tt)*) => { true };
@@ -420,7 +447,7 @@ macro_rules! methods {
             $crate::methods!(@kind $kind),
             &[$($doc),*],
             $crate::schemars::schema_for!($p),
-        ));
+        ).was($crate::methods!(@was [] $($marks)*)));
     };
     (@tool $tools:ident $module:ident $kind:ident $name:ident($p:ty) [$($doc:literal)*] $mark:tt $($marks:tt)*) => {
         $crate::methods!(@tool $tools $module $kind $name($p) [$($doc)*] $($marks)*)
@@ -467,4 +494,15 @@ macro_rules! methods {
     (@stream $kind:ident $self:ident $ask:ident $params:ident $name:ident $p:ty) => {
         Err($crate::Refusal::invalid(format!("{} is not a stream.", $crate::methods::bare(stringify!($name)))))
     };
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_line_keeps_every_name_its_tool_had() {
+        let had: &[&str] = crate::methods!(@was [] tool "work" was "tasks" pass was "threads");
+        assert_eq!(had, ["tasks", "threads"]);
+        let none: &[&str] = crate::methods!(@was [] read tool "screen");
+        assert!(none.is_empty());
+    }
 }

@@ -343,7 +343,7 @@ function Read({
     return (
       <Centered>
         <p className="text-ui text-muted-foreground">
-          This Crew is no longer in its Thread.
+          This Crew is no longer in its Task.
         </p>
       </Centered>
     )

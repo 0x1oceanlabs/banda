@@ -237,7 +237,7 @@ pub struct Linked {
 pub struct LinkAsk {
     /// Its URL, or `#42` for one of the Project's own repository.
     pub pull: String,
-    /// The Thread; an Agent's own when it asks, so it leaves it out.
+    /// The Task; an Agent's own when it asks, so it leaves it out.
     #[serde(default)]
     #[ts(optional)]
     pub thread: Option<String>,
@@ -247,7 +247,7 @@ pub struct LinkAsk {
 #[derive(Clone, Debug, Default, Deserialize, TS, JsonSchema)]
 #[ts(export, export_to = "pulls/")]
 pub struct ThreadAsk {
-    /// The Thread; an Agent's own when it asks, so it leaves it out.
+    /// The Task; an Agent's own when it asks, so it leaves it out.
     #[serde(default)]
     #[ts(optional)]
     pub thread: Option<String>,

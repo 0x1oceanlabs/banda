@@ -242,7 +242,9 @@ same PR.
   JSON-RPC message per line, written on `serde_json`, and the engine's API
   on the other side. Its calls name no Project, so they run in the pass's.
   Its tools are `projects.tools`, read once as it connects: the module
-  methods marked `tool` in their `methods!` tables. It adds `skill`,
+  methods marked `tool` in their `methods!` tables. A call by a name a
+  tool had (`was`) runs that tool, unless another has the name now (ADR
+  0138, decision 5). It adds `skill`,
   which it answers itself from the Banda skill. Its
   `instructions` are the skill's brief (`platform/skill/BRIEF.md`), under
   the 4,096 characters Claude Code keeps of them; the core and its topics

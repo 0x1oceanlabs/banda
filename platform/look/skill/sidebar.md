@@ -57,7 +57,7 @@ nothing is named, and these keys change nothing.
 
 ## Asked for, and what to set
 
-- "Group my Threads by Project": `group = "project"`.
+- "Group my Tasks by Project": `group = "project"`.
 - "Smaller cards" or "one line each": `card = 2` or `card = 1`.
 - "The newest call first": `[inbox]` `order = "newest"`.
 - "Only what is my turn in the Inbox": `[inbox]` `open = false` and

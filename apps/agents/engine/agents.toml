@@ -1,16 +1,16 @@
 #:schema ./schemas/agents.schema.json
-# How Threads start and messages to an Agent are sent (ADR 0016). Every
+# How Tasks start and messages to an Agent are sent (ADR 0016). Every
 # key is optional: what you leave out is Banda's default, written below.
 # Check a change with: banda settings check
 
 # [start]
-# The account a new Thread starts on, by its entry's ID in harnesses.toml,
+# The account a new Task starts on, by its entry's ID in harnesses.toml,
 # and the one it starts on while that one is out of its limits, of any
 # Harness (ADR 0093). By default the first one on, and no fallback.
 # account = "claude"
 # fallback = "personal"
 
-# What a new Thread on a Harness starts with, by the Harness's ID. The
+# What a new Task on a Harness starts with, by the Harness's ID. The
 # Agents section sets it from the composer's bar; what it leaves out, the
 # Harness chooses.
 # [start.claude]
@@ -23,9 +23,9 @@
 # holds the first three models the Harness offers.
 # claude = ["default", "opus", "sonnet"]
 
-# How many seconds the focus stays on a Thread it only came to, by
+# How many seconds the focus stays on a Task it only came to, by
 # scrolling the Strip or Alt+arrow, before its Done counts as seen (ADR
-# 0096). A click or a key in the Thread counts at once; 0 counts the focus
+# 0096). A click or a key in the Task counts at once; 0 counts the focus
 # at once too.
 # seen-after = 2.5
 

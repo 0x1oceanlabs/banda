@@ -31,8 +31,8 @@ fn one_thread(args: &Value) -> Result<(), Refusal> {
         return Ok(());
     }
     Err(Refusal::invalid(format!(
-        "A Thread's Pane shows one of your Project's Threads: args \
-         {{\"thread\": \"<id>\"}}, an ID as `threads` lists it. {SEND}"
+        "A Task's Pane shows one of your Project's Tasks: args \
+         {{\"thread\": \"<id>\"}}, an ID as `tasks` lists it. {SEND}"
     )))
 }
 

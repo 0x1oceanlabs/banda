@@ -23,7 +23,7 @@ pub struct SharingSettings {
     /// Send problem reports: what broke in Banda, where in its code, and
     /// its version and system. Each problem once a day.
     pub problems: Option<bool>,
-    /// Send usage counts: one summary a day of how many Threads, Turns and
+    /// Send usage counts: one summary a day of how many Tasks, Turns and
     /// Panes, by kind, and the country of the system's language. Never
     /// words, paths or names.
     pub usage: Option<bool>,
