@@ -12,7 +12,6 @@ import "@banda/ui/globals.css"
 import { ownEngine } from "@banda/core"
 import { HostsContext, KeptHosts, onDevice, poppedOf } from "@banda/core/react"
 import { stepLoops } from "@banda/ui/lib/loops"
-import { moveEnterKey } from "./enter-key"
 import { quiet } from "./calls/quiet"
 import { followFrame } from "./frame"
 import { followLook } from "./look"
@@ -63,7 +62,6 @@ function open(engine: Engine) {
   watchProblems(engine)
   // Its files' bytes come through the device, which relays them to it.
   relayBytesFrom(engine)
-  if (desktop) void moveEnterKey(device).catch(() => undefined)
   // A Pane in a window of its own draws alone (ADR 0025, decision 9).
   const popped = poppedOf(location.hash)
   const show = () => {

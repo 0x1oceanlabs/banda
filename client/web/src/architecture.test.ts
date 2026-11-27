@@ -696,8 +696,6 @@ test("one place answers a pick, and only the action reaches it", () => {
  *   they read with the mod (#1749).
  * - `settings/RemoveProject.tsx`: the Threads a Project's removal counts,
  *   listed with `APP_METHODS` too (#1748).
- * - `enter-key.ts`: a choice moved once out of the window's old storage
- *   (#1750).
  *
  * The menu's usual Actions left it with WS8: an App says its own
  * (`Action.usual`); and so did the sections of the Apps' settings files,
@@ -705,8 +703,6 @@ test("one place answers a pick, and only the action reaches it", () => {
  * one that goes leaves it. Not what only tests use.
  */
 const APP_STRINGS = [
-  "web/src/enter-key.ts: agents.toml",
-  "web/src/enter-key.ts: agents.toml",
   "web/src/menu/BandaMenu.tsx: thread.new",
   "web/src/settings/MachinesSettings.tsx: terminal.run",
   "web/src/settings/Mod.tsx: thread.new",
