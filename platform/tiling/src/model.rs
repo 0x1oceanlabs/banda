@@ -1225,12 +1225,12 @@ pub(crate) mod tests {
         Seed::of(&Uuid::now_v7().to_string())
     }
 
-    /// The kinds that lead a Group, as the window parts say: a Thread's.
     /// The kinds that lead a Group, as the placing takes them.
     fn leading() -> BTreeSet<String> {
         leads().into_iter().collect()
     }
 
+    /// The kinds that lead a Group, as the window parts say: a Thread's.
     fn leads() -> Vec<String> {
         vec!["agents.thread".into()]
     }

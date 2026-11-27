@@ -41,7 +41,10 @@ pub struct Facts {
     pub home: BTreeSet<String>,
     /// The Pane kinds that lead a Group, as an Agent's Thread does: those
     /// that open as a Group of their own (`PaneKind.grouped`). A Group
-    /// moves as its lead's Project (ADR 0102, decision 6).
+    /// moves as its lead's Project (ADR 0102, decision 6). A Pane of such
+    /// a kind with a `thread` arg is that Thread's one Pane: an Agent's
+    /// Panes go into its Group, and an Agent that asks for it gets the
+    /// one shown (`agents_place`, `model::showing_asked`).
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     #[ts(as = "Option<Vec<String>>", optional)]
     pub leads: BTreeSet<String>,

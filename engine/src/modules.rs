@@ -229,8 +229,9 @@ pub fn described() -> Vec<AppMethods> {
 /// The Pane kinds that open as a Group of their own, as the window parts
 /// in the list of Apps say: the workspaces take them as the engine
 /// starts. A window part that does not read is logged and left out, and
-/// its kinds open in no Group: where a Pane opens never stops the engine,
-/// and its tests catch the wrong file.
+/// its kinds open in no Group, nor is a Thread's Pane found by its Thread
+/// for an Agent's Panes: where a Pane opens never stops the engine, and
+/// its tests catch the wrong file.
 pub fn grouped_kinds() -> BTreeSet<String> {
     grouped_in(APPS)
 }
