@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { Toaster } from "@banda/ui/components/sonner"
-import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
+import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
 import {
@@ -14,7 +14,7 @@ import { Bar } from "../bar/Bar"
 import { useArrangeBar, useWidgets } from "../bar/layout/Widgets"
 import { Watches } from "../calls/Watches"
 import { quiet } from "../calls/quiet"
-import { besideOf, callAfter, sightOf } from "../calls/sight"
+import { besideOf, callAfter } from "../calls/sight"
 import {
   followCalls,
   itemsOf,
@@ -28,8 +28,8 @@ import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
 import { BandaMenu } from "../menu/BandaMenu"
 import { locateRoute } from "../menu/menu"
-import { columnsOf, useLookDrawer, useLookNotify, useLookSound } from "../look"
-import { identityOf, letGoWhenBack, sheetsOf, showsOf } from "../registry"
+import { useLookDrawer, useLookNotify, useLookSound } from "../look"
+import { letGoWhenBack, showsOf } from "../registry"
 import { RemovingProject } from "../settings/RemoveProject"
 import { QuitDialog } from "./Quit"
 import { useWokeNote } from "../calls/woke"
@@ -38,6 +38,7 @@ import { Kept, useKeptHere } from "./here"
 import { tilingShows } from "./shows"
 import { useDocked } from "./docked"
 import { useGoes } from "./goes"
+import { openerOf, sightNow } from "./opening"
 import { useLetsGo } from "./let-go"
 import { useMarked } from "./looked"
 import { useChosen, useMenuOpening } from "./menu"
@@ -46,7 +47,7 @@ import { useModulesStart } from "./starts"
 import { useZoom } from "./zoom"
 import { usePoppedOut } from "./popped-out"
 import { Asked } from "../tiling/AskedPanes"
-import { type Reveal, shownOf } from "../tiling/layout"
+import type { Reveal } from "../tiling/layout"
 import { useTiling } from "../tiling/useTiling"
 import {
   current,
@@ -54,7 +55,6 @@ import {
   across,
   focusEntry,
   projectIn,
-  samePane,
 } from "../tiling/model"
 import { useFlowHere } from "../tiling/flow"
 import { Drawer, useDrawer } from "./Drawer"
@@ -65,7 +65,7 @@ import { usePlacing, writeFlow } from "./placing"
 import { Overview } from "../tiling/Overview"
 import {} from "../tiling/store"
 import { Workspaces } from "../tiling/Workspaces"
-import { closing, focusedIn, placed, strayedIn } from "../tiling/opening"
+import { focusedIn, placed, strayedIn } from "../tiling/opening"
 import { runAction, type Shell as Parts, useWindowApi } from "./actions"
 import { useAsked } from "./asked"
 import { useFrame } from "./frame"
@@ -243,65 +243,23 @@ export function Shell({
   const parts = useSteady<Parts>({
     change,
     home,
-    open: (
-      pane,
-      project,
-      { beside, again = true, update, toggle, drawer: inDrawer, ...how } = {}
-    ) => {
-      if (inDrawer) return drawer.into(pane, project ?? home)
-      if (sheetsOf(pane)) return sheet.show(pane, project, { toggle, again })
-      // The Pane that peeks, opened in the workspace, peeks no more.
-      const peeked = peekNow.current
-      if (
-        peeked &&
-        samePane(
-          { project: project ?? peeked.project, pane },
-          peeked,
-          identityOf
-        )
-      )
-        setPeek(null)
-      change((w) => {
-        const at = beside
-          ? besideOf(w, stores.items.get(), beside, showsOf)
-          : null
-        const into = project ?? at?.project ?? projectIn(w) ?? home
-        // Toggled, the one in focus closes when it is this one.
-        const entry = toggle && focused(w)
-        if (entry && samePane(entry, { project: into, pane }, identityOf))
-          return closing(entry.id)
-        // Not again: the one shown, as its kind names it, keeps what it
-        // shows, or takes these args when asked to update it. Beside its
-        // Agent's Thread, where a workspace shows it, in its Group; else
-        // where the engine places what is opened for an Agent.
-        return placed(w, into, pane, placing, {
-          ...how,
-          ...(at &&
-            (at.from ? { from: at.from, place: "group" } : { agents: true })),
-          ...(again ? { again } : update && { update }),
-        })
-      })
-    },
+    open: openerOf({
+      drawer,
+      sheet,
+      peek: { peekNow, setPeek },
+      change,
+      stores,
+      home,
+      placing,
+    }),
     here,
     beside: (agent) => {
       const at = besideOf(drawnNow(), stores.items.get(), agent, showsOf)
       return at && { project: at.project, right: at.from ? at.right : null }
     },
     items,
-    sight: (thing) => {
-      if (!thing) return inFront() ? "in-window" : "away"
-      const state = drawnNow()
-      const look = columnsOf()
-      // What shows is measured as it is asked, only for a Tile on the
-      // workspace on screen (ADR 0087, decision 9).
-      return sightOf(state, thing, inFront(), showsOf, {
-        look,
-        shown: () => shownOf(current(state), look),
-        away: awayNow.current,
-        // Under a zoom no other Tile shows.
-        zoomed: zoomed !== undefined,
-      })
-    },
+    sight: (thing) =>
+      sightNow(thing, drawnNow(), awayNow.current, zoomed !== undefined),
     // The one answer to `pane.pick` (ADR 0087, decision 7): the Tiling
     // goes to the Pane, or opens it, and it comes to the left once drawn.
     reach: (how) =>
