@@ -12,14 +12,15 @@
 //! makes no event.
 
 use crate::exception::{Banda, TOKEN};
-use banda_kernel::{Error, Event, EventFilter, ModuleProject, Tally};
+use banda_kernel::{Error, Event, EventFilter, ModuleProject, Refusal, Tally};
 use banda_workspaces::model::{Arrangement, PaneId, panes};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The name the module's `app.toml` declares the facts it counts by: the
-/// Threads started and the Turns, of the part that keeps them.
+/// The name the module's `app.toml` declares the facts it counts by
+/// (`[needs.listens.day]`): the Threads started and the Turns, of the part
+/// that keeps them. It hears none of them: the kernel tallies them.
 const COUNTED: &str = "day";
 
 /// A day, in ms.
@@ -31,7 +32,7 @@ pub struct Counts {
     /// The Threads started, by Harness: `unknown` for one that names none.
     pub threads: BTreeMap<String, u64>,
     pub turns: u64,
-    /// The Panes opened, by kind, as `agents.thread`.
+    /// The Panes opened, by kind, `<part>.<pane>`.
     pub panes: BTreeMap<String, u64>,
     /// How many Projects and workspaces there are.
     pub projects: u64,
@@ -80,8 +81,10 @@ fn locale_of(said: &str) -> Option<String> {
 /// Counts the day `day`, in days since the epoch.
 pub(crate) async fn count(project: &ModuleProject, day: i64) -> Result<Counts, Error> {
     let (from, to) = (day * DAY_MS, (day + 1) * DAY_MS);
-    // Whose facts they are, the module's manifest says, with their kinds.
-    let counted = project.hears(COUNTED)?.module.unwrap_or_default();
+    // Whose facts they are, the module's manifest says: the kernel counts
+    // those it declares and no others.
+    let counted = (project.hears(COUNTED)?.module)
+        .ok_or_else(|| Refusal::invalid("The day's count names the part it counts."))?;
     let tally = |kind: &str, by: Option<&str>| Tally {
         module: counted.clone(),
         kind: kind.to_owned(),

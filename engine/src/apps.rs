@@ -230,7 +230,9 @@ mod build {
     /// `BANDA_SHARING=0`.
     pub fn sharing(host: &HostContext<'_>) -> Sharing {
         let places = host.places;
-        let sharing = Sharing::new(&places.config, &places.state).channel(channel());
+        let sharing = Sharing::new(&places.config, &places.state)
+            .channel(channel())
+            .example_panes(crate::modules::pane_kinds().into_iter().take(2));
         if from_checkout() {
             sharing.never(Never::Checkout)
         } else if std::env::var_os("BANDA_SHARING").is_some_and(|off| off == "0") {

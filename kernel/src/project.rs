@@ -1154,9 +1154,11 @@ impl ModuleProject {
     /// these numbers cross the wall, for a module of the machine, which
     /// never hears a Project's log (ADR 0040, decision 3, as ADR 0039 amends
     /// it): no Project, subject, author or word. So `by` names a field whose
-    /// values are a few names, such as a Harness's. None for a module of
-    /// a Project.
+    /// values are a few names, such as a Harness's. Another part's facts it
+    /// counts only as its manifest declares them (`[needs.listens]`), and
+    /// is refused the rest. None for a module of a Project.
     pub async fn tally(&self, tally: Tally) -> Result<Option<BTreeMap<String, u64>>, Error> {
+        listens::counts(&*self.itself()?, &tally.module, &tally.kind)?;
         let Some(projects) = self.project.projects.as_ref().and_then(|s| s.upgrade()) else {
             return Ok(None);
         };

@@ -25,8 +25,9 @@ pub struct Examples {
     pub day: Value,
 }
 
-/// The two events as `banda` would send them, `locale` in `day`.
-pub fn examples(banda: &Banda, locale: Option<&str>) -> Examples {
+/// The two events as `banda` would send them, `locale` in `day`, and its
+/// Panes of the kinds `panes`, which the engine names from its Apps.
+pub fn examples(banda: &Banda, locale: Option<&str>, panes: &[String]) -> Examples {
     let problem = Problem {
         fingerprint: "3124d1bf35ad".to_owned(),
         source: Source::Page,
@@ -45,11 +46,7 @@ pub fn examples(banda: &Banda, locale: Option<&str>) -> Examples {
     let counts = Counts {
         threads: [("claude".to_owned(), 4), ("codex".to_owned(), 1)].into(),
         turns: 31,
-        panes: [
-            ("apps.view".to_owned(), 6),
-            ("harnesses.usage".to_owned(), 3),
-        ]
-        .into(),
+        panes: panes.iter().cloned().zip([6, 3]).collect(),
         projects: 2,
         workspaces: 3,
     };
@@ -155,13 +152,13 @@ fn sorted(value: &Value) -> Value {
 
 /// `docs/sharing.md`: every event and field, from the declarations above
 /// and the examples the engine makes.
-pub fn doc() -> String {
+pub fn doc(panes: &[String]) -> String {
     let banda = Banda {
         version: "0.2.0".to_owned(),
         channel: "stable",
         os: "linux",
     };
-    let examples = examples(&banda, Some("de_DE"));
+    let examples = examples(&banda, Some("de_DE"), panes);
     let mut text = String::from(
         "<!-- Written by `cargo test -p banda-sharing` from platform/sharing/engine/src/events.rs: do not edit. -->\n\n\
          # What Banda sends\n\n\
@@ -213,6 +210,13 @@ mod tests {
         all
     }
 
+    /// The kinds of Pane the examples show.
+    fn panes() -> Vec<String> {
+        ["agents.thread", "terminal.terminal"]
+            .map(str::to_owned)
+            .to_vec()
+    }
+
     #[test]
     fn every_field_of_every_event_is_declared() {
         let examples = examples(
@@ -222,6 +226,7 @@ mod tests {
                 os: "linux",
             },
             Some("de_DE"),
+            &panes(),
         );
         for Declared { name, own, .. } in EVENTS {
             let example = match *name {
@@ -240,7 +245,7 @@ mod tests {
     #[test]
     fn the_doc_lists_every_event() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../docs/sharing.md");
-        let text = doc();
+        let text = doc(&panes());
         if std::fs::read_to_string(&path).ok().as_deref() != Some(text.as_str()) {
             std::fs::write(&path, &text).unwrap();
             panic!(

@@ -59,6 +59,9 @@ pub struct Sharing {
     clock: Clock,
     /// What posts an event.
     post: Arc<dyn Post>,
+    /// The kinds of Pane its example of a day shows, a few of those this
+    /// engine's Apps have.
+    panes: Vec<String>,
 }
 
 /// The time now, in ms since the epoch.
@@ -91,6 +94,7 @@ impl Sharing {
             channel: "local",
             clock: Arc::new(banda_kernel::now_ms),
             post: Arc::new(Capture::at(CAPTURE)),
+            panes: Vec::new(),
         }
     }
 
@@ -113,6 +117,15 @@ impl Sharing {
     /// Says it is Banda's `channel`: `stable` or `dev`.
     pub fn channel(self, channel: &'static str) -> Self {
         Self { channel, ..self }
+    }
+
+    /// Shows Panes of `kinds` in its example of a day: the engine names a
+    /// few of those its Apps have.
+    pub fn example_panes(self, kinds: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            panes: kinds.into_iter().collect(),
+            ..self
+        }
     }
 
     /// Posts what goes with `post`, not to PostHog: only a test does.
@@ -319,7 +332,8 @@ impl Sharing {
 
     async fn example(&self, _: Call, _: Nothing) -> Result<events::Examples, Refusal> {
         let banda = exception::Banda::this(self.channel);
-        Ok(events::examples(&banda, usage::locale().as_deref()))
+        let locale = usage::locale();
+        Ok(events::examples(&banda, locale.as_deref(), &self.panes))
     }
 
     async fn new_id(&self, call: Call, _: Nothing) -> Result<Shared, Refusal> {

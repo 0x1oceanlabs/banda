@@ -2962,6 +2962,12 @@ async fn a_module_of_the_machine_counts_every_projects_events() {
     assert!(later.is_empty());
     // By a plain field only.
     assert!(machine.tally(tally(Some("$.x"), from, to)).await.is_err());
+    // Only the facts its manifest declares: another kind is refused.
+    let undeclared = banda_kernel::Tally {
+        kind: "noted".into(),
+        ..tally(None, from, to)
+    };
+    assert!(refused(machine.tally(undeclared).await, Code::Forbidden));
 
     // A module of a Project counts nothing beyond its wall.
     let module = hears.projects.lock().unwrap()[0].clone();
