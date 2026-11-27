@@ -120,7 +120,7 @@ remove_account: CommandMethod<RemoveAccount, string>,
 login_finish: CommandMethod<LoginId, null>, 
 /**
  * How a Harness is set up, and where that stands (ADR 0140): its
- * steps in order, install then sign in, each done, waiting,
+ * steps in order, Git, install, then sign in, each done, waiting,
  * running, asking for the Person or failed. None for a Harness
  * Banda cannot set up.
  */

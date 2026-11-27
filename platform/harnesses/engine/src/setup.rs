@@ -65,8 +65,14 @@ pub enum StepState {
     Failed,
 }
 
-const INSTALL: usize = 0;
-const SIGN_IN: usize = 1;
+const GIT: usize = 0;
+const INSTALL: usize = 1;
+const SIGN_IN: usize = 2;
+
+/// What a test names in place of a Harness, for Git's installer and for
+/// where Git is looked for.
+const GIT_LINE: &str = "git";
+const GIT_AT: &str = "git-at";
 
 /// The machine's setups: one per Harness at a time.
 #[derive(Default)]
@@ -75,6 +81,22 @@ pub(crate) struct Setups {
     /// The installer's line a test runs for a Harness, in place of its
     /// vendor's.
     stand_ins: Mutex<HashMap<String, String>>,
+}
+
+/// Git's installer, and where a test looks for Git in place of the host.
+#[derive(Clone)]
+struct Git {
+    line: String,
+    at: Option<std::path::PathBuf>,
+}
+
+impl Git {
+    fn found(&self) -> bool {
+        match &self.at {
+            Some(at) => at.is_file(),
+            None => crate::kinds::git().is_some(),
+        }
+    }
 }
 
 struct Run {
@@ -92,6 +114,16 @@ impl Setups {
     fn line(&self, harness: &Harness) -> Option<String> {
         let lines = self.stand_ins.lock().unwrap();
         (lines.get(&harness.id).cloned()).or_else(|| Some(harness.row()?.install.here().to_owned()))
+    }
+
+    /// How Git is installed and found here: a test's stand-ins, else the
+    /// system's.
+    fn git(&self) -> Git {
+        let lines = self.stand_ins.lock().unwrap();
+        Git {
+            line: (lines.get(GIT_LINE).cloned()).unwrap_or_else(|| crate::kinds::GIT.to_owned()),
+            at: lines.get(GIT_AT).map(std::path::PathBuf::from),
+        }
     }
 
     /// `harness`'s setup and what stops it; with `anew`, a stop of its
@@ -122,7 +154,7 @@ impl Setups {
         if state.borrow().running {
             return Ok(state.borrow().clone());
         }
-        let mut found = look(accounts, project, &entry).await;
+        let mut found = look(accounts, project, &entry, &self.git()).await;
         // One that started meanwhile is the newer.
         state.send_if_modified(|now| {
             if now.running {
@@ -161,7 +193,8 @@ impl Setups {
                 entry.name
             )));
         };
-        let mut setup = look(&accounts, project, &entry).await;
+        let git = self.git();
+        let mut setup = look(&accounts, project, &entry, &git).await;
         setup.running = true;
         let (state, _) = self.run(harness, false);
         let taken = state.send_if_modified(|now| {
@@ -184,6 +217,7 @@ impl Setups {
             by,
             harness: entry,
             line,
+            git,
             state: state.clone(),
             stop,
         };
@@ -239,7 +273,7 @@ impl Setups {
 }
 
 /// `harness`'s steps as the engine finds them now, none running.
-async fn look(accounts: &Accounts, project: &ModuleProject, harness: &Harness) -> Setup {
+async fn look(accounts: &Accounts, project: &ModuleProject, harness: &Harness, git: &Git) -> Setup {
     let mut setup = Setup {
         harness: harness.id.clone(),
         name: harness.name.clone(),
@@ -262,6 +296,12 @@ async fn look(accounts: &Accounts, project: &ModuleProject, harness: &Harness) -
     let installed = installed(project, harness).await;
     let signed_in = installed && signed_in(accounts, project, harness).await;
     setup.steps = vec![
+        step(
+            "git",
+            "Git",
+            "Keeps the history of what Agents change in your files".to_owned(),
+            git.found(),
+        ),
         step(
             "install",
             &harness.name,
@@ -298,6 +338,7 @@ struct Going {
     by: Participant,
     harness: Harness,
     line: String,
+    git: Git,
     state: watch::Sender<Setup>,
     stop: Arc<Notify>,
 }
@@ -324,6 +365,18 @@ impl Going {
             let now = self.state.borrow();
             now.steps.get(step).map(|step| step.state) == Some(StepState::Done)
         };
+        if !done(GIT) {
+            // Git holds back no other step: a Harness runs without it.
+            match self.git().await {
+                Err(None) => return Err(None),
+                Err(Some(why)) => self.state.send_modify(|now| {
+                    if let Some(step) = now.steps.get_mut(GIT) {
+                        (step.state, step.note) = (StepState::Failed, Some(why));
+                    }
+                }),
+                Ok(()) => self.set(GIT, StepState::Done),
+            }
+        }
         if !done(INSTALL) {
             self.set(INSTALL, StepState::Running);
             let job = {
@@ -371,6 +424,29 @@ impl Going {
         }
         self.state.send_modify(|now| now.login = None);
         self.set(SIGN_IN, StepState::Done);
+        Ok(())
+    }
+
+    /// Installs Git. Off Windows the system asks the Person in a dialog of
+    /// its own, so the step asks.
+    async fn git(&self) -> Ended {
+        let asks = if cfg!(windows) {
+            StepState::Running
+        } else {
+            StepState::Asks
+        };
+        self.set(GIT, asks);
+        let job = {
+            let project = self.project()?;
+            (self.accounts).install(&project, self.by, &self.harness.id, &self.git.line)
+        };
+        self.follow(job.map_err(|refused| Some(refused.message))?)
+            .await?;
+        if !self.git.found() {
+            return Err(Some(
+                "Its installer ended, and Git is still not on this computer.".to_owned(),
+            ));
+        }
         Ok(())
     }
 
