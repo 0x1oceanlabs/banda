@@ -26,6 +26,7 @@ use banda_base::{AgentId, ProjectId, Refusal};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeSet;
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -384,9 +385,14 @@ pub fn showing<'a>(list: &'a Arrangement, shown: &Shown) -> Option<&'a Pane> {
 /// The Pane that shows what an Agent asks to open, if one does: as
 /// `showing`, but a Thread's Pane by its Thread alone. An Agent gives a
 /// Thread's ID and nothing else, and the window keeps the Thread's title
-/// and Harness beside it.
-pub fn showing_asked<'a>(list: &'a Arrangement, asked: &Shown) -> Option<&'a Pane> {
-    if asked.kind != "agents.thread" {
+/// and Harness beside it. A Thread's Pane is one of the kinds that lead a
+/// Group (`leads`, `Facts::leads`), on a Thread.
+pub fn showing_asked<'a>(
+    list: &'a Arrangement,
+    leads: &BTreeSet<String>,
+    asked: &Shown,
+) -> Option<&'a Pane> {
+    if !leads.contains(&asked.kind) || asked.args.get("thread").is_none() {
         return showing(list, asked);
     }
     panes(list).find(|pane| {
@@ -1220,6 +1226,11 @@ pub(crate) mod tests {
     }
 
     /// The kinds that lead a Group, as the window parts say: a Thread's.
+    /// The kinds that lead a Group, as the placing takes them.
+    fn leading() -> BTreeSet<String> {
+        leads().into_iter().collect()
+    }
+
     fn leads() -> Vec<String> {
         vec!["agents.thread".into()]
     }
@@ -2201,7 +2212,7 @@ pub(crate) mod tests {
         let pane = opened(&mut list, on_thread(work, 1, thread), None);
         group_pane(&mut list, pane, &seed()).unwrap();
         opened(&mut list, shown(work, "a.a", 2), None);
-        let place = agents_place(&list, work, thread);
+        let place = agents_place(&list, &leading(), work, thread);
         assert_eq!(place, Some(Place::Group { pane }));
         // A Deck right of the Thread, in its Group.
         opened(&mut list, shown(work, "git.diff", 3), place);
@@ -2209,7 +2220,7 @@ pub(crate) mod tests {
         assert_eq!(grouping(&list)[0], [1, 1, 0]);
         assert_eq!(list[0].columns[1].display, Some(Display::Deck));
         // The next goes into that Deck.
-        let place = agents_place(&list, work, thread);
+        let place = agents_place(&list, &leading(), work, thread);
         opened(&mut list, shown(work, "browser.browser", 4), place);
         assert_eq!(layout(&list)[0], [vec![1], vec![3, 4], vec![2]]);
         assert_eq!(grouping(&list)[0], [1, 1, 0]);
@@ -2234,7 +2245,7 @@ pub(crate) mod tests {
         group_pane(&mut list, pane, &seed()).unwrap();
         // Not where a Pane of its Project with no place goes, the top
         // workspace that shows one, but beside its Thread.
-        let place = agents_place(&list, work, thread);
+        let place = agents_place(&list, &leading(), work, thread);
         opened(&mut list, shown(work, "git.diff", 4), place);
         assert_eq!(
             layout(&list),
@@ -2256,7 +2267,7 @@ pub(crate) mod tests {
         let column = list[0].columns[1].id;
         group(&mut list, column, &seed()).unwrap();
         assert_eq!(grouping(&list)[0], [0, 1]);
-        let place = agents_place(&list, work, thread);
+        let place = agents_place(&list, &leading(), work, thread);
         opened(&mut list, shown(work, "git.diff", 3), place);
         assert_eq!(layout(&list)[0], [vec![1], vec![3], vec![2]]);
         assert_eq!(grouping(&list)[0], [1, 1, 2]);
@@ -2275,7 +2286,7 @@ pub(crate) mod tests {
             on_thread(work, 2, thread),
             beside(theirs, Side::Below),
         );
-        let place = agents_place(&list, work, thread);
+        let place = agents_place(&list, &leading(), work, thread);
         opened(&mut list, shown(work, "git.diff", 3), place);
         assert_eq!(layout(&list)[0], [vec![1, 2], vec![3]]);
         assert_eq!(grouping(&list)[0], [1, 1]);
@@ -2287,19 +2298,19 @@ pub(crate) mod tests {
         let mut list = start();
         let (work, home) = (ProjectId::new(), ProjectId::new());
         let thread = Uuid::now_v7();
-        assert_eq!(agents_place(&list, work, thread), None);
+        assert_eq!(agents_place(&list, &leading(), work, thread), None);
         // The same ID in another Project, or another Thread of its own.
         opened(&mut list, on_thread(home, 1, thread), None);
         opened(&mut list, on_thread(work, 2, Uuid::now_v7()), None);
-        assert_eq!(agents_place(&list, work, thread), None);
+        assert_eq!(agents_place(&list, &leading(), work, thread), None);
         // Its Thread, once shown and closed again.
         let pane = opened(&mut list, on_thread(work, 3, thread), None);
         assert_eq!(
-            agents_place(&list, work, thread),
+            agents_place(&list, &leading(), work, thread),
             Some(Place::Group { pane })
         );
         close(&mut list, pane, &seed()).unwrap();
-        assert_eq!(agents_place(&list, work, thread), None);
+        assert_eq!(agents_place(&list, &leading(), work, thread), None);
     }
 
     #[test]
