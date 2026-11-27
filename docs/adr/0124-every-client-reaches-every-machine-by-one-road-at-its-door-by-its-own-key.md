@@ -55,7 +55,7 @@ repository), with an adversarial check.
    the door answers `welcome` with today's fields plus its host key, the
    device, the protocol it picked and its Apps with their versions, signed
    over the client's nonce, or `goodbye {unsupported | forbidden |
-   revoked}`. After `welcome` the frames are today's. The door speaks with
+revoked}`. After `welcome` the frames are today's. The door speaks with
    a protocol range from its first day.
 4. **Routes are pipes.** `loopback` for this machine; `tailnet`, through
    `tailscale serve` to the loopback door, for browsers and the phone until
@@ -371,7 +371,7 @@ repository), with an adversarial check.
   window goes behind another, the page is put away or the connection
   goes, with no clock between. The engine reads who calls where
   everything outside a window does, in this machine's line as `banda
-  status --follow` works it out (`engine/src/tell.rs`, over a connection
+status --follow` works it out (`engine/src/tell.rs`, over a connection
   to itself), and a Thread that begins to ask, fails or is done is pushed
   to every device that takes pushes, while no device holds the stream:
   "Deploy docs · banda", "Asks on arc: Keep the old rows, or drop them?".
@@ -396,7 +396,7 @@ repository), with an adversarial check.
 - **A desktop at another machine's door (SE4, PR 1a).** Where the
   engine the follower started says a door and its host key, main pairs
   this device there by its ssh login (`ssh <machine> banda devices add
-  --key … --kind desktop --origin app://banda`, the same device each
+--key … --kind desktop --origin app://banda`, the same device each
   time), forwards to the door's port and not the API's, and gives the
   page the device it is there and the host key to hold that door to. The
   page signs its hello through main, which signs for its own engine's
@@ -416,7 +416,7 @@ repository), with an adversarial check.
   until its next go.
 - **The tailnet route for a desktop (SE4, PR 1b).** Beside each go over
   ssh, main asks the machine where its door is served (`banda devices
-  list`, its `doors`), and keeps the first address with the host key, the
+list`, its `doors`), and keeps the first address with the host key, the
   device this one is there and the build that go said (`host-doors.json`
   in the window's state). A go whose machine has such a door, and whose
   door answers main as it will the page (a WebSocket there, whose first
@@ -445,7 +445,9 @@ repository), with an adversarial check.
   road, the last round trip of the window's own ping to that engine
   (`Engine.roundTrip`), and for ssh why. Away, the open row has Try again
   and each Pane's pill a small button of the same name, which starts the next go at once, the door
-  first (`Hosts.start`). Not yet: a retry as the network comes back.
+  first (`Hosts.start`). As this machine's network comes back, the
+  machines that are away are tried again at once too, as when it wakes
+  (`onBack`, which asks Electron every 3 s whether it is online).
 - **No follower, and no secret of another machine (SE4, the cleanup).**
   The window keeps no ssh at a machine but the forward, and that only
   while its door on the tailnet does not answer. A go asks how the engine
@@ -477,4 +479,3 @@ repository), with an adversarial check.
   address in the words "Banda is stopped on this machine", and the pill on
   each Pane of this machine says them, with Start, which starts the
   engine again. An engine that crashed is started again, as before.
-

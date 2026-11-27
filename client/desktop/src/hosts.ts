@@ -1088,6 +1088,23 @@ type Kept = {
   readonly next?: Deferred.Deferred<void>
 }
 
+/**
+ * Calls `back` each time this machine's network is back: `online`, asked
+ * every `every` ms, says it is there after it said it was not. Main tries
+ * the machines that are away again then (`Hosts.woke`), as when it wakes.
+ * Its timer keeps no process running; how to stop it.
+ */
+export function onBack(online: () => boolean, back: () => void, every = 3000) {
+  let was = online()
+  const timer = setInterval(() => {
+    const now = online()
+    if (now && !was) back()
+    was = now
+  }, every)
+  timer.unref()
+  return () => clearInterval(timer)
+}
+
 /** How one go at a host ended, and whether it was live meanwhile. */
 type Ended = (
   | { state: "away"; why: string }

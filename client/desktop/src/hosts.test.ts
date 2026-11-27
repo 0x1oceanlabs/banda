@@ -27,6 +27,7 @@ import {
   addOf,
   diffOf,
   askArgs,
+  onBack,
   forwardArgs,
   pairCommand,
   forwardsIn,
@@ -2668,3 +2669,36 @@ it.live(
     }),
   20_000
 )
+
+it("the network back after it was gone is said once each time, and not while it stays", () => {
+  vi.useFakeTimers()
+  try {
+    let online = true
+    let backs = 0
+    const stop = onBack(
+      () => online,
+      () => backs++,
+      100
+    )
+    vi.advanceTimersByTime(500)
+    expect(backs).toBe(0)
+    online = false
+    vi.advanceTimersByTime(300)
+    online = true
+    vi.advanceTimersByTime(300)
+    expect(backs).toBe(1)
+    online = false
+    vi.advanceTimersByTime(100)
+    online = true
+    vi.advanceTimersByTime(100)
+    expect(backs).toBe(2)
+    stop()
+    online = false
+    vi.advanceTimersByTime(100)
+    online = true
+    vi.advanceTimersByTime(100)
+    expect(backs).toBe(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})
