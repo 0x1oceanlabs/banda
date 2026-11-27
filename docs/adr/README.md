@@ -125,7 +125,7 @@ Threads, turns, Harnesses, accounts, and what an Agent may do.
 | [0037](0037-an-agent-shows-a-visual-in-its-thread-as-in-t3-code.md) | An Agent shows a Visual in its Thread, as in T3 Code | **standing** | decision 8's app://files moved to Files by 0073 |
 | [0040](0040-the-harnesses-are-the-machine-s-and-the-threads-are-a-space-s.md) | The Harnesses are the machine's, and the Threads are a Space's | **standing** | decisions 1, 3 amended by 0082; decision 6 by 0084 |
 | [0057](0057-an-agent-says-what-its-done-toast-tells.md) | An Agent says what its Done toast tells | **standing** |  |
-| [0059](0059-banda-carries-the-adapters-and-the-person-brings-the-agents.md) | Banda carries the adapters, and the Person brings the Agents | **standing** | decision 1 amended at 0062 step S1; 0084 adds the case of a box |
+| [0059](0059-banda-carries-the-adapters-and-the-person-brings-the-agents.md) | Banda carries the adapters, and the Person brings the Agents | **standing** | decision 1 amended at 0062 step S1; 0084 adds the case of a box; 5, 6 replaced and 4 amended by 0140 |
 | [0074](0074-the-person-snoozes-a-thread-until-a-time-or-until-it-is-done.md) | The Person snoozes a Thread until a time, or until it is done | **standing** | Snooze is Later, a tab, by 0098 (decisions 1, 6); decision 2 changed by 0096 |
 | [0077](0077-the-person-names-a-thread-and-its-harness-s-small-model-suggests-the-name.md) | The Person names a Thread, and its Harness's small model suggests the name | **standing** | decision 2 amended by 0118; 5 and 6 changed by 0087; seen moved by 0096 |
 | [0078](0078-a-thread-moves-between-accounts-and-harnesses-and-keeps-its-history.md) | A Thread moves between accounts and Harnesses, and keeps its history | **standing** | decisions 8, 9 replaced and 6, 10 amended by 0093; 4, 5 amended by 0103 |
@@ -138,6 +138,7 @@ Threads, turns, Harnesses, accounts, and what an Agent may do.
 | [0109](0109-banda-sets-no-limits-on-agents-and-a-person-s-stop-always-ends.md) | Banda sets no limits on Agents, and a Person's Stop always ends | **standing** | decision 4, the Stop that ends after a minute, not built yet |
 | [0118](0118-a-new-thread-is-named-once-after-its-first-turn.md) | A new Thread is named once, after its first turn | done | amends 0077 decision 2 |
 | [0122](0122-an-agent-knows-which-machine-its-person-writes-from.md) | An Agent knows which machine its Person writes from | **standing** |  |
+| [0140](0140-a-harness-is-set-up-in-steps-the-engine-runs-in-one-sheet.md) | A Harness is set up in steps the engine runs, in one sheet | **standing** | replaces 0059 decisions 5, 6, amends 4; not built yet |
 
 ### The Thread
 
