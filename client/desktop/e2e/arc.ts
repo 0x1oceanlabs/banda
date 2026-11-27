@@ -26,7 +26,7 @@
  * unanswered as long as main's ServerAliveInterval and ServerAliveCountMax
  * say. A new ssh then waits its ConnectTimeout and gives up. The hole
  * holds the forward and each ssh started in it, not one that runs
- * already, as main's follower does; and a forward started in it gives up
+ * already; and a forward started in it gives up
  * even if it closes meanwhile. No test here needs more. The forward
  * notes each message the window sends arc, so a test counts what a
  * gesture costs.
@@ -103,6 +103,44 @@ const quoted = (word: string) => `'${word.replaceAll("'", `'\\''`)}'`
  * handshake are done. In a black hole it waits its ConnectTimeout and
  * gives up.
  */
+/**
+ * arc's service manager, the fake ssh's half. \`banda start\` there starts
+ * no engine where it is nobody's service, as in a test, so before the
+ * fake runs one, where no engine runs it asks the test for arc's own
+ * (\`serviceFor\`), by a file beside it, and waits for it. \`on\` is what
+ * every program on arc runs through. It reads \`$last\`, ssh's command.
+ */
+export const service = (on: string[]) => {
+  const there = on.map(quoted).join(" ")
+  const runs = `case "$(${there} sh -c "$stem status'" 2>/dev/null)" in *'"running":true'*)`
+  return `case "$last" in *" start'")
+  stem=\${last%" start'"}
+  ${runs} ;; *)
+    : > "$here/start"
+    for try in $(seq 100); do
+      ${runs} break ;; esac
+      sleep 0.1
+    done ;;
+  esac ;;
+esac`
+}
+
+/**
+ * arc's service manager, the test's half: as the fake ssh in \`bin\` asks,
+ * it starts arc's engine with \`serve\`, apart from the window and its
+ * ssh, as a service is, so the window's end leaves it running. How to
+ * stop asking; the engine itself stops as arc's \`banda stop\` says.
+ */
+export const serviceFor = (bin: string, serve: () => void) => {
+  const asked = join(bin, "start")
+  const timer = setInterval(() => {
+    if (!existsSync(asked)) return
+    rmSync(asked, { force: true })
+    serve()
+  }, 50)
+  return () => clearInterval(timer)
+}
+
 const fakeSsh = (on: string[], exports: Record<string, string>) => `#!/bin/sh
 here=$(dirname "$0")
 case "$1" in -G) printf 'hostname arc\\nport 22\\n'; exit 0 ;; esac
@@ -128,6 +166,7 @@ export PATH="$here/../arc/bin:$PATH"
 ${Object.entries(exports)
   .map(([name, value]) => `export ${name}=${quoted(value)}`)
   .join("\n")}
+${service(on)}
 exec ${[...on.map(quoted), "sh", "-c", '"$last"'].join(" ")}
 `
 
@@ -494,6 +533,10 @@ printf yes > "$FAKE_AGENT_HOME/signed-in"
     const { file, args: all } = run(program, args)
     return execFileSync(file, all, { env, encoding: "utf8" })
   }
+  const served = serviceFor(at("bin"), () => {
+    const { file, args } = run(program, ["serve"])
+    spawn(file, args, { env, stdio: "ignore" })
+  })
   const arc: Arc = {
     dir,
     samePath,
@@ -584,6 +627,7 @@ printf yes > "$FAKE_AGENT_HOME/signed-in"
         `${read(at("bin/pages")) ?? ""} ${port}`.trim()
       ),
     close: () => {
+      served()
       try {
         execFileSync(program, ["stop", "--force"], { env, stdio: "ignore" })
       } catch {

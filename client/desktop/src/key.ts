@@ -45,8 +45,8 @@ export function helloTo(message: string, hostKey: string): boolean {
 
 /** The key a window of Banda's is paired by (ADR 0124), kept in Banda's
  * `state`; none for a page served for development (`dev`), which is of
- * another origin than the one a window pairs from, and reaches the
- * engines as before. */
+ * another origin than the one a window pairs from: it reaches its own
+ * engine as before, and no other machine. */
 export const windowKey = (state: string, dev: unknown) =>
   dev ? undefined : deviceKey(join(state, "device.key"))
 

@@ -53,6 +53,13 @@ child?: string,
  */
 door?: number, host_key?: string, 
 /**
+ * With no engine running: whether it stopped as it was asked to, by
+ * Quit Banda or `banda stop`, so that another machine's window
+ * starts it only when its Person says; none while one runs, and from
+ * a Banda older than this word.
+ */
+stopped?: boolean, 
+/**
  * Whether the fence around its Harnesses holds, as it said in its
  * welcome (ADR 0083).
  */
