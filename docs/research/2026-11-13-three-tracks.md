@@ -11,7 +11,7 @@ It serves stories 1 and 2 and principles 3, 4 and 9 of [what we build](../what-w
 | Track | It builds | It is done when | Led by |
 |---|---|---|---|
 | **1. Story 1** | one Banda on every machine: SE1 to SE13 | the story's text runs with a Thread at work, moved from the phone, and its room follows (SE13) | a session of its own |
-| **2. Story 2** | an Agent writes an App: 2-0 to 2c; then the engine's part of what story 1 left: SE8's costly half, SE10, T0 | Threads is an ordinary App in its own folder (T0c) | a session of its own; 2-0's last PRs were delegated from the story 1 session |
+| **2. Story 2** | an Agent writes an App: 2-0 to 2c; then the engine's part of what story 1 left: SE8's costly half, SE10; then one word, Task (ADR 0138), and an App's screen read by an Agent (ADR 0139) | an Agent reads an App's screen and acts by it, and the window and the Agent both say Task | a session of its own; 2-0's last PRs were delegated from the story 1 session |
 | **3. The window** | the window's architecture: first how it works today and where Roma sees each part, then its philosophy, then slices | Roma accepts its plan, and this file and the roadmap gain its slices | a window session of its own; the sidebar and the look keep their sessions |
 
 A week below is five working days. Week 1 starts on 2026-11-13.
@@ -37,8 +37,9 @@ Four things are settled here:
 | 1 to 4 | 2-0, 2a, 2b, 2c | A1a (merged); the welcome PR lands before SE3's PR 1 |
 | 5 to 6 | SE8's costly half: the last screen kept "as of", the echo ahead in the terminal | The cache is a new file, `client/core/src/cache.ts`, and lands before SE4. It does not edit `queue.ts` |
 | 6 to 8 | SE10: every machine's Project is whole (ADR 0120) | ADR 0120 accepted (#1578); accounts step 6 before its PRs 2 and 3; the `how-picker` branch and #1324 before PRs 6 to 9; its PRs 5 to 7 need SE4's door routes; its PR that asks for a Pane waits for ADR 0110's step 1b |
-| 9 | T0a, T0b: Threads as an ordinary App, without the folder move | track 2 free |
-| 10 | T0c: `apps/agents` becomes `apps/threads` | a freeze of `apps/agents`, once SE11 to SE13 have left it |
+| 9 | T0a: the kernel keeps what a module was called (in, #1892). T0b and T0c are dropped: the App stays `agents` (ADR 0138) | — |
+| 9 to 10 | ADR 0138: Task in the words a Person reads (step 1, in), in the words an Agent reads (step 2), in the code's names (step 3) | step 3 waits for Roma's word, and for SE11 to SE13 to have left `apps/agents` |
+| 10 | ADR 0139: an Agent reads an App's screen (`app_screen`), then `confirm` | ADR 0139 accepted |
 
 Not on this track now: B2, A1b and A1c, B7, B8, D1. No slice needs them. A worker comes before WebAssembly, so D5 and D6 as first written are replaced by 2a and 2c.
 
@@ -66,8 +67,8 @@ Until then the window takes no large step. The sidebar session (#1630 and its ow
 | 6 | SE7 ends; SE4 | SE8: the echo; SE10 PRs 1 to 4 | a push in the pocket, one signal; Add Project on arc from the Mac |
 | 7 | SE4 ends, with its cleanups; SE9 PRs 1 and 2 | SE10 PRs 5 to 7 | "via tailnet · 18 ms"; arc's ports on the Mac |
 | 8 | SE9 PRs 3 to 7 | SE10 PRs 8 to 10 | a devbox Agent's Diff on the Mac |
-| 9 | SE9 ends; SE11 | T0a, T0b | move a Thread at work and close the window |
-| 10 | SE12; SE13 | T0c, in the freeze | the story's text, from the phone; the room follows |
+| 9 | SE9 ends; SE11 | T0a; ADR 0138 steps 1 and 2 | move a Task at work and close the window; the window says Task |
+| 10 | SE12; SE13 | ADR 0139's `app_screen` | the story's text, from the phone; the room follows; an Agent asked what is on the deals screen |
 
 Track 3's weeks come with its plan. Its design session runs from week 1, and its plan is due by about week 4, before SE9 needs the window.
 
@@ -89,7 +90,7 @@ One owner per file. The other track asks first.
 | `client/web/src/window/actions.ts` | SE1, own hunks; the device-only actions before SE5 PR 2 | — | ADR 0110's steps | #1630, then SE1, then any cleaning track 3 plans |
 | `client/web/src/window/Shell.tsx` | does not grow it | — | owns it | four lines of headroom; new UI goes in its own files |
 | `platform/workspaces/**` | SE9 PRs 3 and 4; SE13 | SE10's Pane PR | ADR 0110's steps 1b and 2 | ADR 0110's steps first |
-| `apps/agents/**` | SE9, SE11 to SE13 | T0a, T0b; T0c in the freeze | — | T0c after SE13 |
+| `apps/agents/**` | SE9, SE11 to SE13 | ADR 0138's steps 2 and 3 | — | step 3 after SE13 |
 | `platform/harnesses/**` | SE9 PR 2 | SE10 PRs 2 and 3 | — | after #1612 and accounts step 6 |
 | `engine/src/main.rs` | `devices`, `pair`, `--host`, `move` | `app`, `export` | — | one arm per PR, its code in its own file |
 | `scripts/engine.mjs`, the release workflow | SE5 PR 1 | — | — | tell the release session first |
@@ -119,4 +120,5 @@ What the tracks leave out, found on the way or put off on purpose, is kept in [t
 | `tailscale` on arc, devbox and the Mac; Tailscale on in the iPhone | SE5's try; SE6's try | weeks 4 and 5 | as the story 1 design says |
 | ADR 0120 (#1578), its seven questions | SE10; SE9 PRs 3 and 4 | week 6 | — |
 | The ADR on where an Agent's Chromium runs | SE9 PR 5 | week 8 | — |
-| A quiet two hours for `apps/agents` | T0c | week 10 | Roma asks the sessions with open branches there to land them first |
+| ADR 0139 ([#1921](https://github.com/0x1oceanlabs/banda/pull/1921)) | `app_screen` and `confirm` | week 10 | — |
+| The word to start ADR 0138's step 3 | the names in the code | after SE13 | after step 2 is tried |
