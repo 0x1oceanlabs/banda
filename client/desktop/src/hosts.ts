@@ -6,35 +6,35 @@
  * meanwhile kept (`rewrite`). It applies as it changes
  * (ADR 0095, decision 9): a host that comes is reached, one that goes has
  * its ssh ended, and one whose `ssh` or `banda` changed is reached again.
- * For each, main runs two of the system's ssh, never through a shell:
+ * Each is reached at its engine's door, as the device this one is there
+ * (ADR 0124, decisions 6 and 7); ssh only asks, starts once, pairs and
+ * carries the door when nothing else does, each ssh the system's, never
+ * through a shell:
  *
- * - the follower runs `banda start --with-parent` there, which starts that
- *   machine's engine when it does not run and prints where it listens, as
- *   the window's own does here (engine.ts), then follows it. On a Mac it
- *   starts the engine's launchd job while the Person is logged in at its
- *   screen, locked or not, and the engine runs in that session as if
- *   started there (ADR 0086, plan step 7c); with nobody logged in it
- *   starts none, and the host is away;
- * - the forward carries a port of this machine's loopback to the port
- *   that engine listens on, on that machine's loopback.
+ * - one asks how the engine there runs (`banda status`), which starts
+ *   nothing. Where none runs and it did not stop as asked, another starts
+ *   it (`banda start`), as that machine's service, never as a child of
+ *   the link. One that stopped as asked, by Quit Banda or `banda stop`
+ *   there, is started only by the first go of a run of this Banda, and
+ *   when the page asks;
+ * - one pairs this device, by its login (`banda devices add`, the same
+ *   device each time), and one asks where the door is served;
+ * - the forward carries a port of this machine's loopback to the door's
+ *   port on that machine's loopback, while its door on the tailnet does
+ *   not answer.
  *
- * A machine whose engine has a door is reached there (ADR 0124, decisions
- * 6 and 7): a third ssh pairs this device once a go, by its login (`banda
- * devices add`, the same device each time), the forward goes to the
- * door's port, and the page gets the forward's address with the device
- * it is there and the host key that door must prove; main signs the
- * page's hello to that door with this device's key (`signed`). The page
- * then holds no secret of that machine's owner. An engine with no door
- * yet, a main with no key and a machine that would not pair are reached
- * as before: the page gets the forward's address and the engine's secret.
- * Where that machine serves its door on the tailnet and it answers there,
- * no forward runs: the page reaches the door itself (`direct`), and after
- * a go that was live that door is asked before any ssh, as when this
- * machine wakes.
- * Either way only once that
- * ssh itself listens on the port, never another program that took it
- * first, and it loses them the moment either ssh ends. The secret goes
- * nowhere else: no program's arguments or environment, no log, no file.
+ * The page gets the door's address, the device it is there and the host
+ * key that door must prove; main signs the page's hello to that door with
+ * this device's key (`signed`). The page holds no secret of that machine's
+ * owner, and main reads none: a Banda from before the door is refused,
+ * and says to update it. Where that machine serves its door on the
+ * tailnet and it answers there, no forward runs: the page reaches the door
+ * itself (`direct`), and after a go that was live that door is asked
+ * before any ssh, as when this machine wakes. Through the forward, only
+ * once that ssh itself listens on the port, never another program that
+ * took it first, and the door answers there with its host key. A live
+ * machine is one whose door answers: asked every few seconds, it is away
+ * once it answered nothing twice, or as the forward ends.
  * Neither the road (road.ts) nor main's own engine client nor the
  * problems ever reach these engines, so what one of them asks of a window
  * stays on its machine.
@@ -50,8 +50,8 @@
  * that stops there as asked leaves this Banda running, and is started
  * again only when the page asks, or as this Banda starts again; so is one
  * Stop Banda stopped, whether the host was live then or not. A refused
- * host is tried again every ten minutes, or when the page asks. Quitting Banda ends both ssh; the engine
- * there runs on, as that machine's service.
+ * host is tried again every ten minutes, or when the page asks. Quitting
+ * Banda ends its ssh; the engine there runs on, as that machine's service.
  *
  * Test asks what is at an address and starts nothing there (#837): what
  * the machine is and its own name and icon, the `banda` found and its
@@ -122,7 +122,7 @@ function tableOf(text: string): Record<string, unknown> | string {
 
 /** The good hosts of `hosts.toml`'s `text`, and why each other one is
  * refused. A host with no `banda` runs this build's own there, as the
- * follower finds it (`remoteCommand`). */
+ * window finds it (`throughSh`). */
 export function hostsOf(text: string): { hosts: Entry[]; refused: string[] } {
   const table = tableOf(text)
   return typeof table === "string"
@@ -590,7 +590,7 @@ const PLAIN_SSH = [
 ]
 
 /** What an ssh that may wait for Tailscale's sign-in is given, the
- * follower's, Test's and Stop Banda's: it asks the machine every 15 s
+ * one that asks or starts, Test's and Stop Banda's: it asks the machine every 15 s
  * whether it is there, which keeps the link open through a router, and
  * gives up after about 12 minutes of silence. Before it is in, ssh waits
  * that long for each answer too (OpenSSH), and Tailscale SSH says nothing
@@ -602,20 +602,19 @@ const PATIENT = ["-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=48"]
 /** What the forward is given: it asks every 5 s and gives up after 3
  * asks with no answer, so a machine asleep while live shows away in
  * about 20 s, not 45 (#824). Before it is in, it waits 15 s for each
- * answer, which is enough: it starts once the follower is in, past any
+ * answer, which is enough: it starts once ssh was in, past any
  * sign-in. */
 const QUICK = ["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3"]
 
 /** What a shell exits with when it finds no program to run. */
 const NOT_FOUND = 127
-/** What `banda start --with-parent` exits with there while no engine runs
- * on a machine where it starts none for this window, as a Mac with nobody
- * logged in at its screen, or once a Mac's engine stops as the Person logs
- * out there (engine/src/control.rs): the window tries again as after any
- * end. */
-const NOT_OPEN = 75
+/** What `banda` exits with when it could not do its part (engine/src/
+ * main.rs): `banda start` where it could start no engine, as on a Mac
+ * with nobody logged in at its screen. The window tries again as after
+ * any end. */
+const BROKEN = 2
 
-/** This build's names, which the follower looks for there: its program
+/** This build's names, which are looked for there: its program
  * on PATH and its data folder (`banda-dev`), and its app (`Banda Dev`). */
 type Own = { readonly folder: string; readonly name: string }
 
@@ -649,13 +648,16 @@ const throughSh = (
   return `sh -c '${lines.join("; ")}'`
 }
 
-/** What the follower runs there (`throughSh`): `banda start
- * --with-parent`, with `BANDA_OVER_SSH`, so a Mac's starts its launchd
- * job, never an engine that lives only as long as the link. */
-export const remoteCommand = (banda: string | undefined, own: Own = channel) =>
-  throughSh(banda, own, (b) => [
-    `exec ${RUNTIME} BANDA_OVER_SSH=1 ${b} start --with-parent`,
-  ])
+/** What starts that machine's engine (`throughSh`): `banda start`, which
+ * starts it as that machine's service when none answers, never as a
+ * child of the link, and says how it runs, as `banda status` does. */
+export const startCommand = (banda: string | undefined, own: Own = channel) =>
+  throughSh(banda, own, (b) => [`exec ${RUNTIME} BANDA_OVER_SSH=1 ${b} start`])
+
+/** What asks that machine how its engine runs (`throughSh`): `banda
+ * status`, which starts nothing. */
+export const statusCommand = (banda: string | undefined, own: Own = channel) =>
+  throughSh(banda, own, (b) => [`exec ${RUNTIME} ${b} status`])
 
 /** What pairs this device there (`throughSh`), by its ssh login, which
  * gives what the login already gives (ADR 0124, decision 6): `banda
@@ -756,9 +758,13 @@ const commandArgs = (host: Entry, remote: string) => [
   remote,
 ]
 
-/** The follower's arguments. */
-export const followerArgs = (host: Entry) =>
-  commandArgs(host, remoteCommand(host.banda))
+/** The arguments of the ssh that asks `host` how its engine runs, or
+ * with `start` starts it. */
+export const askArgs = (host: Entry, start = false) =>
+  commandArgs(
+    host,
+    start ? startCommand(host.banda) : statusCommand(host.banda)
+  )
 
 /** A terminal's arguments: `remote` run at `ssh` on a terminal there,
  * with every option Banda's own ssh has but `-T` and BatchMode, so ssh
@@ -794,7 +800,7 @@ export const forwardArgs = (host: Entry, from: number, to: number) => [
   host.ssh,
 ]
 
-/** The forwards `ssh -G` says the config gives a host. The follower drops
+/** The forwards `ssh -G` says the config gives a host. Banda's own ssh drops
  * them (`ClearAllForwardings`), but that would drop the forward's own
  * too, so a host with any is refused. */
 export const forwardsIn = (said: string) =>
@@ -886,20 +892,6 @@ const plain = (line: string) =>
     .trim()
     .slice(0, 300)
 
-/** What `start --with-parent` prints first there; `window` is that
- * machine's own door, and is left. */
-const Running = Schema.fromJsonString(
-  Schema.Struct({
-    protocol: Schema.Number,
-    port: Schema.Number,
-    secret: Schema.String,
-    build: Schema.optional(Schema.String),
-    version: Schema.optional(Schema.String),
-    // Its door, and the host key it proves there, where it has one.
-    door: Schema.optional(Schema.Number),
-    host_key: Schema.optional(Schema.String),
-  })
-)
 /** What `banda devices list` prints there, of which only where its door
  * is served is read. */
 const Listed = Schema.fromJsonString(
@@ -917,16 +909,22 @@ const Refusal = Schema.fromJsonString(
     error: Schema.Struct({ code: Schema.String, message: Schema.String }),
   })
 )
-/** What `banda status` prints there: whether its engine runs, and what
- * it says of itself; and the system the machine runs, and its own name
- * and icon, which are read by hand (`namedOf`), so a bad one leaves the
- * rest (engine/src/control.rs). */
+/** What `banda status` prints there, and `banda start`: whether its
+ * engine runs, and what it says of itself; and the system the machine
+ * runs, and its own name and icon, which are read by hand (`namedOf`), so
+ * a bad one leaves the rest (engine/src/status.rs). */
 const Status = Schema.fromJsonString(
   Schema.Struct({
     running: Schema.Boolean,
     protocol: Schema.optional(Schema.Number),
     build: Schema.optional(Schema.String),
     version: Schema.optional(Schema.String),
+    // Its door, and the host key it proves there, where it has one.
+    door: Schema.optional(Schema.Number),
+    host_key: Schema.optional(Schema.String),
+    // With none running: whether it stopped as asked; none from a Banda
+    // older than this word.
+    stopped: Schema.optional(Schema.Boolean),
     system: Schema.optional(Schema.Unknown),
     named: Schema.optional(Schema.Unknown),
   })
@@ -1304,7 +1302,7 @@ export class Hosts extends Context.Service<
 
         /** Holds `host` stopped, as Stop Banda stopped its engine there: a
          * go that is on ends, its ssh with it, and none starts until the
-         * page asks. A live host's follower may have seen the stop already;
+         * page asks. A live host's door would say so in a few seconds;
          * an away or refused one would start the engine again at its next
          * try. Nothing, when `host` went from `hosts.toml` or changed
          * meanwhile. */
@@ -1629,7 +1627,7 @@ type Run = {
   /** This build's `install.sh`, read once; none where it carries none. */
   readonly install: Effect.Effect<string | undefined>
   /** This device's key, by which it pairs at another machine's door;
-   * with none, each is reached by its owner's secret, as before. */
+   * with none, none is reached. */
   readonly key: string | undefined
   /** The file of the host keys the machines proved; with none, each is
    * kept for this run of main. */
@@ -1649,7 +1647,9 @@ const keep = (
   { set, begin }: Tell,
   run: Run,
   held?: Deferred.Deferred<void>,
-  /** The first go tries the door on the tailnet first (`once`). */
+  /** The first go tries the door on the tailnet first (`once`), as this
+   * machine woke or the Person said Try again: it is no new run of Banda,
+   * and starts no engine that stopped there as asked. */
   first = false
 ) =>
   Effect.gen(function* () {
@@ -1664,15 +1664,18 @@ const keep = (
     if (held) yield* stoppedUntil(held)
     let wait = times.first
     let quick = first
+    // An engine stopped there as asked is started by the first go of a
+    // run, and by one the page asked for.
+    let start = !first || held !== undefined
     while (true) {
       // Made before the go, so it is there as soon as the host shows
       // stopped or refused.
       const next = yield* Deferred.make<void>()
       yield* begin(next)
       const ended: Ended = yield* Effect.scoped(
-        once(host, set, said, told, run, quick).pipe(
-          // Said before the scope closes, as it ends the follower; a live
-          // go said it as soon as one ssh ended.
+        once(host, set, said, told, run, quick, start).pipe(
+          // Said before the scope closes; a live go said it as soon as it
+          // ended.
           Effect.tap((ended) => (ended.live ? Effect.void : set(linkOf(ended))))
         )
       )
@@ -1690,9 +1693,13 @@ const keep = (
       if (ended.state === "stopped") {
         yield* stoppedUntil(next)
         wait = times.first
+        start = true
         continue
       }
       quick = true
+      // Once a go was live, its engine ran in this run of Banda: one that
+      // stops as asked after is the Person's stop.
+      if (ended.live) start = false
       if (ended.live) wait = times.first
       yield* Console.error(
         `banda: ${host.name} is away (${ended.why}); Banda tries again in ${wait} ms`
@@ -1702,8 +1709,9 @@ const keep = (
     }
   })
 
-/** One go at `host`, in its own scope: the config checked, the follower
- * and its first line, the forward, and the live host until one ssh ends. */
+/** One go at `host`, in its own scope: the config checked, its engine
+ * asked how it runs, and started where this go may, this device paired at
+ * its door, and the live host until its door stops answering. */
 const once = (
   host: Entry,
   set: (link: Link, address?: EngineAt) => Effect.Effect<void>,
@@ -1713,7 +1721,10 @@ const once = (
   /** A go before ended, or this machine woke: the link broke, as after a
    * sleep, and the machine's door on the tailnet may answer before ssh is
    * back. The first go of a run is by ssh, which says its build anew. */
-  quick = false
+  quick = false,
+  /** Whether this go starts an engine that stopped there as asked: the
+   * first go of a run does, and one the page asked for. */
+  start = false
 ) =>
   Effect.gen(function* () {
     const { times } = run
@@ -1723,8 +1734,6 @@ const once = (
     }
     /** When a sign-in link showed, which gives the Person longer. */
     let signin: number | undefined
-    /** The secret of this go, once known, kept out of what the log says. */
-    const kept: { secret?: string } = {}
     /** Logs `child`'s stderr, and takes Tailscale's sign-in link from it
      * while `asks` says ssh is not in yet: what comes after is the other
      * machine's. Each line goes to `also` too. Its fiber ends with the
@@ -1744,7 +1753,7 @@ const once = (
                 yield* set({ state: "signin", url })
               }
               also(line)
-              yield* said(line, kept.secret)
+              yield* said(line)
             })
           ),
           Effect.ignore
@@ -1764,11 +1773,30 @@ const once = (
         yield* Effect.sleep(until - now)
       }
     })
-    // As the window's other children: the follower's stdin is a pipe
-    // Banda holds, so if Banda dies the other machine sees it close, and
-    // `--with-parent` goes.
     const ssh = (args: string[]) =>
       run.spawner.spawn(command("ssh", args, run.env, "pipe"))
+    /** Runs `banda status` there, or `banda start`: the first line it
+     * printed and the code it ended with, or `late`. */
+    const ask = (starts: boolean) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const child = yield* ssh(askArgs(host, starts))
+          let line: string | undefined
+          yield* watch(child, () => line === undefined)
+          // Every line is read, so the pipe never fills; the first is the
+          // one.
+          const read = linesOf(child.stdout).pipe(
+            Stream.runForEach((next) => Effect.sync(() => (line ??= next))),
+            Effect.ignore
+          )
+          return yield* Effect.raceFirst(
+            Effect.all([read, exited(child)], { concurrency: 2 }).pipe(
+              Effect.map(([, code]) => ({ line, code }))
+            ),
+            Effect.as(late, "late" as const)
+          )
+        })
+      )
 
     const config = yield* configOf(host, run).pipe(Effect.result)
     if (config._tag === "Failure")
@@ -1776,84 +1804,74 @@ const once = (
     const forwards = forwardsWhy(host, config.success)
     if (forwards) return { state: "refused", why: forwards } satisfies Ended
 
-    const follower = yield* ssh(followerArgs(host))
-    const first = yield* Deferred.make<Option.Option<string>>()
-    yield* watch(follower, () => !Deferred.isDoneUnsafe(first))
-    // Every line is read, so the pipe never fills; the first is the one.
-    yield* Effect.forkScoped(
-      linesOf(follower.stdout).pipe(
-        Stream.runForEach((line) => Deferred.succeed(first, Option.some(line))),
-        Effect.ignore,
-        Effect.ensuring(Deferred.succeed(first, Option.none()))
-      )
-    )
-    const line = yield* Effect.raceFirst(
-      Deferred.await(first),
-      Effect.as(late, "late" as const)
-    )
-    if (line === "late") return away(`${host.ssh} did not answer in time`)
-    if (Option.isNone(line)) return endOf(host, yield* exited(follower))
-    const running = Schema.decodeUnknownOption(Running)(line.value)
-    if (Option.isNone(running)) return yield* refusalIn(host, line.value)
-    const { protocol, port, secret, build, version, door, host_key } =
-      running.value
-    kept.secret = secret
+    // Asked first, which starts nothing: an engine stopped there as asked
+    // stays so, and any other that does not run is started.
+    let engine: typeof Status.Type | undefined
+    for (const starts of start ? [true] : [false, true]) {
+      const asked = yield* ask(starts)
+      if (asked === "late") return away(`${host.ssh} did not answer in time`)
+      const status = yield* saidOf(host, asked, starts)
+      if ("state" in status) return status
+      engine = status
+      if (engine.running) break
+      if (!starts && engine.stopped !== false)
+        return { state: "stopped" } satisfies Ended
+    }
+    if (!engine?.running) return away(`${channel.name} did not start there`)
+    const { protocol, build, version, door, host_key: hostKey } = engine
     if (protocol !== PROTOCOL)
       return {
         state: "refused",
         why: `the engine there speaks protocol ${protocol}, this window ${PROTOCOL}`,
       } satisfies Ended
-    if (
-      !Number.isInteger(port) ||
-      port < 1 ||
-      port > 65_535 ||
-      !/^[\x21-\x7e]+$/.test(secret)
-    )
-      return away(UNEXPECTED)
-    yield* set({ state: "connecting" })
     // At its door, as the device this ssh login pairs here (ADR 0124,
-    // decisions 6 and 7), so the page holds no secret of that machine's
-    // owner; an engine with no door, a main with no key and a pairing
-    // that fails are reached as before.
-    const paired =
-      run.key !== undefined &&
-      door !== undefined &&
-      Number.isInteger(door) &&
-      door >= 1 &&
-      door <= 65_535 &&
-      host_key !== undefined &&
-      HOST_KEY.test(host_key) &&
-      (yield* provedBy(host, host_key, run))
-        ? yield* pairedAt(host, run.key, run)
-        : undefined
-    const to = paired === undefined ? port : (door as number)
-    if (paired !== undefined) {
-      const now = { build: buildOf(build), version: versionNamed(version) }
-      const before = doorsKept(run)[host.ssh]
-      doorsKept(run, {
-        [host.ssh]: {
-          ...now,
-          hostKey: host_key as string,
-          device: paired,
-          door: before?.hostKey === host_key ? before.door : undefined,
-        },
-      })
-      // Where its door is served is asked beside the go, for the next.
-      yield* Effect.forkScoped(servedAt(host, run))
-      const ended = yield* direct(
-        host,
-        set,
-        run,
-        exited(follower).pipe(Effect.map((code) => endOf(host, code)))
-      )
-      if (ended) return ended
-    }
+    // decisions 6 and 7): the page holds no secret of that machine's
+    // owner, and there is no other road.
+    if (
+      door === undefined ||
+      !Number.isInteger(door) ||
+      door < 1 ||
+      door > 65_535 ||
+      hostKey === undefined ||
+      !HOST_KEY.test(hostKey)
+    )
+      return {
+        state: "refused",
+        why: `${channel.name} there is older than its door; update it there`,
+      } satisfies Ended
+    if (run.key === undefined)
+      return {
+        state: "refused",
+        why: "this device has no key to pair with",
+      } satisfies Ended
+    if (!(yield* provedBy(host, hostKey, run)))
+      return {
+        state: "refused",
+        why: "it says the host key that another machine proved",
+      } satisfies Ended
+    yield* set({ state: "connecting" })
+    const paired = yield* pairedAt(host, run.key, run)
+    if (paired === undefined) return away("it did not pair this device")
+    const now = { build: buildOf(build), version: versionNamed(version) }
+    const before = doorsKept(run)[host.ssh]
+    doorsKept(run, {
+      [host.ssh]: {
+        ...now,
+        hostKey,
+        device: paired,
+        door: before?.hostKey === hostKey ? before.door : undefined,
+      },
+    })
+    // Where its door is served is asked beside the go, for the next.
+    yield* Effect.forkScoped(servedAt(host, run))
+    const tailnet = yield* direct(host, set, run)
+    if (tailnet) return tailnet
 
     for (let tries = 1; ; tries++) {
       const ended: Ended | "again" = yield* Effect.scoped(
         Effect.gen(function* () {
           const from = yield* freePort
-          const forward = yield* ssh(forwardArgs(host, from, to))
+          const forward = yield* ssh(forwardArgs(host, from, door))
           let listening = false
           /** Whether ssh said it could not listen on the port. */
           let taken = false
@@ -1869,7 +1887,6 @@ const once = (
               Effect.as("answers" as const)
             ),
             exited(forward).pipe(Effect.map((code) => ({ forward: code }))),
-            exited(follower).pipe(Effect.map((code) => endOf(host, code))),
             late.pipe(
               Effect.as(
                 away(`the forward to ${host.ssh} did not answer in time`)
@@ -1889,7 +1906,10 @@ const once = (
           }
           if (answered !== "answers") return answered
           listening = true
-          const now = { build: buildOf(build), version: versionNamed(version) }
+          const url = `ws://127.0.0.1:${from}/ws`
+          const answering = doorAnswers(url, hostKey, times.door)
+          if (!(yield* answering))
+            return away("its door did not answer through the forward")
           const ours = yield* run.own
           if (
             (now.build !== ours.build || now.version !== ours.version) &&
@@ -1900,26 +1920,22 @@ const once = (
               `banda: ${host.name} runs Banda ${now.version} (build ${now.build}), this window ${ours.version} (build ${ours.build})`
             )
           }
-          const url = `ws://127.0.0.1:${from}/ws`
           yield* set(
             { state: "live", ...now, own: ours, route: "ssh" },
-            paired === undefined
-              ? { url, secret }
-              : { url, door: { device: paired, hostKey: host_key as string } }
+            { url, door: { device: paired, hostKey } }
           )
           yield* Console.error(
             `banda: ${host.name} is live, through loopback port ${from}`
           )
           const end = yield* Effect.raceFirst(
-            exited(follower).pipe(Effect.map((code) => endOf(host, code))),
+            silent(answering, times.door, "its door stopped answering"),
             exited(forward).pipe(
               Effect.map((code) =>
                 away(`the forward to ${host.ssh} ended (code ${code})`)
               )
             )
           )
-          // Forgotten the moment one ssh ended, before the forward is
-          // stopped.
+          // Forgotten the moment it ended, before the forward is stopped.
           yield* set(linkOf(end))
           return { ...end, live: true }
         })
@@ -1938,6 +1954,17 @@ const once = (
       )
     )
   )
+
+/** Ends, as away for `why`, once what `answers` asks answered nothing
+ * twice in a row, asked every `every` ms. */
+const silent = (answers: Effect.Effect<boolean>, every: number, why: string) =>
+  Effect.gen(function* () {
+    for (let missed = 0; missed < 2;) {
+      yield* Effect.sleep(every)
+      missed = (yield* answers) ? 0 : missed + 1
+    }
+    return away(why)
+  })
 
 /** What this device keeps of a machine it paired at, by its address, to
  * reach its door on the tailnet: the host key it proved, the device this
@@ -2031,15 +2058,13 @@ const doorAnswers = (url: string, hostKey: string, within: number) =>
  * no forward: live while that door answers, with the page given its
  * address there, the device this one is and the host key to hold it to.
  * None where this device keeps no such door, another machine holds its
- * key, or it does not answer now: ssh goes on. With `until`, as the
- * follower's end, it ends so too; alone, it starts nothing there, and
- * says the build the last go over ssh said.
+ * key, or it does not answer now: ssh goes on. It starts nothing there,
+ * and says the build the last go over ssh said.
  */
 const direct = (
   host: Entry,
   set: (link: Link, address?: EngineAt) => Effect.Effect<void>,
-  run: Run,
-  until?: Effect.Effect<Ended>
+  run: Run
 ): Effect.Effect<Ended | undefined> =>
   Effect.gen(function* () {
     const kept = doorsKept(run)[host.ssh]
@@ -2057,15 +2082,11 @@ const direct = (
     yield* Console.error(
       `banda: ${host.name} is live, at its door on the tailnet`
     )
-    /** Ends once the door answered nothing twice in a row. */
-    const silent = Effect.gen(function* () {
-      for (let missed = 0; missed < 2;) {
-        yield* Effect.sleep(run.times.door)
-        missed = (yield* answers) ? 0 : missed + 1
-      }
-      return away(`${host.name}'s door on the tailnet stopped answering`)
-    })
-    const end = yield* until ? Effect.raceFirst(until, silent) : silent
+    const end = yield* silent(
+      answers,
+      run.times.door,
+      `${host.name}'s door on the tailnet stopped answering`
+    )
     yield* set(linkOf(end))
     return { ...end, live: true } satisfies Ended
   })
@@ -2086,7 +2107,7 @@ const provedHere: Record<string, string> = {}
  * device. Each key is kept with the address that said it, in a file, as
  * ssh keeps `known_hosts`, so a machine cannot take another's between
  * runs; one taken out of `hosts.toml` frees its key. A machine refused
- * here is reached as before, by its own secret, and the log says so.
+ * here is not reached, and the log says so.
  */
 const provedBy = (host: Entry, hostKey: string, run: Run) =>
   Effect.gen(function* () {
@@ -2110,7 +2131,7 @@ const provedBy = (host: Entry, hostKey: string, run: Run) =>
     if (by === host.ssh) return true
     if (by !== undefined && (yield* run.reached).includes(by)) {
       yield* Console.error(
-        `banda: ${host.name} says the host key that ${by} proved; it is not held to it, and is reached as before`
+        `banda: ${host.name} says the host key that ${by} proved; it is not held to it, and is not reached`
       )
       return false
     }
@@ -2135,9 +2156,9 @@ const pairedAt = (host: Entry, key: string, run: Run) =>
       orElse: () => Effect.fail(new Error("it did not answer in time")),
     }),
     Effect.catch(() =>
-      Console.error(
-        `banda: ${host.name} did not pair this device; it is reached as before`
-      ).pipe(Effect.as(undefined))
+      Console.error(`banda: ${host.name} did not pair this device`).pipe(
+        Effect.as(undefined)
+      )
     )
   )
 
@@ -2159,19 +2180,34 @@ const sshEnded = (host: Entry, code: number) =>
       ? `ssh could not reach ${host.ssh}`
       : undefined
 
-/** How the follower's end leaves the host: code 0 is its engine stopped
- * as asked, 255 ssh's own failure, 127 no `banda` there, 75 no engine
- * running there or nobody logged in there, none a signal. */
-function endOf(host: Entry, code: number): Ended {
-  if (code === 0) return { state: "stopped" }
+/** What `banda status` or `banda start` (`starts`) said there, from the
+ * first line it printed and the code it ended with; or how the go ends:
+ * 255 is ssh's own failure, 127 no `banda` there, 2 from `banda start`
+ * an engine it could not start, as on a Mac with nobody logged in at its
+ * screen. */
+const saidOf = (
+  host: Entry,
+  asked: { line: string | undefined; code: number },
+  starts: boolean
+): Effect.Effect<Ended | typeof Status.Type> => {
+  const { line = "", code } = asked
   const ssh = sshEnded(host, code)
-  if (ssh) return away(ssh)
-  if (code === NOT_OPEN)
-    return away(
-      `${channel.name} is not running there, or nobody is logged in there`
+  if (ssh) return Effect.succeed(away(ssh))
+  if (code === NOT_FOUND)
+    return Effect.succeed({ state: "refused", why: notFound(host) })
+  if (starts && code === BROKEN)
+    return Effect.succeed(
+      away(
+        `${channel.name} could not start there, or nobody is logged in there`
+      )
     )
-  if (code === NOT_FOUND) return { state: "refused", why: notFound(host) }
-  return away(`the link to ${host.ssh} ended (code ${code})`)
+  return Option.match(
+    code === 0 ? Schema.decodeUnknownOption(Status)(line) : Option.none(),
+    {
+      onNone: () => refusalIn(host, line),
+      onSome: (status) => Effect.succeed(status),
+    }
+  )
 }
 
 /** banda's refusal there, as the page may say it: its code, when plain. */
@@ -2206,8 +2242,8 @@ const LINES_KEPT = 8
 type Ran =
   { lines: string[]; errors: string[]; code: number } | { url: string } | "late"
 
-/** Runs `remote` on `host` over ssh, as the follower's ssh runs it, for
- * at most `wait` ms (`Ran`). Its stderr is logged as the follower's, and
+/** Runs `remote` on `host` over ssh, as the go's own ssh runs it, for
+ * at most `wait` ms (`Ran`). Its stderr is logged as the go's, and
  * its last lines kept; `told` hears each line of its stdout as it comes. */
 const overSsh = (
   host: Entry,
@@ -2233,7 +2269,7 @@ const overSsh = (
             errors.push(line)
             if (errors.length > LINES_KEPT) errors.shift()
             return (url ? Deferred.succeed(signin, url) : Effect.void).pipe(
-              Effect.andThen(said(line, undefined))
+              Effect.andThen(said(line))
             )
           }),
           Effect.ignore
@@ -2469,7 +2505,7 @@ const freePort = Effect.callback<number, Error>((resume) => {
 /** Waits until the forward, process `pid`, listens on loopback port
  * `port`. A program that took the port first is not it, though it
  * answers: ssh's arguments show the port to every user of this machine,
- * and the page gives what answers there the secret. */
+ * and the page would say its hello to what answers there. */
 const answers = (host: Entry, port: number, pid: number, run: Run) =>
   Effect.gen(function* () {
     let told = false
@@ -2577,13 +2613,12 @@ const takes = (port: number) =>
     return Effect.sync(() => socket.destroy())
   })
 
-/** Logs what ssh said for host `name`, as `plain` takes it and with
- * the go's secret, should it show, taken out, at most `LINES_A_MINUTE`
- * lines a minute. */
+/** Logs what ssh said for host `name`, as `plain` takes it, at most
+ * `LINES_A_MINUTE` lines a minute. */
 function heard(name: string) {
   let since = Number.NEGATIVE_INFINITY
   let count = 0
-  return (line: string, secret: string | undefined) =>
+  return (line: string) =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       if (now - since >= 60_000) {
@@ -2598,7 +2633,7 @@ function heard(name: string) {
           )
         return
       }
-      const text = plain(secret ? line.split(secret).join("…") : line)
+      const text = plain(line)
       if (text) yield* Console.error(`banda: ${name}: ssh said: ${text}`)
     })
 }

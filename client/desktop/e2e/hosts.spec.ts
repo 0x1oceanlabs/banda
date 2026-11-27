@@ -1,8 +1,9 @@
 /**
  * Another machine's Threads in the sidebar (ADR 0081, decision 4): the
  * window reaches a second engine, "arc", over ssh. Here ssh is a fake
- * first on the window's PATH: it runs arc's `banda start --with-parent`
- * on this machine, on arc's own folders, and forwards the port itself, as
+ * first on the window's PATH: it runs what main asks of arc's `banda`
+ * on this machine, on arc's own folders, starts arc's engine as a service
+ * manager would where `banda start` finds none, and forwards the port itself, as
  * ssh does, so main's check that ssh holds the port holds. arc's label
  * shows below this machine's Projects, with its Projects and Threads;
  * stopped there, it says so, and Start brings it back. Its Thread opens
@@ -25,9 +26,7 @@
  * window; one moved from arc to this machine's Project never names arc,
  * not for a frame, and starts its Thread here. As a Mac, its `uname` says
  * Darwin, and the window finds its Banda in its Application Support; its
- * engine is this checkout's still, which serves for the follower, as a
- * Mac's does not
- * (engine/src/control.rs).
+ * engine is this checkout's still.
  * hosts.toml applies as it changes: a machine written there by hand, or
  * added through the bridge as the page will, shows at once, and goes as
  * it is taken out, and its address changes in place; Test finds arc's
@@ -56,6 +55,7 @@ import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import type { Host } from "../src/bridge"
+import { service, serviceFor } from "./arc"
 import {
   bandaMenu,
   headerShows,
@@ -90,9 +90,9 @@ const quoted = (word: string) => `'${word.replaceAll("'", `'\\''`)}'`
 /**
  * ssh as main runs it, for the host "arc" on this machine: `-G` says a
  * config with no forwards; the forward (`-N`) listens on the port `-L`
- * names, as itself, and carries each connection to arc's engine; the
- * follower runs what main asks there, on arc's folders, unless `down`
- * is there, when it cannot reach arc.
+ * names, as itself, and carries each connection to arc's engine; any
+ * other runs what main asks there, on arc's folders, unless `down` is
+ * there, when it cannot reach arc.
  */
 const fakeSsh = (folders: Record<string, string>) => `#!/bin/sh
 here=$(dirname "$0")
@@ -112,6 +112,7 @@ unset BANDA_TOKEN BANDA_ENGINE
 ${Object.entries(folders)
   .map(([name, path]) => `export ${name}=${quoted(path)}`)
   .join("\n")}
+${service([])}
 exec sh -c "$last"
 `
 
@@ -202,6 +203,9 @@ function newArc({ mac = false } = {}): Arc {
   }
   delete env.BANDA_TOKEN
   delete env.BANDA_ENGINE
+  const served = serviceFor(at("bin"), () =>
+    spawn(program, ["serve"], { env, stdio: "ignore" })
+  )
   return {
     dir,
     env,
@@ -217,6 +221,7 @@ function newArc({ mac = false } = {}): Arc {
         on ? "SIGSTOP" : "SIGCONT"
       ),
     close: () => {
+      served()
       try {
         // A forward held still would outlive the window's end.
         process.kill(
@@ -2693,7 +2698,7 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   arc = newArc()
   await seed(arc)
   // Banda's own, as a Person's PATH would have it there: Add's Connect
-  // and the follower find it with no `banda` in hosts.toml.
+  // and the window find it with no `banda` in hosts.toml.
   writeFileSync(
     join(arc.bin, "banda-local"),
     `#!/bin/sh\nexec ${quoted(program)} "$@"\n`,

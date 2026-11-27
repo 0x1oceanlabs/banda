@@ -446,6 +446,28 @@ repository), with an adversarial check.
   (`Engine.roundTrip`), and for ssh why. Away, the open row has Try again
   and each Pane's pill a small button of the same name, which starts the next go at once, the door
   first (`Hosts.start`). Not yet: a retry as the network comes back.
+- **No follower, and no secret of another machine (SE4, the cleanup).**
+  The window keeps no ssh at a machine but the forward, and that only
+  while its door on the tailnet does not answer. A go asks how the engine
+  there runs (`banda status`, which starts nothing), starts it where none
+  runs (`banda start`, as that machine's service, a command that ends),
+  pairs, and reaches the door. A live machine is one whose door answers:
+  asked every few seconds through the forward as on the tailnet, it is
+  away once it said nothing twice, and the next go asks again. An engine
+  that stopped as asked says so in `banda status` (`stopped`, from the
+  run's own word; on a Mac not while nobody is logged in at the screen,
+  as launchd stopped it then), and is started only by the first go of a
+  run and when the page asks; one that says only that none runs, from a
+  Banda older than the word, is left stopped too. Main reads no engine's
+  secret and the page gets none: an engine from before the door is
+  refused, "older than its door; update it there", and so is every
+  machine for a window whose page is served for development, which has
+  no device key; a machine that does not pair is away and tried
+  again. A machine that runs its engine as nobody's service, as a Linux
+  with no systemd user manager, is no longer served as a child of the
+  link: it is away until Banda runs there. The engine's own code for a
+  follower over ssh (`start --with-parent` with `BANDA_OVER_SSH`) stays
+  for windows from before this, and goes later.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

@@ -20,6 +20,8 @@
 use crate::client::{Client, Pass};
 use crate::control::{ANSWERS_WITHIN, NOWHERE, answering};
 use crate::places::{Places, Running};
+use crate::run::{self, Before};
+use crate::service::launchd::{Launchctl, Launchd};
 use crate::{Failure, parent};
 use banda_agents::counts::{self, AgentCounts, ProjectThreads};
 use banda_agents::model::{ListedThread, ThreadList};
@@ -84,6 +86,13 @@ pub struct Status {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub host_key: Option<String>,
+    /// With no engine running: whether it stopped as it was asked to, by
+    /// Quit Banda or `banda stop`, so that another machine's window
+    /// starts it only when its Person says; none while one runs, and from
+    /// a Banda older than this word.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub stopped: Option<bool>,
     /// Whether the fence around its Harnesses holds, as it said in its
     /// welcome (ADR 0083).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -176,7 +185,13 @@ async fn status_line(places: &Places, pass: bool) -> Result<Status, Failure> {
                 (said(&places.running()?), None)
             }
             Err(refused @ Failure::Refused(_)) => return Err(refused),
-            Err(_) => (Status::default(), None),
+            Err(_) => (
+                Status {
+                    stopped: Some(stopped_as_asked(places, || Launchctl.session())),
+                    ..Status::default()
+                },
+                None,
+            ),
         }
     };
     let named = match named {
@@ -184,6 +199,14 @@ async fn status_line(places: &Places, pass: bool) -> Result<Status, Failure> {
         named => named,
     };
     Ok(this_machine(line, system(), named))
+}
+
+/// Whether the engine that ran here last stopped as it was asked to. On a
+/// Mac launchd stops its job as the Person logs out at the screen too:
+/// with nobody logged in there (`session`), it was not the Person's stop,
+/// and it starts again as they log in.
+fn stopped_as_asked(places: &Places, session: impl Fn() -> bool) -> bool {
+    matches!(run::before(places).0, Before::Left(_)) && (!cfg!(target_os = "macos") || session())
 }
 
 /// What `banda status` says of a running engine, as `engine.json` says it.
@@ -742,8 +765,30 @@ mod tests {
         assert_eq!(line["system"], json!(banda_machines::about().system));
         assert!(line["system"].is_string(), "{line}");
         assert!(line.get("agents").is_none(), "nobody works with no engine");
+        assert_eq!(line["stopped"], false, "none ran here, so none was stopped");
         // It started nothing: no engine's state was written.
         assert!(!base.path().join("state").exists());
+    }
+
+    #[test]
+    fn an_engine_stopped_as_asked_says_so_and_one_that_crashed_does_not() {
+        let base = tempfile::tempdir().unwrap();
+        let places = Places::under(base.path());
+        std::fs::create_dir_all(&places.state).unwrap();
+        let logged_in = || true;
+        assert!(!stopped_as_asked(&places, logged_in), "none ran here");
+        let ran = run::Run::began(&places, 4100);
+        assert!(
+            !stopped_as_asked(&places, logged_in),
+            "it never said it left"
+        );
+        ran.left(run::Left::Stopped);
+        assert!(stopped_as_asked(&places, logged_in));
+        // On a Mac with nobody logged in, launchd stopped it, not the Person.
+        assert_eq!(
+            stopped_as_asked(&places, || false),
+            !cfg!(target_os = "macos")
+        );
     }
 
     #[test]
