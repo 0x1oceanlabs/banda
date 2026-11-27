@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A Project's access: mock 1</title>
+<link rel="stylesheet" href="../../../design/kit/kit.css" />
+<style>
+  /* Only this page's layout; everything Banda is in kit.css. */
+  body { margin: 0; }
+  .sheet { padding: 28px 28px 72px; display: grid; gap: 40px; max-width: 1180px; margin: 0 auto; }
+  .sheet h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  .sheet h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  .sheet p.note { margin: 0 0 14px; color: var(--muted-foreground); font-size: 13px; line-height: 1.5; max-width: 820px; }
+  .pick { color: var(--added); font-weight: 600; }
+  .stage { padding: 20px; border-radius: var(--r-tile); background: var(--tile); box-shadow: inset 0 0 0 1px var(--border); }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+  .cap { margin: 0 0 8px; font-size: 12px; color: var(--muted-foreground); }
+
+  /* The card. */
+  .acc { max-width: 560px; }
+  .acc-row { display: grid; grid-template-columns: 92px 1fr; gap: 12px; padding: 12px; }
+  .acc-row + .acc-row { box-shadow: inset 0 1px 0 var(--border); }
+  .acc-label { font-size: var(--text-meta); color: var(--muted-foreground); padding-top: 7px; }
+  .opts { display: grid; gap: 2px; min-width: 0; }
+  .opt { display: grid; grid-template-columns: 16px 1fr; gap: 10px; padding: 7px 8px; border-radius: var(--r-control); align-items: start; }
+  .opt.is-on { background: var(--raised); }
+  .opt.is-off { opacity: .45; }
+  .radio { width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--muted-foreground); }
+  .opt.is-on .radio { box-shadow: inset 0 0 0 4.5px var(--foreground); }
+  .opt b { font-weight: 550; display: block; }
+  .opt span.d { display: block; color: var(--muted-foreground); font-size: var(--text-meta); line-height: 1.45; }
+  .opt .status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .gets { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 12px 12px; box-shadow: inset 0 1px 0 var(--border); font-size: var(--text-meta); color: var(--muted-foreground); }
+  .gets b { font-weight: 500; color: var(--foreground); }
+  .gets .no { text-decoration: line-through; opacity: .6; }
+  .gets-h { flex: 0 0 100%; }
+
+  /* The compact variant. */
+  .seg { display: inline-flex; padding: 2px; border-radius: var(--r-control); background: var(--raised); }
+  .seg span { padding: 4px 10px; border-radius: calc(var(--r-control) - 2px); font-size: var(--text-ui); color: var(--muted-foreground); white-space: nowrap; }
+  .seg span.is-on { background: var(--block); color: var(--foreground); box-shadow: inset 0 0 0 1px var(--border); }
+  .line { margin-top: 6px; font-size: var(--text-meta); color: var(--muted-foreground); line-height: 1.45; }
+
+  /* The menus. */
+  .menus { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .b-menu { width: 268px; }
+  .b-menu-item .b-end { margin-left: auto; color: var(--muted-foreground); display: inline-flex; }
+  .b-menu-item.is-two { height: auto; padding: 6px 8px; align-items: flex-start; }
+  .b-menu-item.is-two .t { display: grid; gap: 1px; min-width: 0; }
+  .b-menu-item.is-two .t small { color: var(--muted-foreground); font-size: var(--text-meta); line-height: 1.4; }
+  .b-menu-item.is-two > i { margin-top: 2px; }
+
+  /* The sidebar's rows. */
+  .projs { display: grid; gap: 6px; max-width: 300px; }
+  .proj { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: var(--r-row); font-weight: 550; }
+  .proj small { font-weight: 400; color: var(--muted-foreground); font-size: var(--text-meta); }
+  .q { display: grid; gap: 10px; max-width: 820px; font-size: 14px; line-height: 1.5; }
+  .q div b { font-weight: 600; }
+
+  .opt { grid-template-columns: 18px 1fr 16px; }
+  .opt > .ic { margin-top: 2px; color: var(--muted-foreground); }
+  .opt.is-on > .ic { color: var(--foreground); }
+  .opt > .tick { margin-top: 3px; color: var(--foreground); visibility: hidden; }
+  .opt.is-on > .tick { visibility: visible; }
+  .seg span { display: inline-flex; align-items: center; gap: 6px; }
+  .proj .pg { color: var(--muted-foreground); margin-left: -2px; }
+
+  .plist { display: grid; gap: 2px; min-width: 0; }
+  .prow { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: var(--r-control); }
+  .prow:hover { background: var(--raised); }
+  .prow .pn { font-weight: 550; flex: 0 0 96px; }
+  .prow .pa { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: var(--text-meta); margin-left: auto; }
+  .prow .pg { color: var(--muted-foreground); }
+</style>
+</head>
+<body class="b-kit">
+<div class="sheet">
+
+  <header>
+    <h1>Доступ Проекта: одна карточка, две строки</h1>
+    <p class="note" style="margin-top:8px">
+      Один сценарий на всех картинках: Проект <b>banda</b> (свой), <b>dotfiles</b> (Агенту можно всё),
+      <b>acme-sdk</b> (чужой репозиторий). Интерфейс на английском, пояснения на русском.
+      Две оси разведены: <b>режим</b> — сколько Агент спрашивает, выбирается на Thread, как сейчас;
+      <b>доступ</b> — до чего дотягивается, выбирается на Проект, один раз.
+      Слова «fence» человек не видит: это способ, которым Banda держит уровни.
+    </p>
+  </header>
+
+  <section id="a">
+    <h2>A. Карточка в настройках Проекта <span class="pick">· Мой выбор</span></h2>
+    <p class="note">Две строки: кому доверяю и где работает. Ключи из них следуют, отдельной строки нет. Каждый вариант сразу говорит, что он значит. Внизу — итог одной строкой: что получают Агенты этого Проекта. Так не нужно помнить, что стоит за словом.</p>
+    <div class="stage">
+      <div class="b-block acc">
+        <div class="b-block-head"><i data-icon="shield" class="b-icon"></i><span class="b-block-title">Access</span><span class="b-end b-muted" style="font-size:var(--text-meta)">banda · ~/code/banda</span></div>
+        <div class="acc-row">
+          <div class="acc-label">Trust</div>
+          <div class="opts">
+            <label class="opt"><i data-x="user-round" data-size="16" class="ic"></i><span><b>As me</b><span class="d">Its Agents are you on this computer: every program, your keyring, sudo, Docker, and Banda itself.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            <label class="opt is-on"><i data-x="shield-check" data-size="16" class="ic"></i><span><b>Trusted</b><span class="d">Your files, programs and network, and your keys. Banda's own data stays out of reach.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            <label class="opt"><i data-x="shield-question-mark" data-size="16" class="ic"></i><span><b>Not trusted</b><span class="d">What the folder brings for a Harness (.claude/, .codex/, .mcp.json) is not loaded, and your key files are hidden.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+          </div>
+        </div>
+        <div class="acc-row">
+          <div class="acc-label">Runs</div>
+          <div class="opts">
+            <label class="opt is-on"><i data-icon="laptop" data-size="16" class="ic"></i><span><b>On this computer</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            <label class="opt"><i data-icon="box" data-size="16" class="ic"></i><span><b>Isolated</b><span class="d">In a box: a container with this folder inside. For code you did not write, or as the Project's own environment.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+          </div>
+        </div>
+        <div class="gets">
+          <span class="gets-h">Its Agents get</span>
+          <b>Your files</b><b>Your programs</b><b>The network</b><b>GitHub and SSH as you</b><b>The folder's Harness settings</b><span class="no">Banda's own data</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="b">
+    <h2>B. То же, компактно</h2>
+    <p class="note">Два переключателя и одна строка про выбранное. Меньше места, но чтобы узнать, что значит соседний вариант, его надо нажать. Для выбора с последствиями я бы так не делал.</p>
+    <div class="stage">
+      <div class="b-block acc">
+        <div class="b-block-head"><i data-icon="shield" class="b-icon"></i><span class="b-block-title">Access</span></div>
+        <div class="acc-row">
+          <div class="acc-label">Trust</div>
+          <div><div class="seg"><span><i data-x="user-round" data-size="14"></i>As me</span><span class="is-on"><i data-x="shield-check" data-size="14"></i>Trusted</span><span><i data-x="shield-question-mark" data-size="14"></i>Not trusted</span></div>
+            <div class="line">Your files, programs and network, and your keys. Banda's own data stays out of reach.</div></div>
+        </div>
+        <div class="acc-row">
+          <div class="acc-label">Runs</div>
+          <div><div class="seg"><span class="is-on"><i data-icon="laptop" data-size="14"></i>On this computer</span><span><i data-icon="box" data-size="14"></i>Isolated</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="c">
+    <h2>C. Остальные состояния карточки A</h2>
+    <p class="note">Четыре случая из твоих трёх пунктов. Ключи следуют из двух строк: As me — всё; Trusted на компьютере — все твои ключи, в коробке — только git этого Проекта; Not trusted — никаких, и файлы с ключами спрятаны. «As me» в коробке не бывает: коробка — это как раз не твой компьютер, поэтому вариант гаснет. Строка состояния коробки — как в ADR 0084: тихий текст, без спиннеров.</p>
+    <div class="stage cols">
+
+      <div>
+        <p class="cap">dotfiles — Агент, которому можно всё</p>
+        <div class="b-block acc">
+          <div class="acc-row">
+            <div class="acc-label">Trust</div>
+            <div class="opts">
+              <label class="opt is-on"><i data-x="user-round" data-size="16" class="ic"></i><span><b>As me</b><span class="d">Its Agents are you on this computer: every program, your keyring, sudo, Docker, and Banda itself.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt"><i data-x="shield-check" data-size="16" class="ic"></i><span><b>Trusted</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt"><i data-x="shield-question-mark" data-size="16" class="ic"></i><span><b>Not trusted</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            </div>
+          </div>
+          <div class="acc-row">
+            <div class="acc-label">Runs</div>
+            <div class="opts">
+              <label class="opt is-on"><i data-icon="laptop" data-size="16" class="ic"></i><span><b>On this computer</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt is-off"><i data-icon="box" data-size="16" class="ic"></i><span><b>Isolated</b><span class="d">Not with As me: a box is not this computer.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            </div>
+          </div>
+          <div class="gets"><span class="gets-h">Its Agents get</span><b>Everything you have here</b><b>Banda's own data</b></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="cap">acme-sdk — чужой код, на компьютере</p>
+        <div class="b-block acc">
+          <div class="acc-row">
+            <div class="acc-label">Trust</div>
+            <div class="opts">
+              <label class="opt"><i data-x="user-round" data-size="16" class="ic"></i><span><b>As me</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt"><i data-x="shield-check" data-size="16" class="ic"></i><span><b>Trusted</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt is-on"><i data-x="shield-question-mark" data-size="16" class="ic"></i><span><b>Not trusted</b><span class="d">What the folder brings for a Harness (.claude/, .codex/, .mcp.json) is not loaded, and your key files are hidden.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            </div>
+          </div>
+          <div class="acc-row">
+            <div class="acc-label">Runs</div>
+            <div class="opts">
+              <label class="opt is-on"><i data-icon="laptop" data-size="16" class="ic"></i><span><b>On this computer</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt"><i data-icon="box" data-size="16" class="ic"></i><span><b>Isolated</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            </div>
+          </div>
+          <div class="gets"><span class="gets-h">Its Agents get</span><b>Your files</b><b>Your programs</b><b>The network</b><span class="no">Your key files</span><span class="no">GitHub and SSH as you</span><span class="no">The folder's Harness settings</span><span class="no">Banda's own data</span></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="cap">acme-sdk — чужой код, в коробке</p>
+        <div class="b-block acc">
+          <div class="acc-row">
+            <div class="acc-label">Trust</div>
+            <div class="opts">
+              <label class="opt is-off"><i data-x="user-round" data-size="16" class="ic"></i><span><b>As me</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt"><i data-x="shield-check" data-size="16" class="ic"></i><span><b>Trusted</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt is-on"><i data-x="shield-question-mark" data-size="16" class="ic"></i><span><b>Not trusted</b><span class="d">What the folder brings for a Harness is not loaded.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            </div>
+          </div>
+          <div class="acc-row">
+            <div class="acc-label">Runs</div>
+            <div class="opts">
+              <label class="opt"><i data-icon="laptop" data-size="16" class="ic"></i><span><b>On this computer</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt is-on"><i data-icon="box" data-size="16" class="ic"></i><span><b>Isolated</b>
+                <span class="status"><span>Running · Debian · 2.1 GB</span><span class="b-link">Rebuild</span><span class="b-link">Log</span></span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            </div>
+          </div>
+          <div class="gets"><span class="gets-h">Its Agents get</span><b>This folder</b><b>The box's programs</b><b>The network</b><span class="no">Your other files</span><span class="no">GitHub and SSH as you</span><span class="no">Banda's own data</span></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="cap">banda — свой код, коробка как среда разработки</p>
+        <div class="b-block acc">
+          <div class="acc-row">
+            <div class="acc-label">Trust</div>
+            <div class="opts">
+              <label class="opt is-off"><i data-x="user-round" data-size="16" class="ic"></i><span><b>As me</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt is-on"><i data-x="shield-check" data-size="16" class="ic"></i><span><b>Trusted</b><span class="d">Only this Project's git reaches into the box: SSH to github.com, and the token you gave it.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt"><i data-x="shield-question-mark" data-size="16" class="ic"></i><span><b>Not trusted</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            </div>
+          </div>
+          <div class="acc-row">
+            <div class="acc-label">Runs</div>
+            <div class="opts">
+              <label class="opt"><i data-icon="laptop" data-size="16" class="ic"></i><span><b>On this computer</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+              <label class="opt is-on"><i data-icon="box" data-size="16" class="ic"></i><span><b>Isolated</b>
+                <span class="status"><span>Stopped</span><span class="b-link">Rebuild</span><span class="b-link">Log</span></span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            </div>
+          </div>
+          <div class="gets"><span class="gets-h">Its Agents get</span><b>This folder</b><b>The box's programs</b><b>The network</b><b>Git for this repository</b><b>The folder's Harness settings</b><span class="no">Your other keys</span><span class="no">Your other files</span><span class="no">Banda's own data</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="d">
+    <h2>D. Одно место: щит в композере</h2>
+    <p class="note">Сверху режим этого Thread — он харнеса, меняется тут же, как сейчас. Снизу одна строка про доступ Проекта: видно всегда, меняется в карточке. Цвета нет ни у одного уровня: цвет в Banda только зовёт, а «As me» — твой спокойный выбор, не тревога.</p>
+    <div class="stage menus">
+      <div>
+        <p class="cap">banda</p>
+        <div class="b-menu">
+          <div class="b-menu-label">This Thread</div>
+          <div class="b-menu-item">Supervised</div>
+          <div class="b-menu-item">Auto-accept edits</div>
+          <div class="b-menu-item">Auto</div>
+          <div class="b-menu-item is-hl">Full access<span class="b-end"><i data-icon="check" data-size="14"></i></span></div>
+          <div class="b-menu-sep"></div>
+          <div class="b-menu-label">Project banda</div>
+          <div class="b-menu-item is-two"><i data-x="shield-check"></i><span class="t">Trusted · On this computer<small>All your keys</small></span><span class="b-end"><i data-icon="chevron-right" data-size="14"></i></span></div>
+        </div>
+      </div>
+      <div>
+        <p class="cap">dotfiles</p>
+        <div class="b-menu">
+          <div class="b-menu-label">This Thread</div>
+          <div class="b-menu-item">Supervised</div>
+          <div class="b-menu-item">Auto-accept edits</div>
+          <div class="b-menu-item">Auto</div>
+          <div class="b-menu-item is-hl">Full access<span class="b-end"><i data-icon="check" data-size="14"></i></span></div>
+          <div class="b-menu-sep"></div>
+          <div class="b-menu-label">Project dotfiles</div>
+          <div class="b-menu-item is-two"><i data-x="user-round"></i><span class="t">As me · On this computer<small>This Agent is you, in Banda too</small></span><span class="b-end"><i data-icon="chevron-right" data-size="14"></i></span></div>
+        </div>
+      </div>
+      <div>
+        <p class="cap">acme-sdk</p>
+        <div class="b-menu">
+          <div class="b-menu-label">This Thread</div>
+          <div class="b-menu-item">Supervised</div>
+          <div class="b-menu-item">Auto-accept edits</div>
+          <div class="b-menu-item">Auto</div>
+          <div class="b-menu-item is-hl">Full access<span class="b-end"><i data-icon="check" data-size="14"></i></span></div>
+          <div class="b-menu-sep"></div>
+          <div class="b-menu-label">Project acme-sdk</div>
+          <div class="b-menu-item is-two"><i data-icon="box"></i><span class="t">Not trusted · Isolated<small>No keys · Running · Debian</small></span><span class="b-end"><i data-icon="chevron-right" data-size="14"></i></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="e">
+    <h2>E. Добавление папки, которая выглядит чужой</h2>
+    <p class="note">Сейчас Banda спрашивает «Not yet / Trust». Те же три ответа, что в карточке, одним списком; Enter — самый осторожный, который ничего не требует ставить. Коробка предлагается только там, где найден Docker или Podman.</p>
+    <div class="stage menus">
+      <div class="b-menu" style="width:420px">
+        <div class="b-menu-label">acme-sdk was cloned from github.com/acme. Do you trust it?</div>
+        <div class="b-menu-item is-two is-hl"><i data-x="shield-question-mark"></i><span class="t">Not trusted<small>No keys, and nothing its folder brings for a Harness</small></span><span class="b-key">↵</span></div>
+        <div class="b-menu-item is-two"><i data-icon="box"></i><span class="t">Not trusted, and isolated<small>The same, in a box of its own</small></span></div>
+        <div class="b-menu-item is-two"><i data-x="shield-check"></i><span class="t">Trusted<small>As a folder of your own</small></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="f">
+    <h2>F. Компьютер, где ограды нет (Mac и Windows сегодня)</h2>
+    <p class="note">Честно: там «Trusted» не может держать данные Banda подальше от Агента. Вариант остаётся — ключи и настройки папки Banda выдаёт сама и без ограды, — но строка говорит, чего он здесь не даёт. Уровень, которого нет, не рисуем.</p>
+    <div class="stage">
+      <div class="b-block acc">
+        <div class="b-block-head"><i data-icon="shield" class="b-icon"></i><span class="b-block-title">Access</span><span class="b-end b-muted" style="font-size:var(--text-meta)">on m1pro</span></div>
+        <div class="acc-row">
+          <div class="acc-label">Trust</div>
+          <div class="opts">
+            <label class="opt"><i data-x="user-round" data-size="16" class="ic"></i><span><b>As me</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            <label class="opt is-on"><i data-x="shield-check" data-size="16" class="ic"></i><span><b>Trusted</b><span class="d">Your files, programs and network. macOS has no fence yet, so here its Agents reach Banda's own data too, as with As me.</span></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            <label class="opt"><i data-x="shield-question-mark" data-size="16" class="ic"></i><span><b>Not trusted</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+          </div>
+        </div>
+        <div class="acc-row">
+          <div class="acc-label">Runs</div>
+          <div class="opts">
+            <label class="opt is-on"><i data-icon="laptop" data-size="16" class="ic"></i><span><b>On this computer</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+            <label class="opt"><i data-icon="box" data-size="16" class="ic"></i><span><b>Isolated</b></span><i data-icon="check" data-size="14" class="tick"></i></label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="g">
+    <h2>G. В сайдбаре</h2>
+    <p class="note">Сегодня у недоверенного Проекта серый пунктирный кружок у знака. Те же иконки, что в карточке, тихо после имени и только там, где доступ не обычный; слово — в подсказке при наведении. Обычный «Trusted · On this computer» ничем не помечен.</p>
+    <div class="stage">
+      <div class="projs">
+        <div class="proj"><span class="b-sign" data-color="violet">B</span>banda</div>
+        <div class="proj"><span class="b-sign" data-color="teal">D</span>dotfiles <i data-x="user-round" data-size="13" class="pg"></i></div>
+        <div class="proj"><span class="b-sign is-plain">A</span>acme-sdk <i data-x="shield-question-mark" data-size="13" class="pg"></i><i data-icon="box" data-size="13" class="pg"></i></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="h">
+    <h2>H. Первый запуск: один вопрос</h2>
+    <p class="note">Человек ставит Banda сам. Вопрос не «пишете ли вы код», а о том, что будет происходить, простыми словами и без слов «fence», «box», «trust». Ответ задаёт умолчание для новых Проектов; Enter — изолированно, потому что тех, кто просто работает, больше. Позже меняется в настройках и у любого Проекта.</p>
+    <div class="stage menus">
+      <div class="b-menu" style="width:460px">
+        <div class="b-menu-label">Where may your Agents work?</div>
+        <div class="b-menu-item is-two is-hl"><i data-icon="box"></i><span class="t">Only in the folders I open<small>Each Project gets a space of its own. An Agent sees that folder and nothing else on this computer.</small></span><span class="b-key">↵</span></div>
+        <div class="b-menu-item is-two"><i data-icon="laptop"></i><span class="t">On this computer, as I do<small>Agents use your programs and files, as a developer's tools do.</small></span></div>
+        <div class="b-menu-sep"></div>
+        <div class="b-menu-label" style="font-weight:400">You can change it later, for all Projects or for one.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="i">
+    <h2>I. Настройки → Access: всё в одном месте</h2>
+    <p class="note">Те же две строки, что в карточке Проекта: сверху — как открываются новые Проекты, ниже — все Проекты с их доступом, меняется на месте. Для тех, кто пишет код, то же самое есть строкой в файле настроек и командой <code class="b-code-inline">banda project access</code>. Агент этого поменять не может: только человек.</p>
+    <div class="stage">
+      <div class="b-block acc" style="max-width:640px">
+        <div class="b-block-head"><i data-icon="shield" class="b-icon"></i><span class="b-block-title">Access</span></div>
+        <div class="acc-row">
+          <div class="acc-label">New Projects</div>
+          <div class="b-vstack" style="gap:8px;align-items:flex-start">
+            <div class="seg"><span><i data-x="user-round" data-size="14"></i>As me</span><span class="is-on"><i data-x="shield-check" data-size="14"></i>Trusted</span><span><i data-x="shield-question-mark" data-size="14"></i>Not trusted</span></div>
+            <div class="seg"><span><i data-icon="laptop" data-size="14"></i>On this computer</span><span class="is-on"><i data-icon="box" data-size="14"></i>Isolated</span></div>
+            <div class="line" style="margin:0">A folder that looks like someone else's code still asks first.</div>
+          </div>
+        </div>
+        <div class="acc-row">
+          <div class="acc-label">Projects</div>
+          <div class="plist">
+            <div class="prow"><span class="b-sign" data-color="violet">B</span><span class="pn">banda</span><span class="pa"><i data-x="shield-check" data-size="14"></i><i data-icon="laptop" data-size="14"></i>Trusted · On this computer</span><i data-icon="chevron-down" data-size="14" class="pg"></i></div>
+            <div class="prow"><span class="b-sign" data-color="teal">D</span><span class="pn">dotfiles</span><span class="pa"><i data-x="user-round" data-size="14"></i><i data-icon="laptop" data-size="14"></i>As me · On this computer</span><i data-icon="chevron-down" data-size="14" class="pg"></i></div>
+            <div class="prow"><span class="b-sign is-plain">A</span><span class="pn">acme-sdk</span><span class="pa"><i data-x="shield-question-mark" data-size="14"></i><i data-icon="box" data-size="14"></i>Not trusted · Isolated</span><i data-icon="chevron-down" data-size="14" class="pg"></i></div>
+            <div class="prow"><span class="b-sign" data-color="sand">R</span><span class="pn">reports</span><span class="pa"><i data-x="shield-check" data-size="14"></i><i data-icon="box" data-size="14"></i>Trusted · Isolated</span><i data-icon="chevron-down" data-size="14" class="pg"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="q">
+    <h2>Вопросы</h2>
+    <div class="q">
+      <div><b>1. Карточка: A или B?</b> Мой выбор — A: у выбора с последствиями смысл каждого варианта должен быть виден без нажатия.</div>
+      <div><b>2. Слова и иконки.</b> Человек — «As me», щит с галочкой — «Trusted», щит с вопросом — «Not trusted», ноутбук и коробка. «As me», «Trusted», «Not trusted»; «On this computer», «Isolated». «Isolated» и «box» уже есть в GLOSSARY. Мой выбор — так и оставить.</div>
+      <div><b>3. Режим нового Thread.</b> Сейчас его выбирает состояние ограды. Предлагаю: везде тот, что ты поставил для харнеса в Settings → Agents; карточка доступа на него не влияет. Одна вещь решает одно.</div>
+      <div><b>4. «As me»: спрашивать подтверждение при выборе?</b> Мой выбор — нет, одного ясного предложения в карточке достаточно. Banda не переспрашивает человека.</div>
+      <div><b>5. Сайдбар.</b> Те же иконки после имени, только где доступ не обычный (G). Это территория сессии сайдбара, им и решать окончательно.</div>
+      <div><b>7. Первый запуск (H).</b> Один вопрос, Enter — «только в папках, которые я открываю». Честно это можно включить, только когда коробка работает без Docker. Мой выбор — так.</div>
+      <div><b>6. Ключи.</b> Отдельной строки нет. На компьютере доверенный Агент и так читает твои файлы с ключами, поэтому «только git этого Проекта» честно получается лишь в коробке.</div>
+      <div><b>Позже, не в этом моке:</b> сеть коробки (shared / private / allowlist, ADR 0084), вход в аккаунт внутри коробки, что именно Агент недоверенного Проекта может делать с чужими Thread.</div>
+    </div>
+  </section>
+
+</div>
+<script src="../../../design/kit/icons.js"></script>
+<script src="../../../design/kit/mark.js"></script>
+<script>
+/* Three lucide icons the kit does not carry yet (lucide v1.65, ISC). */
+(function(){var X={"key-round":'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
+"user-round":'<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+"shield-check":'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+"shield-question-mark":'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>'};
+document.querySelectorAll('[data-x]').forEach(function(n){var z=+(n.getAttribute('data-size')||16);var t=document.createElement('template');
+t.innerHTML='<svg class="b-icon '+(n.className||'')+'" width="'+z+'" height="'+z+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+X[n.getAttribute('data-x')]+'</svg>';n.replaceWith(t.content.firstChild)})})();
+</script>
+</body>
+</html>
