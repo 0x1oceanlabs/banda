@@ -91,15 +91,7 @@ struct Needs {
     /// listener's name: the kernel refuses it one it does not declare
     /// (`ModuleProject::hears`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    listens: BTreeMap<String, Listens>,
-}
-
-/// The facts one listener hears: the part's they are, and their kinds.
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Listens {
-    from: String,
-    kinds: Vec<String>,
+    listens: BTreeMap<String, banda_kernel::Listens>,
 }
 
 /// One module, as `banda modules` prints it.

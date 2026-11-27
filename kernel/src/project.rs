@@ -284,10 +284,6 @@ pub struct Project {
     store: Store,
     /// The modules that run here: [`Project::modules`].
     modules: std::sync::RwLock<Arc<[Arc<dyn Module>]>>,
-    /// The module [`Project::add`] is telling it opened, which is not yet
-    /// among those that run here: what it declares is read of it, not of
-    /// one it takes the place of.
-    taking: std::sync::Mutex<Option<Arc<dyn Module>>>,
     passes: Arc<Passes>,
     window: Arc<Window>,
     environment: Arc<dyn Environment>,
@@ -395,7 +391,6 @@ impl Project {
             owner,
             store,
             modules: std::sync::RwLock::new(modules),
-            taking: std::sync::Mutex::default(),
             passes,
             window,
             environment,
@@ -628,6 +623,7 @@ impl Project {
         ModuleProject {
             project: self.clone(),
             module,
+            taken: None,
         }
     }
 
@@ -668,16 +664,13 @@ impl Project {
             if let Some(off) = self.store.add(Tables::of(&**module)).await? {
                 return Ok::<_, Error>(Some(off.words()));
             }
-            // Let go of however this ends, an add given up too.
-            struct Taking<'a>(&'a Project);
-            impl Drop for Taking<'_> {
-                fn drop(&mut self) {
-                    *self.0.taking.lock().unwrap() = None;
-                }
-            }
-            *self.taking.lock().unwrap() = Some(module.clone());
-            let _taking = Taking(self);
-            module.opened(self.module(name)).await?;
+            // It is not among those that run here yet: what it declares
+            // is read of it, not of one it takes the place of.
+            let taken = ModuleProject {
+                taken: Some(module.clone()),
+                ..self.module(name)
+            };
+            module.opened(taken).await?;
             Ok(None)
         };
         let off = match taken.await {
@@ -812,6 +805,9 @@ impl Reaction {
 pub struct ModuleProject {
     project: Arc<Project>,
     module: &'static str,
+    /// The module itself, while it is told it opened as the engine takes
+    /// it ([`Project::add`]), before it runs here.
+    taken: Option<Arc<dyn Module>>,
 }
 
 /// A [`ModuleProject`] held weakly ([`ModuleProject::downgrade`]): it
@@ -828,6 +824,7 @@ impl WeakModuleProject {
         Some(ModuleProject {
             project: self.project.upgrade()?,
             module: self.module,
+            taken: None,
         })
     }
 }
@@ -898,6 +895,7 @@ impl ModuleProject {
         Ok(ModuleProject {
             project: other,
             module: self.module,
+            taken: None,
         })
     }
 
@@ -1084,7 +1082,7 @@ impl ModuleProject {
         filter: EventFilter,
         carried: Option<i64>,
     ) -> Result<Listener, Error> {
-        self.admits(name, &filter)?;
+        listens::admits(&*self.itself()?, name, &filter)?;
         let cursor = Cursor::new(self.module, self.kept(), name, self.project.id, None)?;
         Listener::begin(&self.project, cursor, filter, carried, None).await
     }
@@ -1098,17 +1096,9 @@ impl ModuleProject {
         listens::declared(&*self.itself()?, name)
     }
 
-    /// Refuses the listener `name` what `filter` matches of another
-    /// part's facts unless its manifest declares it.
-    fn admits(&self, name: &str, filter: &EventFilter) -> Result<(), Refusal> {
-        listens::admits(&*self.itself()?, name, filter)
-    }
-
-    /// This module, as it runs here, or as it is taken here now.
+    /// This module, as it is taken here now, or as it runs here.
     fn itself(&self) -> Result<Arc<dyn Module>, Refusal> {
-        let taking = self.project.taking.lock().unwrap().clone();
-        taking
-            .filter(|module| module.name() == self.module)
+        (self.taken.clone())
             .or_else(|| self.project.serving(self.module))
             .ok_or_else(|| Refusal::conflict(format!("{} does not run here.", self.module)))
     }
@@ -1128,7 +1118,7 @@ impl ModuleProject {
         name: &'static str,
         filter: EventFilter,
     ) -> Result<Option<Listener>, Error> {
-        self.admits(name, &filter)?;
+        listens::admits(&*self.itself()?, name, &filter)?;
         let Some(machine) = &self.project.machine else {
             return Ok(None);
         };

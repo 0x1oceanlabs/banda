@@ -28,8 +28,9 @@ kinds = ["git.acted"]
 from = "browser"
 kinds = ["browser.lent"]
 
-# An account of this machine's changed or was removed: its Tasks' Harness
-# processes are let go, and those of a removed one retire.
+# An account of this machine's changed or was removed, heard by two
+# listeners: its Tasks' Harness processes are let go, and those of a
+# removed one retire.
 [needs.listens.removed-accounts]
 from = "harnesses"
 kinds = ["account_changed"]

@@ -98,6 +98,7 @@ pub use foreign::{Foreign, ForeignWhy};
 pub use hands::{Hands, InHand, TYPED_TOLD_EVERY_MS};
 pub use ids::{AgentId, CommandId, DeviceId, EventId, Participant, PersonId, ProjectId};
 pub use kernel::{Kernel, ProjectSummary, present};
+pub use listens::Listens;
 pub use methods::{Does, Kind, Method, Nothing, Picture, Tool};
 pub use module::Other;
 pub use module::{Call, Module, Scope, Stream, Wall, watching, watching_as};
