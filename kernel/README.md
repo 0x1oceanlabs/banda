@@ -98,8 +98,7 @@ The kernel holds only what every module needs, and it names no module.
   (`[needs.listens.<name>]`, `ModuleProject::hears`), and the kernel
   refuses one it does not declare, so who hears whom is read in the
   manifests (ADR 0082, decisions 2 and 5). Reading the log is not held so
-  yet (#1928). A listener new to a log starts at its
-  head. In one scope a
+  yet (#1928). A listener new to a log starts at its head. In one scope a
   reaction acks its fact in the transaction it writes in (`Tx::ack`), so
   it runs once, and a second ack is refused. One that cannot, its work
   outside the store (git's checkpoints) or what it follows spanning

@@ -16,7 +16,7 @@
 
 use crate::module::Module;
 use crate::{EventFilter, Refusal};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Deserialize, Default)]
@@ -31,11 +31,13 @@ struct Needs {
     listens: BTreeMap<String, Listens>,
 }
 
-#[derive(Deserialize)]
+/// What one listener hears, as a manifest's `[needs.listens.<name>]`
+/// says it: the part whose facts they are, and their kinds.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Listens {
-    from: String,
-    kinds: Vec<String>,
+pub struct Listens {
+    pub from: String,
+    pub kinds: Vec<String>,
 }
 
 /// The facts `module`'s listener `name` hears of another part, as its
