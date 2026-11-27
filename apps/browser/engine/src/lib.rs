@@ -9,6 +9,7 @@
 //!
 //! With no window open, a tool is refused, and says so.
 
+pub mod chromium;
 pub mod settings;
 
 use banda_kernel::{Call, Kind, Module, Nothing, Picture, Refusal, Right, Tool};
