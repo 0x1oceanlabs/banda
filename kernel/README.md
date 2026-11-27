@@ -97,7 +97,8 @@ The kernel holds only what every module needs, and it names no module.
   through a listener its `app.toml` declares, with the part and the kinds
   (`[needs.listens.<name>]`, `ModuleProject::hears`), and the kernel
   refuses one it does not declare, so who hears whom is read in the
-  manifests (ADR 0082, decision 2). A listener new to a log starts at its
+  manifests (ADR 0082, decisions 2 and 5). Reading the log is not held so
+  yet (#1928). A listener new to a log starts at its
   head. In one scope a
   reaction acks its fact in the transaction it writes in (`Tx::ack`), so
   it runs once, and a second ack is refused. One that cannot, its work

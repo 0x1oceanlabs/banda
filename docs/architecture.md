@@ -102,7 +102,7 @@ contract. It is one folder: an App's in `apps/`, the platform's in
   engine/      Rust crate: rules · store · operation · adapters
   pane/        React package: its window part, one defineModule
   app.toml     id, kind, name, version, api, from Banda, settings files,
-               legacy table prefixes, needs (empty yet), unstable marks
+               legacy table prefixes, needs (what it hears), unstable marks
   window.json  its window part as the engine reads it, written by the window's tests:
                what `banda modules` prints, and the Pane kinds that open as
                a Group of their own, stand on their Project's workspace,

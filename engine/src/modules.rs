@@ -491,6 +491,26 @@ mod tests {
         }
     }
 
+    /// The manifest an engine part hands the kernel, which reads in it
+    /// what the part may hear of another (ADR 0082, decision 2), is its
+    /// `app.toml` and no other text; one that hears none may hand none.
+    #[test]
+    fn the_manifest_an_engine_part_hands_the_kernel_is_its_app_toml() {
+        let parts = crate::apps::on_a_test_host(crate::apps::scanned::parts);
+        for (offer, listed) in offers().iter().zip(APPS) {
+            let id = &offer.manifest.id;
+            let Some((_, part)) = parts.iter().find(|(_, part)| part.name() == id) else {
+                continue;
+            };
+            let hears = (offer.manifest.needs.as_ref()).is_some_and(|n| !n.listens.is_empty());
+            let handed = part.manifest();
+            assert!(
+                handed == listed.manifest || (handed.is_empty() && !hears),
+                "{id}'s Module::manifest is its {MANIFEST}"
+            );
+        }
+    }
+
     /// What the workspaces open as a Group of its own is what the window's
     /// code says, through the files its tests write: a Thread's Pane alone
     /// (ADR 0065, decision 7).

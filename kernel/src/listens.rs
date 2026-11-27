@@ -1,7 +1,7 @@
 //! What a module hears of another, as its manifest declares it (ADR 0082,
 //! decision 2): `[needs.listens]` of its `app.toml`, one table for each
 //! listener, by its name, with the part it hears and the kinds of its
-//! facts; every kind, when it names none.
+//! facts.
 //!
 //! ```toml
 //! [needs.listens.copies]
@@ -32,10 +32,10 @@ struct Needs {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Listens {
     from: String,
-    /// None for every kind of the part's facts.
-    kinds: Option<Vec<String>>,
+    kinds: Vec<String>,
 }
 
 /// The facts `module`'s listener `name` hears of another part, as its
@@ -52,7 +52,7 @@ pub(crate) fn declared(module: &dyn Module, name: &str) -> Result<EventFilter, R
     Ok(EventFilter {
         module: Some(listens.from.clone()),
         subject: None,
-        kinds: listens.kinds.clone(),
+        kinds: Some(listens.kinds.clone()),
     })
 }
 
@@ -69,11 +69,10 @@ pub(crate) fn admits(module: &dyn Module, name: &str, filter: &EventFilter) -> R
         return Ok(());
     }
     let declared = declared(module, name)?;
+    let kinds = declared.kinds.unwrap_or_default();
     let within = declared.module.as_deref() == Some(from)
-        && declared.kinds.is_none_or(|kinds| {
-            (filter.kinds.as_ref())
-                .is_some_and(|asked| asked.iter().all(|kind| kinds.contains(kind)))
-        });
+        && (filter.kinds.as_ref())
+            .is_some_and(|asked| asked.iter().all(|kind| kinds.contains(kind)));
     if within {
         Ok(())
     } else {

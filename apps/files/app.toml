@@ -11,6 +11,6 @@ from-banda = true
 # The settings file it owns, in ~/.config/banda.
 settings = ["files.toml"]
 
-# What it needs of Banda (ADR 0082, decision 2): nothing it could
-# declare here is built yet.
+# What it needs of Banda (ADR 0082, decision 2): it hears no other part,
+# and the rest it could declare here is not built yet.
 [needs]

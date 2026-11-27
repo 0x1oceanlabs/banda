@@ -1864,7 +1864,7 @@ impl Module for Agents {
             .write(move |tx| retirements::quiet(tx, &harnesses))
             .await?;
         if let Some(heard) = project
-            .listen_to_machine("removed-accounts", banda_harnesses::account_changed())
+            .listen_to_machine("removed-accounts", project.hears("removed-accounts")?)
             .await?
         {
             tokio::spawn(retirements::follow(heard, self.harnesses.clone(), true));
@@ -1888,7 +1888,7 @@ impl Module for Agents {
         // A put-off Thread's failed turn goes on as its time comes.
         let heard = project.listen(time_comes::LISTENER, time_comes::put_off());
         tokio::spawn(time_comes::watch(heard.await?));
-        let filter = banda_harnesses::account_changed();
+        let filter = project.hears(Live::ACCOUNTS)?;
         if let Some(heard) = project.listen_to_machine(Live::ACCOUNTS, filter).await? {
             let live = self.live.clone();
             tokio::spawn(live.let_go_as_accounts_change(project.id(), heard));

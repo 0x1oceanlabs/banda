@@ -448,13 +448,13 @@ impl Module for Hears {
     fn manifest(&self) -> &'static str {
         r#"
         [needs.listens]
-        notes = { from = "notes" }
-        copies = { from = "notes" }
-        carried = { from = "notes" }
-        ahead = { from = "notes" }
-        nothing = { from = "notes" }
+        notes = { from = "notes", kinds = ["added"] }
+        copies = { from = "notes", kinds = ["added"] }
+        carried = { from = "notes", kinds = ["added"] }
+        ahead = { from = "notes", kinds = ["added"] }
+        nothing = { from = "notes", kinds = ["added"] }
         added = { from = "notes", kinds = ["added"] }
-        panes = { from = "desk" }
+        panes = { from = "desk", kinds = ["opened"] }
         "#
     }
 
@@ -2859,9 +2859,10 @@ async fn a_module_of_a_project_hears_the_machine_until_its_project_closes() {
     open_pane("before").await.unwrap();
     let filter = EventFilter {
         module: Some("desk".into()),
+        kinds: Some(vec!["opened".into()]),
         ..EventFilter::default()
     };
-    let heard = module.listen_to_machine("panes", filter).await;
+    let heard = module.listen_to_machine("panes", filter.clone()).await;
     let mut heard = heard.unwrap().unwrap();
     assert_eq!(heard.project().map(|own| own.id()), Some(work.id));
     open_pane("terminal").await.unwrap();
@@ -2900,9 +2901,7 @@ async fn a_module_of_a_project_hears_the_machine_until_its_project_closes() {
     assert!(machine.reacted(short).await);
 
     // A module of the machine has no machine to hear but its own log.
-    let own = machine
-        .listen_to_machine("panes", EventFilter::default())
-        .await;
+    let own = machine.listen_to_machine("panes", filter).await;
     assert!(own.unwrap().is_none());
 }
 
@@ -3815,6 +3814,7 @@ async fn an_effect_waits_until_the_modules_reacting_to_the_log_have_reacted() {
 
     let filter = EventFilter {
         module: Some("notes".into()),
+        kinds: Some(vec!["added".into()]),
         ..EventFilter::default()
     };
     let mut heard = module.listen("notes", filter).await.unwrap();
@@ -3894,6 +3894,7 @@ async fn a_listener_resumes_from_its_cursor_and_reacts_once_across_a_crash() {
     };
     let filter = EventFilter {
         module: Some("notes".into()),
+        kinds: Some(vec!["added".into()]),
         ..EventFilter::default()
     };
     let hears = Hears::default();
@@ -3964,6 +3965,7 @@ async fn a_listener_begins_once_where_its_modules_own_cursor_stood() {
     let module = opened_in(&hears).await;
     let filter = EventFilter {
         module: Some("notes".into()),
+        kinds: Some(vec!["added".into()]),
         ..EventFilter::default()
     };
     let one = add(&kernel, person, &project, "one").await.unwrap();
@@ -4036,6 +4038,10 @@ async fn a_module_hears_another_only_as_its_manifest_declares() {
     let unnamed = module.listen("added", EventFilter::default()).await;
     assert!(refused(unnamed, Code::Invalid));
 
+    // The machine's log is heard by the same rule, with a machine or none.
+    let machine = module.listen_to_machine("undeclared", of("desk", Some(&["opened"])));
+    assert!(refused(machine.await, Code::Forbidden));
+
     // Its own facts it hears with no word in its manifest.
     assert!(module.listen("own", of("hears", None)).await.is_ok());
 }
@@ -4058,6 +4064,7 @@ async fn one_name_is_one_listener_and_it_acks_only_what_it_heard() {
     let module = opened_in(&hears).await;
     let filter = EventFilter {
         module: Some("notes".into()),
+        kinds: Some(vec!["added".into()]),
         ..EventFilter::default()
     };
     let mut heard = module.listen("copies", filter.clone()).await.unwrap();
@@ -4111,7 +4118,7 @@ async fn a_listener_begun_behind_the_head_has_handled_what_it_does_not_hear() {
     let nothing = EventFilter {
         module: Some("notes".into()),
         subject: Some("nothing".into()),
-        ..EventFilter::default()
+        kinds: Some(vec!["added".into()]),
     };
     let carried = one["seq"].as_i64();
     let mut heard = module.listen_from("nothing", nothing, carried).await;
@@ -4142,6 +4149,7 @@ async fn a_reaction_across_scopes_is_written_once_though_its_ack_was_lost() {
     };
     let filter = EventFilter {
         module: Some("desk".into()),
+        kinds: Some(vec!["opened".into()]),
         ..EventFilter::default()
     };
     let hears = Hears::default();

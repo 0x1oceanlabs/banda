@@ -223,6 +223,13 @@ Roma, 2026-11-06, among the vision's decisions:
    - A listener declares what it hears in `app.toml`, as
      `listens = ["threads.turn.began@1"]`. The registry refuses a listen
      on a private or undeclared kind.
+     _Amended 2026-11-27 (#1798, step 4): until `facts!` publishes names
+     (step 8), a listener is declared by its own name, as
+     `[needs.listens.<listener>]` with `from`, the part it hears, and
+     `kinds`, its facts' kinds as the log holds them. The kernel refuses a
+     listener of another part's facts its manifest does not declare
+     (`kernel/src/listens.rs`). Private and published facts are not told
+     apart yet, and an App from elsewhere declares none._
    - A fact that carries what an Agent ran and what it printed, as
      `threads.tool.ran@1` does, is sensitive: listening to it is a grant
      the Person sees.

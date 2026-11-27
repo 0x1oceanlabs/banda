@@ -284,6 +284,10 @@ pub struct Project {
     store: Store,
     /// The modules that run here: [`Project::modules`].
     modules: std::sync::RwLock<Arc<[Arc<dyn Module>]>>,
+    /// The module [`Project::add`] is telling it opened, which is not yet
+    /// among those that run here: what it declares is read of it, not of
+    /// one it takes the place of.
+    taking: std::sync::Mutex<Option<Arc<dyn Module>>>,
     passes: Arc<Passes>,
     window: Arc<Window>,
     environment: Arc<dyn Environment>,
@@ -391,6 +395,7 @@ impl Project {
             owner,
             store,
             modules: std::sync::RwLock::new(modules),
+            taking: std::sync::Mutex::default(),
             passes,
             window,
             environment,
@@ -663,6 +668,15 @@ impl Project {
             if let Some(off) = self.store.add(Tables::of(&**module)).await? {
                 return Ok::<_, Error>(Some(off.words()));
             }
+            // Let go of however this ends, an add given up too.
+            struct Taking<'a>(&'a Project);
+            impl Drop for Taking<'_> {
+                fn drop(&mut self) {
+                    *self.0.taking.lock().unwrap() = None;
+                }
+            }
+            *self.taking.lock().unwrap() = Some(module.clone());
+            let _taking = Taking(self);
             module.opened(self.module(name)).await?;
             Ok(None)
         };
@@ -1090,11 +1104,12 @@ impl ModuleProject {
         listens::admits(&*self.itself()?, name, filter)
     }
 
-    /// This module, as it runs here.
+    /// This module, as it runs here, or as it is taken here now.
     fn itself(&self) -> Result<Arc<dyn Module>, Refusal> {
-        let modules = self.project.modules();
-        (modules.iter().find(|module| module.name() == self.module))
-            .cloned()
+        let taking = self.project.taking.lock().unwrap().clone();
+        taking
+            .filter(|module| module.name() == self.module)
+            .or_else(|| self.project.serving(self.module))
             .ok_or_else(|| Refusal::conflict(format!("{} does not run here.", self.module)))
     }
 
@@ -1113,10 +1128,10 @@ impl ModuleProject {
         name: &'static str,
         filter: EventFilter,
     ) -> Result<Option<Listener>, Error> {
+        self.admits(name, &filter)?;
         let Some(machine) = &self.project.machine else {
             return Ok(None);
         };
-        self.admits(name, &filter)?;
         let cursor = Cursor::new(
             self.module,
             self.kept(),
