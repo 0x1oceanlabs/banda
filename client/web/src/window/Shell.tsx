@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { useCallback, useContext, useEffect, useMemo, useState } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { Toaster } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
@@ -29,32 +22,14 @@ import {
   nowOf,
   workingHere,
 } from "../calls/stores"
-import { Edge, LaterPicker, useOrderNow, writeSidebar } from "../sidebar"
+import { Edge, LaterPicker, useOrderNow } from "../sidebar"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
-import { BandaMenu, openingIn } from "../menu/BandaMenu"
-import {
-  type At,
-  type Branch,
-  type Choice,
-  type Own,
-  locateRoute,
-  type Opening,
-  openingAt,
-  settingsLinkOf,
-} from "../menu/menu"
-import { writeLook } from "../menu/theme"
+import { BandaMenu } from "../menu/BandaMenu"
+import { locateRoute } from "../menu/menu"
 import { columnsOf, useLookDrawer, useLookNotify, useLookSound } from "../look"
-import { modules as known } from "../modules"
-import {
-  identityOf,
-  letGoWhenBack,
-  runs,
-  sheetsOf,
-  showsOf,
-  sources,
-} from "../registry"
+import { identityOf, letGoWhenBack, sheetsOf, showsOf } from "../registry"
 import { RemovingProject } from "../settings/RemoveProject"
 import { QuitDialog } from "./Quit"
 import { useWokeNote } from "../calls/woke"
@@ -62,8 +37,13 @@ import { attachChips, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
 import { tilingShows } from "./shows"
 import { useDocked } from "./docked"
+import { useGoes } from "./goes"
 import { useLetsGo } from "./let-go"
 import { useMarked } from "./looked"
+import { useChosen, useMenuOpening } from "./menu"
+import { useOverviewShown } from "./overview"
+import { useModulesStart } from "./starts"
+import { useZoom } from "./zoom"
 import { usePoppedOut } from "./popped-out"
 import { Asked } from "../tiling/AskedPanes"
 import { type Reveal, shownOf } from "../tiling/layout"
@@ -73,10 +53,8 @@ import {
   focused,
   across,
   focusEntry,
-  go,
   projectIn,
   samePane,
-  step,
 } from "../tiling/model"
 import { useFlowHere } from "../tiling/flow"
 import { Drawer, useDrawer } from "./Drawer"
@@ -100,9 +78,6 @@ import { PushTap } from "../devices/PushTap"
 import { useKeyRouter, useKeys } from "./keys"
 import { useSteady } from "./steady"
 import { closeTop, Layered, TopPart, useTopFollows, useTops } from "./top"
-
-/** The modules' sources, as a route names one for the menu to show alone. */
-const menuSources = sources.map(({ source }) => source)
 
 /**
  * The window (ADR 0005): the bar on top, the sidebar docked on the left,
@@ -166,11 +141,9 @@ export function Shell({
   const { sidebar, sidebarWidth, setSidebarWidth, hiding, setHiding } = docked
   const { columnMin, narrow, over, setShown, showSidebar, hideSidebar } = docked
   const { hideOver } = docked
-  const [overviewState, setOverview] = useState<"closed" | "open" | "closing">(
-    "closed"
-  )
-  const overview = overviewState !== "closed"
-  const [menu, setMenu] = useState<Opening | null>(null)
+  const shown = useOverviewShown()
+  const { overviewState, overview } = shown
+  const { toggleOverview, closeOverview, leftOverview } = shown
 
   // The Panes that had the focus, for where an App's attach goes.
   const focusedId = focused(workspaces)?.id
@@ -207,19 +180,10 @@ export function Shell({
   const [reveal, setReveal] = useState<Reveal>()
   // A Pane picked opens on the host its Project is on (ADR 0081).
   const paneOn = usePaneOn()
-  // `banda menu ROUTE` opens the menu there (ADR 0017, decision 7).
-  const projectsNow = useRef(projects)
-  useEffect(() => {
-    projectsNow.current = projects
-  }, [projects])
   useMadeGoesHome(projects, placing, change)
   // How many Agents worked as the Person asked to quit, while Banda asks
   // whether to stop them (ADR 0086, decision 3).
   const [quitting, setQuitting] = useState<number | null>(null)
-  const toggleOverview = useCallback(
-    () => setOverview((was) => (was === "open" ? "closing" : "open")),
-    []
-  )
   // The drawer (ADR 0025, decision 8). Dropped with none, it gets a new
   // Thread in the home Project, the agents module's, which opens it there.
   const drawer = useDrawer()
@@ -237,14 +201,8 @@ export function Shell({
   )
   // Quick Look's tile over the desk (ADR 0073, decision 7).
   const { peek, setPeek, peekNow, closePeek, fillPeek } = usePeek()
-  // The Pane zoomed over the whole window, while it keeps the focus: the
-  // focus elsewhere, or the overview, brings it back (ADR 0025, decision 4).
-  const [zoom, setZoom] = useState<string>()
-  const zoomed =
-    zoom !== undefined && !overview && focused(workspaces)?.id === zoom
-      ? zoom
-      : undefined
-  if (zoom !== undefined && zoomed === undefined) setZoom(undefined)
+  // The Pane zoomed over the whole window (zoom.ts).
+  const { zoomed, toggleZoom } = useZoom(workspaces, overview, drawnNow)
   const sidebarShown = (narrow ? over || bare(workspaces) : sidebar) && !zoomed
   // Where the Person is (ADR 0087, decision 4), and what the Apps list,
   // as the Apps' code reads them.
@@ -256,59 +214,19 @@ export function Shell({
     const entry = focused(drawnNow())?.id
     if (entry) setReveal({ entry, how: "middle" })
   }, [drawnNow])
-  const toggleZoom = useCallback(
-    () =>
-      setZoom((was) =>
-        was === undefined ? focused(drawnNow())?.id : undefined
-      ),
-    [drawnNow]
-  )
-  const closeOverview = useCallback(() => setOverview("closing"), [])
-  const leftOverview = useCallback(
-    () => setOverview((was) => (was === "closing" ? "closed" : was)),
-    []
-  )
   // The Panes in windows of their own (ADR 0025, decision 9): main keeps
   // which, and their places here keep stand-ins.
   const { away, awayNow, popOut, togglePopOut } = usePoppedOut(drawnNow)
-  // Goes to workspace `id`, as its number does.
-  const goTo = useCallback(
-    (id: string) =>
-      change((w) => {
-        const index = w.list.findIndex((each) => each.id === id)
-        return index < 0 ? undefined : go(w, index)
-      }),
-    [change]
-  )
-  // A swipe up or down with the mod held steps once.
-  const stepBy = useCallback(
-    (by: 1 | -1) => change((w) => step(w, by)),
-    [change]
-  )
-  // Alt+Space or Alt+K again, or the other of them, closes the menu.
-  const toggleMenu = useCallback(
-    (at: At) => setMenu((open) => (open ? null : openingAt(at))),
-    []
-  )
-  const closeMenu = useCallback(() => setMenu(null), [])
-
+  const { goTo, stepBy } = useGoes(change)
   // The actions with the keys in force (keys.ts).
   const { mod, binds, keyed, keys, own } = useKeys()
   // The Sheet (ADR 0102, decision 5), in the Project the Person is in.
   const sheet = useSheet(() => projectIn(drawnNow()) ?? home)
   const { settings } = sheet
   useSheetTilesGo(ready, drawnNow, change)
-  // A settings route opens the settings there; any other, the menu.
-  const route = useCallback(
-    (route: string) => {
-      const link = settingsLinkOf(route)
-      if (link === undefined)
-        setMenu(openingIn(kept, route, projectsNow.current, menuSources))
-      else settings(link)
-    },
-    [settings, kept]
-  )
-  useEffect(() => device.menu.listen(route), [route])
+  // The Banda menu, opened by its keys or by a route (menu.ts).
+  const opening = useMenuOpening(kept, projects, settings)
+  const { menu, toggleMenu, closeMenu, route, missing } = opening
   const ownKeys = useCallback(() => {
     own()
     settings("keys")
@@ -456,18 +374,7 @@ export function Shell({
   // A new Problem of Banda's own tells too, silently (ADR 0039).
   useProblemNews(engine, notify, parts.run)
   const api = useWindowApi(parts)
-  // Each module that runs starts once, with the window as it is when it
-  // asks (ADR 0022): the browser opens a Pane for an Agent's tab.
-  const running = known
-    .filter((module) => runs(module, modules))
-    .map((module) => module.id)
-    .join()
-  useEffect(() => {
-    const stops = known
-      .filter((module) => running.split(",").includes(module.id))
-      .flatMap((module) => module.start?.(api) ?? [])
-    return () => stops.forEach((stop) => stop())
-  }, [running, api])
+  useModulesStart(modules, api)
   // The keys run the actions, before any Pane hears them (keys.ts); an
   // Esc none kept, the Top layer's stack hears last (top/stack.ts).
   useKeyRouter(parts, keyed, mod)
@@ -486,10 +393,10 @@ export function Shell({
   // A Project whose folder is missing finds it first (ADR 0026).
   const newThreadIn = useCallback(
     (project: ProjectId, ask?: string) =>
-      projectsNow.current.find((one) => one.id === project)?.missing
+      missing(project)
         ? route(locateRoute(project))
         : startThread(project, ask),
-    [startThread, route]
+    [startThread, route, missing]
   )
   // The bar's widgets, the window's own and the modules', where the
   // look's `[bar]` puts them (ADR 0024). Where the Person is they read
@@ -509,38 +416,7 @@ export function Shell({
     () => projects.filter((project) => !project.scratch),
     [projects]
   )
-  const choose = useCallback(
-    (row: Exclude<Choice, Branch | Own>) => {
-      switch (row.kind) {
-        case "thread":
-          // A pick goes as the sidebar's does, and so does one brought
-          // beside, as its Shift+Enter.
-          return parts.run(row.beside ? "pane.beside" : "pane.pick", {
-            project: row.project,
-            pane: row.listed.pane,
-          })
-        case "action":
-          return runAction(parts, row.action)
-        case "ask":
-          return newThreadIn(
-            row.project ?? here.get().starts,
-            row.words || undefined
-          )
-        case "item":
-          return parts.run(row.action, {
-            project: row.project,
-            item: row.listed.id,
-          })
-        case "group":
-          return writeSidebar(parts.writeSetting, "group", row.group)
-        case "look":
-          return writeLook(parts.writeSetting, row)
-        case "found":
-          return row.row.run(parts)
-      }
-    },
-    [newThreadIn, parts, here]
-  )
+  const choose = useChosen(parts, here, newThreadIn)
   const frame = useFrame({ tiling, parts, stores, popOut, away: awayNow })
   // What is asked from outside the window, it does, as for its own.
   useAsked(parts, frame.open)
