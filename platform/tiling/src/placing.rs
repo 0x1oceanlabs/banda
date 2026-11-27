@@ -5,7 +5,7 @@
 //! engine by this same code, compiled to WebAssembly (ADR 0088, decision
 //! 11).
 
-use crate::model::{self, Arrangement, ColumnId, PaneId, Place, Shown, Side, WorkspaceId};
+use crate::model::{self, Arrangement, ColumnId, PaneId, Place, Side, WorkspaceId};
 use crate::rule::{self, Opens, Rule, When};
 use banda_base::{ProjectId, Refusal};
 use schemars::JsonSchema;
@@ -304,7 +304,8 @@ pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked<'_>) -> 
     };
     // An Agent's Pane.
     if let By::Agent { thread } = by {
-        let group = (thread.filter(|_| !grouped)).and_then(|t| agents_place(list, project, t));
+        let group =
+            (thread.filter(|_| !grouped)).and_then(|t| agents_place(list, leads, project, t));
         if group.is_some() {
             return group;
         }
@@ -551,14 +552,22 @@ fn moves_as(
 /// Where a Pane an Agent opens with no place goes: into its Thread's
 /// Group, as a Diff opened from the Thread goes (ADR 0065, decision 7),
 /// and a Thread in no Group starts one for it. Only the Thread's Pane of
-/// `project` counts; with none on a workspace, it has no place here.
-pub fn agents_place(list: &Arrangement, project: ProjectId, thread: Uuid) -> Option<Place> {
-    let asked = Shown {
-        project,
-        kind: "agents.thread".into(),
-        args: serde_json::json!({ "thread": thread.to_string() }),
-    };
-    model::showing_asked(list, &asked).map(|pane| Place::Group { pane: pane.id })
+/// `project` counts, of a kind that leads a Group (`leads`); with none on
+/// a workspace, it has no place here.
+pub fn agents_place(
+    list: &Arrangement,
+    leads: &BTreeSet<String>,
+    project: ProjectId,
+    thread: Uuid,
+) -> Option<Place> {
+    let thread = serde_json::Value::String(thread.to_string());
+    model::panes(list)
+        .find(|pane| {
+            pane.shows.project == project
+                && leads.contains(&pane.shows.kind)
+                && pane.shows.args.get("thread") == Some(&thread)
+        })
+        .map(|pane| Place::Group { pane: pane.id })
 }
 
 #[cfg(test)]

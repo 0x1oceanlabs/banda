@@ -243,10 +243,8 @@ const PLATFORM_NAMES: &[(&str, usize)] = &[
     ("platform/settings/src/accounts.rs", 6),
     // A Thread's Pane kind, for the words an Agent's Pane never keeps.
     ("platform/workspaces/engine/src/lib.rs", 1),
-    // A Thread's Pane kind, and the old agents.diff made git.diff.
-    ("platform/tiling/src/model.rs", 3),
-    // A Thread's Pane kind.
-    ("platform/tiling/src/placing.rs", 1),
+    // The old agents.diff made git.diff.
+    ("platform/tiling/src/model.rs", 2),
     // agents.toml, where two of the Tiling's settings are kept.
     ("platform/workspaces/engine/src/tiling.rs", 2),
 ];

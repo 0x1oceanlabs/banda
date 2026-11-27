@@ -985,7 +985,7 @@ impl ForAgent {
             thread,
             by,
         } = self;
-        if let Some(shown) = model::showing_asked(list, &shows) {
+        if let Some(shown) = model::showing_asked(list, &facts.leads, &shows) {
             return Ok((shown.id, false));
         }
         // A kind that opens as a Group of its own does so here too, unless
@@ -1146,7 +1146,7 @@ impl Workspaces {
                 rusqlite::params![machine, at],
             )?;
             // A Thread not shown here places nothing (ADR 0101, call 2).
-            if placing::agents_place(list, project, thread).is_none() {
+            if placing::agents_place(list, &opening.facts.leads, project, thread).is_none() {
                 return Ok((None, false));
             }
             let (pane, new) = opening.open(list, None, seed)?;
