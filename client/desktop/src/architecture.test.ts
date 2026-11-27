@@ -79,7 +79,7 @@ function projectReads(source: string, file: string): string[] {
  * file more than `SLACK` lines below it lowers it; what main gains goes
  * into a part, not the root.
  */
-const MAIN_LINES = 449
+const MAIN_LINES = 374
 const SLACK = 20
 
 test("main's root keeps under its ceiling, and the ceiling follows it down", () => {
@@ -98,26 +98,10 @@ test("main's root keeps under its ceiling, and the ceiling follows it down", () 
  * answers `act` and `device/files.ts` `files`, is named there by its
  * table alone. The list only falls: a part that leaves the root leaves
  * it, and a new one is answered beside its code from the start (ADR 0089,
- * decision 9). The `engine`, `sign` and `host*` parts wait for the hosts'
- * move to the core (track 1, SE4).
+ * decision 9). None is left: the engines' and the machines' are
+ * `machines.ts`'s, the last to go.
  */
-const MAIN_ANSWERS = [
-  "engine",
-  "hosts",
-  "hostEngine",
-  "sign",
-  "hostStart",
-  "hostAdd",
-  "hostSet",
-  "hostRemove",
-  "hostTest",
-  "hostInstall",
-  "hostInstallCancel",
-  "hostTerminal",
-  "hostInstalling",
-  "hostStop",
-  "sshSuggestions",
-]
+const MAIN_ANSWERS: string[] = []
 
 /** The parts `source` answers itself in its `serve(…)`: those written
  * there as a table or an answer, not named by one made elsewhere. */
@@ -166,6 +150,7 @@ test("main's code is found: the window's, the kit's and the Apps' parts in main"
   const found = new Set(mains.map((file) => relative(root, file)))
   for (const file of [
     "client/desktop/src/main.ts",
+    "client/desktop/src/machines.ts",
     "client/desktop/src/os-window/system.ts",
     "client/desktop/src/os-window/page.ts",
     "client/desktop/src/os-window/material.ts",

@@ -217,6 +217,9 @@ desktop, web and the PWA now.
    the main one as it closes on macOS; the kit's `Window` is answered
    from it. What quitting is, the Dock and the Panes' own windows stay
    in the root, which hands them in.
+   The last part: what main answers the page of its own engine and of
+   the other machines is `machines.ts`'s, and the root answers none of
+   the bridge itself: the test's second list is empty.
 
 10. **The catalogue's code stays where the vision put it,** `sdk/kit` as
     `@banda/kit` (L3). The Tree runtime goes in the core; the web renderer

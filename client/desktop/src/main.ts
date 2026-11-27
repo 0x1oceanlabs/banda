@@ -27,18 +27,19 @@
  * menus.ts).
  * It reaches the engines of the machines in `hosts.toml` over ssh, and
  * hands the page their addresses too; it adds, takes out, tests and stops
- * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
+ * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095); what
+ * it answers the page of them and of its own engine is machines.ts.
  */
 import { existsSync } from "node:fs"
 import { userInfo } from "node:os"
 import { join, resolve } from "node:path"
 import { app, nativeTheme, net, powerMonitor, type WebContents } from "electron"
 import { NodeServices } from "@effect/platform-node"
-import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
-import { Engine, none, serve, tellPage, text } from "@banda/desktop-kit"
+import { Effect, Layer, ManagedRuntime, Stream } from "effect"
+import { Engine, serve, tellPage } from "@banda/desktop-kit"
 import { actsAnswers } from "./acts"
 import { BRIDGE } from "./bridge"
-import { engineLayer, OwnEngine, Stop } from "./engine"
+import { engineLayer, Stop } from "./engine"
 import { windowKey } from "./key"
 import { loginPath } from "./login"
 import { firstLook, lookLayer } from "./look"
@@ -54,8 +55,9 @@ import {
 import { listApp, listedImage, listShortcut } from "./entry"
 import { hasIcon } from "./tray"
 import { statusLayer } from "./status"
-import { forwardAnswer, reaching, signedHello } from "./forward"
-import { Hosts, onBack, terminalArgs } from "./hosts"
+import { forwardAnswer, reaching } from "./forward"
+import { Hosts, onBack } from "./hosts"
+import { machinesAnswers } from "./machines"
 import { problemsAnswers, startLog, watchProblems } from "./problems"
 import { Editors } from "./editors"
 import { roadLayer } from "./road"
@@ -318,87 +320,10 @@ async function ready(): Promise<void> {
   void engineClient().then((client) =>
     appUpdates.followEngine(client, app.getVersion(), update.heard)
   )
-  /** An engine's address, with the tests' latency. */
-  const late = <A extends { url: string }, E, R>(
-    address: Effect.Effect<A, E, R>
-  ) =>
-    TEST_LATENCY
-      ? Effect.map(address, (at) => ({ ...at, latency: TEST_LATENCY }))
-      : address
   serve(runtime, fromPage, BRIDGE, {
-    // Stopped, not by Quit Banda, it says so: the page's Panes do too.
-    engine: [none, () => OwnEngine.use((engine) => late(engine.reached))],
-    // The other machines' engines, through ssh (hosts.ts, ADR 0081), as
-    // far as this one's in a test.
-    hosts: { current: [none, () => Hosts.use((hosts) => hosts.current)] },
-    hostEngine: [
-      text,
-      ([name]) => Hosts.use((hosts) => late(hosts.address(name))),
-    ],
-    // No name is this machine's own engine, stopped (ADR 0124).
-    sign: [text, ([message]) => signedHello(message)],
-    hostStart: [
-      text,
-      ([name]) =>
-        name === ""
-          ? OwnEngine.use((engine) => engine.start)
-          : Hosts.use((hosts) => hosts.start(name)),
-    ],
-    hostAdd: [
-      Schema.Tuple([
-        Schema.Struct({
-          name: Schema.optionalKey(Schema.String),
-          ssh: Schema.String,
-          banda: Schema.optionalKey(Schema.String),
-        }),
-      ]),
-      ([machine]) => Hosts.use((hosts) => hosts.add(machine)),
-    ],
-    hostSet: [
-      Schema.Tuple([
-        Schema.String,
-        Schema.Struct({
-          ssh: Schema.optionalKey(Schema.String),
-          banda: Schema.optionalKey(Schema.String),
-        }),
-      ]),
-      ([name, change]) => Hosts.use((hosts) => hosts.set(name, change)),
-    ],
-    hostRemove: [text, ([name]) => Hosts.use((hosts) => hosts.remove(name))],
-    hostTest: [
-      Schema.Tuple([Schema.String, Schema.NullOr(Schema.String)]),
-      // An empty `banda` is none, as Add's.
-      ([ssh, banda]) =>
-        Hosts.use((hosts) => hosts.test(ssh, banda || undefined)),
-    ],
-    hostInstall: [
-      text,
-      ([ssh], event) =>
-        Hosts.use((hosts) =>
-          hosts.install(ssh, (line) =>
-            tellPage(event.sender, BRIDGE.hostInstalling.listen, {
-              ssh,
-              line,
-            })
-          )
-        ),
-    ],
-    hostInstallCancel: [
-      text,
-      ([ssh]) => Hosts.use((hosts) => hosts.cancelInstall(ssh)),
-    ],
-    hostTerminal: [
-      Schema.Tuple([Schema.String, Schema.String]),
-      ([ssh, remote]) => Effect.sync(() => terminalArgs(ssh, remote)),
-    ],
-    // Its lines go to the page that asked, as they come.
-    hostInstalling: {},
-    hostStop: [
-      Schema.Tuple([Schema.String, Schema.Boolean]),
-      ([name, force]) => Hosts.use((hosts) => hosts.stop(name, force)),
-    ],
+    // This machine's engine and the other machines' (machines.ts).
+    ...machinesAnswers(TEST_LATENCY),
     hostForward: forwardAnswer,
-    sshSuggestions: [none, () => Hosts.use((hosts) => hosts.suggestions)],
     // What the windows are made of (os-window/material.ts): the look as
     // a window can show it, and the room its frame takes.
     look: lookAnswers,
