@@ -426,11 +426,11 @@ impl HarnessesModule {
     }
     async fn setup_watch(
         &self,
-        _: Call,
+        call: Call,
         OneHarness { harness }: OneHarness,
     ) -> Result<Stream, Refusal> {
-        self.harnesses.get(&harness).map_err(Refusal::invalid)?;
-        Ok(self.setups.watch(&harness))
+        let (accounts, list) = (&self.accounts, &self.harnesses);
+        (self.setups.watch(accounts, list, call.project(), &harness)).await
     }
     async fn setup_cancel(
         &self,

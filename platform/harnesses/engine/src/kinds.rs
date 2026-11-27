@@ -101,7 +101,7 @@ pub(crate) fn installer(line: &str) -> banda_kernel::Program {
         ("sh", &["-c"])
     };
     let args = args.iter().copied().chain([line]).map(str::to_owned);
-    banda_kernel::Program::terminal(shell, args.collect())
+    banda_kernel::Program::act(shell, args.collect())
 }
 
 impl Row {

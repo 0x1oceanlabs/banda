@@ -57,8 +57,10 @@ PR.
   order, and answers at once; `setup_watch` is it as it changes and
   `setup_cancel` stops it. One per Harness at a time, with no call or
   window waiting (`engine/src/setup.rs`). The install is its vendor's own
-  installer, a line of `kinds.rs`'s row for this system, run in a terminal
-  as a sign-in is; the sign-in is the one above. A step is done when the
+  installer, a line of `kinds.rs`'s row for this system, run on pipes for
+  at most 30 minutes and watched as a sign-in is; the sign-in is the one
+  above. Its CLI is then found in its vendor's folder, which no PATH may
+  name yet (`cli.rs`). A step is done when the
   engine finds it so: the CLI found, someone signed in. A Harness Banda
   does not know has no steps.
 - It asks through a Harness process of its own, with no session, in a

@@ -122,20 +122,22 @@ impl Setups {
         if state.borrow().running {
             return Ok(state.borrow().clone());
         }
-        let was = state.borrow().clone();
         let mut found = look(accounts, project, &entry).await;
-        // What stopped it stays said until the step is done or run again.
-        for (step, old) in found.steps.iter_mut().zip(&was.steps) {
-            if old.state == StepState::Failed && step.state != StepState::Done {
-                (step.state, step.note) = (StepState::Failed, old.note.clone());
-                found.output.clone_from(&was.output);
-            }
-        }
         // One that started meanwhile is the newer.
         state.send_if_modified(|now| {
-            let changed = !now.running && *now != found;
+            if now.running {
+                return false;
+            }
+            // What stopped it stays said until the step is done or run again.
+            for (step, old) in found.steps.iter_mut().zip(&now.steps) {
+                if old.state == StepState::Failed && step.state != StepState::Done {
+                    (step.state, step.note) = (StepState::Failed, old.note.clone());
+                    found.output.clone_from(&now.output);
+                }
+            }
+            let changed = *now != found;
             if changed {
-                *now = found;
+                *now = std::mem::take(&mut found);
             }
             changed
         });
@@ -199,6 +201,12 @@ impl Setups {
                         (step.state, step.note) = (StepState::Failed, Some(why));
                     }
                     (Some(step), _) => step.state = StepState::Waiting,
+                    (None, Err(Some(why))) => {
+                        let left = now.steps.iter_mut().find(|s| s.state != StepState::Done);
+                        if let Some(step) = left {
+                            (step.state, step.note) = (StepState::Failed, Some(why));
+                        }
+                    }
                     (None, _) => {}
                 }
             });
@@ -206,9 +214,19 @@ impl Setups {
         Ok(state.borrow().clone())
     }
 
-    /// `harness`'s setup as it changes, until its watcher goes.
-    pub(crate) fn watch(&self, harness: &str) -> Stream {
-        banda_kernel::watching(self.run(harness, false).0.subscribe())
+    /// `harness`'s setup as it changes, until its watcher goes: as the
+    /// engine finds it now first.
+    pub(crate) async fn watch(
+        &self,
+        accounts: &Accounts,
+        harnesses: &Harnesses,
+        project: &ModuleProject,
+        harness: &str,
+    ) -> Result<Stream, Refusal> {
+        self.now(accounts, harnesses, project, harness).await?;
+        Ok(banda_kernel::watching(
+            self.run(harness, false).0.subscribe(),
+        ))
     }
 
     /// Stops `harness`'s setup, if one runs.
@@ -385,7 +403,10 @@ impl Going {
                     return Err(Some("It ended before it was done.".to_owned()));
                 },
                 () = self.stop.notified() => {
+                    // Its slot is free once it ended: the next run takes it.
                     self.accounts.cancel_job(&job.login);
+                    let _ = status.wait_for(|job| job.done).await;
+                    self.accounts.forget_job(&job.login);
                     return Err(None);
                 }
             }

@@ -50,6 +50,9 @@ const LIST_CHANGED: &str = "list_changed";
 /// asked.
 const IDLE: Duration = Duration::from_secs(5 * 60);
 
+/// How long an installer may take: a download on a slow line.
+const INSTALLING: Duration = Duration::from_secs(30 * 60);
+
 /// How long a sign-in waits for every holder of the Harness's process to
 /// let go of it.
 const REACTED: Duration = Duration::from_secs(5);
@@ -543,8 +546,8 @@ impl Accounts {
         }
         Ok(status)
     }
-    /// Runs `line`, the installer of `harness`'s CLI, in a terminal to its
-    /// end, as a sign-in runs: watched, cancelled and bounded the same
+    /// Runs `line`, the installer of `harness`'s CLI, to its end, as a
+    /// sign-in runs: watched, cancelled and bounded the same
     /// way, and every process of the Harness let go of as it ends, so the
     /// next look finds its CLI (ADR 0140, decision 3).
     pub(crate) fn install(
@@ -555,18 +558,15 @@ impl Accounts {
         line: &str,
     ) -> Result<LoginStatus, Refusal> {
         let (status, cancel) = self.logins.reserve(harness)?;
-        let size = banda_kernel::PtySize {
-            rows: 30,
-            cols: 100,
-        };
         let program = crate::kinds::installer(line);
-        match project.environment().pty(&program, size) {
-            Ok((process, pty)) => self.logins.terminal(
+        let input = banda_kernel::Input::Null;
+        match project.environment().spawn(&program, input) {
+            Ok(process) => self.logins.piped(
                 &status.login,
                 process,
-                pty,
                 cancel,
                 self.finish(project, by, harness),
+                INSTALLING,
             ),
             Err(error) => {
                 self.logins.forget(&status.login);
