@@ -15,12 +15,16 @@ banda-look = { path = "../../../platform/look" }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
 toml.workspace = true
+tracing.workspace = true
 ts-rs.workspace = true
+# Chrome for Testing's zips are deflated (ADR 0132, decision 2).
+zip = { workspace = true, features = ["deflate-flate2"] }
 
 [dev-dependencies]
 tempfile.workspace = true
-tokio.workspace = true
 
 [lints]
 workspace = true

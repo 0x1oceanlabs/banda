@@ -299,6 +299,11 @@ enum Command {
         #[command(subcommand)]
         what: account::AccountCommand,
     },
+    /// The browser this machine's Agents use with no window (ADR 0132).
+    Browser {
+        #[command(subcommand)]
+        what: BrowserCommand,
+    },
     /// The devices this machine lets in at its door, each by its own key:
     /// lists them, pairs one, or removes one.
     Devices {
@@ -412,6 +417,16 @@ enum Command {
         #[arg(last = true)]
         program: Vec<OsString>,
     },
+}
+
+#[derive(Subcommand)]
+enum BrowserCommand {
+    /// Makes this machine ready for its Agents to browse: fetches Banda's
+    /// browser for them, a Chromium with no window, and, where the system
+    /// keeps Chromium's sandbox from it (Ubuntu), allows it with sudo. Run
+    /// it once, in a terminal; without it the browser is fetched on an
+    /// Agent's first call.
+    Setup,
 }
 
 #[derive(Subcommand)]
@@ -571,6 +586,20 @@ enum SettingsCommand {
 
 fn file_names() -> clap::builder::PossibleValuesParser {
     clap::builder::PossibleValuesParser::new(apps::SETTINGS.files().map(|file| file.name))
+}
+
+/// `banda browser setup`, which is the Person's: it asks for sudo.
+async fn browser_setup(places: &Places) -> Result<(), Failure> {
+    if client::Pass::from_env()?.is_some() {
+        return Err(Failure::Refused(Refusal::forbidden(
+            "Only your Person makes this machine ready for its Agents to browse: give them \
+             `banda browser setup` to run in a terminal.",
+        )));
+    }
+    let chromium = banda_browser::chromium::Chromium::of(&places.data);
+    let program = (chromium.setup(|line| eprintln!("{line}")).await).map_err(Failure::Broken)?;
+    println!("Banda's browser for Agents is ready: {}", program.display());
+    Ok(())
 }
 
 /// Why the program did not do its job, and how it exits.
@@ -918,6 +947,9 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             export::export(&places, app, project, to).await
         }
         Command::Account { what } => account::account(&places, what).await,
+        Command::Browser {
+            what: BrowserCommand::Setup,
+        } => browser_setup(&places).await,
         Command::Devices { what } => devices::devices(&places, what).await,
         Command::Pair { machine } => there::pair(&places, &machine).await,
         Command::Secret { what } => account::secret(&places, what).await,

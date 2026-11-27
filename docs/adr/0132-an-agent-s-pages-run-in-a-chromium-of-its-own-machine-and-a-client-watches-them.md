@@ -311,3 +311,27 @@ Each with the recommended answer first.
 - Ubuntu machines need one `sudo` command before their Agents browse.
 - Not tried before this ADR: macOS and Windows, a Mac with its lid closed,
   Ghostery's Playwright package, Banda's own fence.
+
+## As built
+
+### The Chromium is fetched (slice 1, step 1)
+
+- **The pin** is `apps/browser/engine/chromium.json`: Chrome for Testing
+  156.0.8078.4, the version `playwright-core` 1.64.1 is made for, with each
+  system's zip by its size and SHA-256 (linux64, linux-arm64, mac-arm64,
+  mac-x64, win64).
+- **The fetch** (`apps/browser/engine/src/chromium.rs`) puts it in
+  `<data>/browser/<version>/`, whole or not at all, and drops other
+  versions. `Chromium::ready` is what a tool will ask: while the program is
+  not there it starts the fetch and refuses with how much has come.
+- **`banda browser setup`** fetches it ahead of an Agent's first call and,
+  where `apparmor_restrict_unprivileged_userns` is 1 and the profile is not
+  there, writes `/etc/apparmor.d/<banda's folder>-browser` with `sudo` and
+  loads it. The profile names the program under any version, so it is
+  written once. Without it `Chromium::ready` refuses with the command.
+- **Tried:** the fetch on devbox (126 MB in 12 s, the program says its
+  version), and Playwright driving it over a pipe on Node 24 and on
+  Electron 45 as Node. **Not tried:** the profile itself, which needs
+  `sudo`; macOS and Windows.
+- **Not yet:** nothing calls `ready`. The tools still ask the window.
+
