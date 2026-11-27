@@ -69,7 +69,8 @@ impl HarnessesModule {
     }
 
     /// Installs `harness` with `line`, a stand-in of its vendor's
-    /// installer: only a test does.
+    /// installer: only a test does. As `git` it is Git's installer, and as
+    /// `git-at` the file Git is looked for at.
     pub fn installing_with(self, harness: &str, line: &str) -> Self {
         self.setups.installing_with(harness, line);
         self
@@ -145,7 +146,7 @@ banda_kernel::methods! {
         /// to confirm the Harness's report.
         command login_finish(LoginId) -> (), Write, tool "login_finish";
         /// How a Harness is set up, and where that stands (ADR 0140): its
-        /// steps in order, install then sign in, each done, waiting,
+        /// steps in order, Git, install, then sign in, each done, waiting,
         /// running, asking for the Person or failed. None for a Harness
         /// Banda cannot set up.
         call setup(OneHarness) -> Setup, Read;

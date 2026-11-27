@@ -178,7 +178,7 @@ const PORT: &str = "kernel/src/environment.rs";
 /// start behind the fence with its Project's holes, and its CLI asked
 /// about itself with none; a terminal the Person opened and a git act they
 /// asked for, outside it (ADR 0083, decision 1).
-const WHOSE: [(&str, &str, usize, &str); 10] = [
+const WHOSE: [(&str, &str, usize, &str); 11] = [
     (
         "platform/apps/engine/src/worker.rs",
         "worker",
@@ -214,6 +214,12 @@ const WHOSE: [(&str, &str, usize, &str); 10] = [
         "act",
         1,
         "a git act the Person asked for, which runs the repository's hooks",
+    ),
+    (
+        "platform/harnesses/engine/src/kinds.rs",
+        "act",
+        1,
+        "a setup's installer, a Harness's vendor's own or Git's, which the Person asked for with Set up: it writes into the Person's folders or asks the system, which the fence would refuse (ADR 0140, decisions 3 and 5)",
     ),
     (
         "platform/harnesses/engine/src/cli.rs",
