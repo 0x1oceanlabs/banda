@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-27
 ---
 
@@ -46,8 +46,8 @@ Its logic, and where each part is in Banda:
 | UI SDK, in the page | Banda, in the engine |
 | --- | --- |
 | a component registers itself | a node of the Tree a view answers |
-| `snapshot`: what is on the page | `app_screen`: what the screen shows, as text (decision 2) |
-| `query`: find, and page through a list | `app_screen` with the view's own args, and a Table's next rows (decision 2) |
+| `snapshot`: what is on the page | `<app>_screen`: what the screen shows, as text (decision 2) |
+| `query`: find, and page through a list | `<app>_screen` with the view's own args, and a Table's next rows (decision 2) |
 | `act`: call a component's own API | the App's own tools, named on each control (decision 2) |
 | a change says it came from an Agent | every command and event is kept by who called (ADR 0126) |
 | the page hears a change | the Pane follows the App's events and reads the view again (ADR 0126) |
@@ -61,24 +61,29 @@ Its logic, and where each part is in Banda:
    description for Agents is written beside it, and no node is for one
    reader only.
 
-2. **An Agent reads a screen with one tool, `app_screen {app, view,
-   args}`**, the method `apps.screen`. It is a read, and it answers what
-   the Pane `apps.view` of the same three would show now.
+2. **An Agent reads a screen with one tool of its App, `<app>_screen
+   {view, args}`**, the method `<app>.screen`. It is a read, and it
+   answers what the Pane `apps.view` of that App, view and args would
+   show now. Banda answers it for every App that has a view; an App
+   writes nothing for it.
    - It answers **text**, not the Tree: an outline in the Tree's order,
      with each node's words and values, a Table as its columns and its
      first rows with how many more there are, and `rows` and `from` to
      read on.
    - **Each control is written with the tool it sends and the params it
      carries**: a Button, a Form with its fields, a row's actions. So the
-     Agent acts by the App's own tool, as it does today. `app_screen`
-     sends nothing and has no "press".
-   - It is one tool for every App, not one for each view, so a machine
-     with many Apps does not fill an Agent's list of tools.
-   - `banda call apps.screen` gives a Person and a script the same text.
-     The Tree itself stays what a view answers to `banda call`.
+     Agent acts by the App's own tool, as it does today. `screen` sends
+     nothing and has no "press".
+   - It is one tool for each App, not one for each view, so an App with
+     many screens does not fill an Agent's list of tools. As first
+     written here it was one tool for all Apps, `apps.screen`; a view is
+     read in its Project by its App's own module, and no module calls
+     another's method (ADR 0082), so the method is the App's.
+   - `banda call clients.screen` gives a Person and a script the same
+     text. The Tree itself stays what a view answers to `banda call`.
 
 3. **A view by itself stays no Agent's tool** unless it says so, as
-   ADR 0126 has it: `app_screen` is how an Agent reads one.
+   ADR 0126 has it: `<app>_screen` is how an Agent reads one.
 
 4. **An App's author may say that a command needs care, in a word both
    read: `confirm`.** It is the author's option, on a command in
@@ -112,8 +117,8 @@ Its logic, and where each part is in Banda:
 
 ## Plan
 
-1. `apps.screen` in `platform/apps`, with its tool and the topic `apps`
-   of the Banda skill; the deals App of the tests read as text.
+1. `<app>.screen` in `platform/apps`, with its tool and the topic `apps`
+   of the Banda skill; the deals App of the tests read as text. Built.
 2. The try: a real Agent, asked "what is on the deals screen, and close
    the oldest deal", with no other hint.
 3. `confirm` as a word (decision 4, its first form): the Person's
