@@ -2,7 +2,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -46,18 +45,10 @@ import {
   settingsLinkOf,
 } from "../menu/menu"
 import { writeLook } from "../menu/theme"
-import {
-  columnsOf,
-  useLookColumns,
-  useLookDrawer,
-  useLookNotify,
-  useLookSound,
-} from "../look"
+import { columnsOf, useLookDrawer, useLookNotify, useLookSound } from "../look"
 import { modules as known } from "../modules"
 import {
-  closedOf,
   identityOf,
-  keptAway,
   letGoWhenBack,
   runs,
   sheetsOf,
@@ -70,19 +61,19 @@ import { useWokeNote } from "../calls/woke"
 import { attachChips, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
 import { tilingShows } from "./shows"
-import { useNarrow } from "./narrow"
+import { useDocked } from "./docked"
+import { useLetsGo } from "./let-go"
+import { useMarked } from "./looked"
+import { usePoppedOut } from "./popped-out"
 import { Asked } from "../tiling/AskedPanes"
 import { type Reveal, shownOf } from "../tiling/layout"
 import { useTiling } from "../tiling/useTiling"
 import {
   current,
-  type Entry,
-  entries,
   focused,
   across,
   focusEntry,
   go,
-  left,
   projectIn,
   samePane,
   step,
@@ -94,14 +85,7 @@ import { Sheet, useSheet, useSheetTilesGo } from "./Sheet"
 import { useMadeGoesHome } from "./made"
 import { usePlacing, writeFlow } from "./placing"
 import { Overview } from "../tiling/Overview"
-import {
-  keepLooked,
-  keepSidebar,
-  keepSidebarWidth,
-  loadLooked,
-  loadSidebar,
-  loadSidebarWidth,
-} from "../tiling/store"
+import {} from "../tiling/store"
 import { Workspaces } from "../tiling/Workspaces"
 import { closing, focusedIn, placed, strayedIn } from "../tiling/opening"
 import { runAction, type Shell as Parts, useWindowApi } from "./actions"
@@ -110,7 +94,7 @@ import { useFrame } from "./frame"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
-import { bare, List, PhoneForm, phoneNow } from "../phone"
+import { bare, List, PhoneForm } from "../phone"
 import { elsewhere } from "../devices/elsewhere"
 import { PushTap } from "../devices/PushTap"
 import { useKeyRouter, useKeys } from "./keys"
@@ -176,28 +160,12 @@ export function Shell({
     const well = setTimeout(wentWell, WELL)
     return () => clearTimeout(well)
   }, [ready])
-  const [sidebar, setSidebar] = useState(loadSidebar)
-  // How wide the Person dragged it, which the page's every part that
-  // starts past it reads.
-  const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth)
-  useLayoutEffect(() => {
-    document.documentElement.style.setProperty(
-      "--sidebar-width",
-      `${sidebarWidth}rem`
-    )
-  }, [sidebarWidth])
-  useEffect(() => keepSidebarWidth(sidebarWidth), [sidebarWidth])
-  // Its edge dragged past the narrowest: letting go hides it.
-  const [hiding, setHiding] = useState(false)
-  // Narrow, the window hides the sidebar and shows it over the Strip when
-  // asked; wide, it keeps the Person's choice (ADR 0025, decision 10).
-  const columnMin = useLookColumns().min
-  const narrow = useNarrow(columnMin, sidebarWidth)
-  const [over, setOver] = useState(phoneNow)
-  if (over && !narrow) setOver(false)
-  const setShown = narrow ? setOver : setSidebar
-  const showSidebar = useCallback(() => setShown(true), [setShown])
-  const hideSidebar = useCallback(() => setShown(false), [setShown])
+  // The sidebar: whether it shows, how wide, and over the Strip when the
+  // window is narrow (sidebar.ts).
+  const docked = useDocked()
+  const { sidebar, sidebarWidth, setSidebarWidth, hiding, setHiding } = docked
+  const { columnMin, narrow, over, setShown, showSidebar, hideSidebar } = docked
+  const { hideOver } = docked
   const [overviewState, setOverview] = useState<"closed" | "open" | "closing">(
     "closed"
   )
@@ -213,38 +181,15 @@ export function Shell({
   const sound = useLookSound()
   const told = useMemo(() => ({ notify, sound }), [notify, sound])
   const front = useInFront()
-  useEffect(() => keepSidebar(sidebar), [sidebar])
   // A Pane an Agent opened is marked until the Person looks at it: has
   // it in focus, the window in front (ADR 0032).
-  const [looked, setLooked] = useState(loadLooked)
-  const lookedAt = (front && !overview && focused(workspaces)) || undefined
-  if (lookedAt?.by && !looked.has(lookedAt.id)) {
-    // Only the Panes still there are kept.
-    const now = new Set([lookedAt.id])
-    for (const entry of entries(workspaces))
-      if (looked.has(entry.id)) now.add(entry.id)
-    setLooked(now)
-  }
-  useEffect(() => keepLooked(looked), [looked])
-  const marked = useCallback(
-    (entry: Entry) => entry.by !== undefined && !looked.has(entry.id),
-    [looked]
-  )
+  const marked = useMarked(workspaces, front && !overview)
 
   // A Pane that leaves every workspace lets its module let go, as a
   // terminal stops its program; one moved, or drawn still, has not left.
   const engineOf = useEngineOf()
   const kept = useContext(HostsContext)
-  const before = useRef(standing)
-  useEffect(() => {
-    for (const entry of left(before.current, standing, identityOf))
-      closedOf(
-        () => engineOf(entry.project, entry.pane),
-        entry,
-        keptAway(kept, entry)
-      )
-    before.current = standing
-  }, [engineOf, kept, standing])
+  useLetsGo(standing, engineOf, kept)
   useEffect(() => letGoWhenBack(kept), [kept])
 
   // What the Apps list and what calls the Person (`stores`), for the Marks,
@@ -306,7 +251,6 @@ export function Shell({
   const around = { sidebar: sidebarShown, home, machine, flow, projects }
   const here = useKeptHere(drawnNow, around, showsOf)
   const [items] = useState(() => itemsOf(stores))
-  const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.
   const toCenter = useCallback(() => {
     const entry = focused(drawnNow())?.id
@@ -326,24 +270,7 @@ export function Shell({
   )
   // The Panes in windows of their own (ADR 0025, decision 9): main keeps
   // which, and their places here keep stand-ins.
-  const [away, setAway] = useState<ReadonlySet<string>>(() => new Set())
-  const awayNow = useRef(away)
-  useEffect(() => {
-    awayNow.current = away
-  }, [away])
-  useEffect(() => device.popped.follow(setAway), [])
-  // Its window opens as big as its tile.
-  const popOut = useCallback((entry: string) => {
-    const tile = document.querySelector(`[data-tile="${CSS.escape(entry)}"]`)
-    const size = tile?.getBoundingClientRect()
-    device.popped.open(entry, size?.width ?? 0, size?.height ?? 0)
-  }, [])
-  const togglePopOut = useCallback(() => {
-    const entry = focused(drawnNow())?.id
-    if (!entry) return
-    if (awayNow.current.has(entry)) device.popped.close(entry)
-    else popOut(entry)
-  }, [popOut, drawnNow])
+  const { away, awayNow, popOut, togglePopOut } = usePoppedOut(drawnNow)
   // Goes to workspace `id`, as its number does.
   const goTo = useCallback(
     (id: string) =>
