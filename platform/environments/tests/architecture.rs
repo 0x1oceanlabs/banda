@@ -27,7 +27,7 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 20] = [
+const ON_THE_HOST: [(&str, usize, &str); 21] = [
     (
         "engine/src/moving.rs",
         1,
@@ -90,6 +90,13 @@ const ON_THE_HOST: [(&str, usize, &str); 20] = [
         1,
         "opens Banda's own app, hidden, with the system's open, when the engine's launchd job \
          has none (ADR 0086, decision 4)",
+    ),
+    (
+        "engine/src/there.rs",
+        2,
+        "runs the Person's own ssh for their CLI, to pair it on another of their machines and \
+         to carry that machine's door: no Project's program, and never under an Agent's pass \
+         (ADR 0124, decision 6)",
     ),
     (
         "platform/git-cli/src/lib.rs",

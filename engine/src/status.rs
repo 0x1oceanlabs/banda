@@ -135,8 +135,9 @@ impl std::fmt::Display for Status {
 /// file that names where an engine runs, and since when, is hidden, and
 /// so may `machine.toml` be.
 pub async fn status(places: &Places, follow: bool, with_parent: bool) -> Result<(), Failure> {
-    let pass = Pass::from_env()?.is_some();
-    if follow && pass {
+    // Another machine's is said as its engine says it, as under a pass.
+    let pass = Pass::from_env()?.is_some() || crate::there::named().is_some();
+    if follow && Pass::from_env()?.is_some() {
         return Err(Failure::Refused(Refusal::forbidden(
             "banda status --follow is for the Person's bar: under an Agent's pass, banda status \
              says it once.",

@@ -39,6 +39,7 @@ dunce.workspace = true
 mime_guess.workspace = true
 futures.workspace = true
 rustix.workspace = true
+ring.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -53,7 +54,6 @@ uuid = { workspace = true, features = ["v7"] }
 
 [dev-dependencies]
 async-trait.workspace = true
-ring.workspace = true
 tempfile.workspace = true
 
 # build.rs scans each App's manifest into the list of Apps (ADR 0062,

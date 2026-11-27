@@ -451,3 +451,125 @@ async fn a_browser_asks_at_the_door_and_the_person_allows_it_by_the_code_on_its_
     let listed = engine.banda(&["devices", "list"]);
     assert_eq!(listed["ok"]["devices"].as_array().unwrap().len(), 1);
 }
+
+/// An `ssh` for the test, in `bin` of `here`: the machine it reaches is
+/// `there`'s engine, on this one. With `-W` it carries its stdin and
+/// stdout to the port named, as ssh does; else it runs the command it is
+/// given on `there`'s places.
+#[cfg(unix)]
+fn fake_ssh(here: &tempfile::TempDir, there: &tempfile::TempDir) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    let at = |name: &str| there.path().join(name).display().to_string();
+    let script = format!(
+        "#!/bin/bash\nfor arg; do last=$arg; done\nwhile [ $# -gt 0 ]; do\n  \
+         if [ \"$1\" = -W ]; then\n    exec 3<>\"/dev/tcp/127.0.0.1/${{2#127.0.0.1:}}\" || exit 255\n    \
+         cat <&3 &\n    cat >&3\n    kill $!\n    exit 0\n  fi\n  shift\ndone\n\
+         export BANDA_CONFIG='{}' BANDA_ROOT='{}' BANDA_DATA='{}' BANDA_STATE='{}' BANDA_CACHE='{}'\n\
+         exec sh -c \"$last\"\n",
+        at("config"),
+        at("root"),
+        at("data"),
+        at("state"),
+        at("cache"),
+    );
+    let bin = here.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("ssh"), script).unwrap();
+    std::fs::set_permissions(bin.join("ssh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
+#[cfg(unix)]
+#[test]
+fn the_cli_pairs_by_its_ssh_login_and_acts_on_another_machine_as_a_device_of_its_own() {
+    let arc = Engine::start();
+    let here = tempfile::tempdir().unwrap();
+    let path = fake_ssh(&here, &arc.dir);
+    std::fs::create_dir_all(here.path().join("config")).unwrap();
+    std::fs::write(
+        here.path().join("config/hosts.toml"),
+        format!(
+            "[[hosts]]\nname = \"arc\"\nssh = \"roma@arc\"\nbanda = \"{}\"\n",
+            env!("CARGO_BIN_EXE_banda")
+        ),
+    )
+    .unwrap();
+    let mine = |args: &[&str]| {
+        let output = banda(&here, args).env("PATH", &path).output().unwrap();
+        let said = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        let erred = String::from_utf8_lossy(&output.stderr).into_owned();
+        let value: Value = serde_json::from_str(&said).unwrap_or(Value::Null);
+        (output.status.success(), value, erred)
+    };
+
+    // Not paired yet: it says how, and nothing went there.
+    let (ok, refused, _) = mine(&["--host", "arc", "status"]);
+    assert!(!ok);
+    assert_eq!(refused["error"]["code"], "invalid", "{refused}");
+    assert!(
+        refused["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("banda pair arc"),
+        "{refused}"
+    );
+
+    // Paired by the login: arc lists it as a CLI, with no origin.
+    let (ok, paired, erred) = mine(&["pair", "arc"]);
+    assert!(ok, "{paired} {erred}");
+    assert_eq!(paired["ok"]["host_key"], arc.host_key());
+    let devices = arc.banda(&["devices", "list"]);
+    let device = &devices["ok"]["devices"][0];
+    assert_eq!(device["id"], paired["ok"]["device"]);
+    assert_eq!(device["kind"], "cli");
+    assert!(
+        device["name"].as_str().unwrap().ends_with("CLI"),
+        "{device}"
+    );
+    assert!(device.get("origin").is_none_or(Value::is_null), "{device}");
+    // Its key is its owner's alone.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(here.path().join("state/cli.key"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o077, 0, "{mode:o}");
+    }
+
+    // Through the door, as that device: status as arc's engine says it,
+    // and a call that only the Person makes.
+    let (ok, status, erred) = mine(&["--host", "arc", "status"]);
+    assert!(ok, "{status} {erred}");
+    assert_eq!(status["running"], true);
+    assert_eq!(status["protocol"], PROTOCOL);
+    let (ok, listed, erred) = mine(&["--host", "arc", "call", "devices.list"]);
+    assert!(ok, "{listed} {erred}");
+    assert_eq!(listed["ok"]["host_key"], arc.host_key());
+    // No engine was started here, and what is this machine's alone is
+    // refused there.
+    assert!(!here.path().join("state/engine.json").exists());
+    let (ok, refused, _) = mine(&["--host", "arc", "stop"]);
+    assert!(!ok);
+    assert_eq!(refused["error"]["code"], "invalid", "{refused}");
+
+    // A door that proves another key is told nothing.
+    let kept = here.path().join("state/cli-hosts.json");
+    let was = std::fs::read_to_string(&kept).unwrap();
+    std::fs::write(&kept, was.replace(arc.host_key(), &public(&key()))).unwrap();
+    let (ok, refused, _) = mine(&["--host", "arc", "call", "devices.list"]);
+    assert!(!ok);
+    assert_eq!(refused["error"]["code"], "forbidden", "{refused}");
+    std::fs::write(&kept, was).unwrap();
+
+    // Removed there, it is let in no more.
+    arc.banda(&["devices", "remove", device["id"].as_str().unwrap()]);
+    let (ok, refused, _) = mine(&["--host", "arc", "call", "devices.list"]);
+    assert!(!ok);
+    assert_eq!(refused["error"]["code"], "revoked", "{refused}");
+}
