@@ -89,48 +89,6 @@ impl Install {
     }
 }
 
-/// Git's install on this system (ADR 0140, decision 5): the one step that
-/// may ask the system for a right, each in the system's own dialog.
-/// - Windows: winget, for the Person alone where it allows it, else for
-///   the machine, which Windows asks to allow.
-/// - macOS: Apple's own tools, in Apple's dialog, waited for.
-/// - Linux: the system's package manager through `pkexec`, which asks for
-///   the password in a dialog of its own.
-pub(crate) const GIT: &str = if cfg!(windows) {
-    "$a = 'install','--id','Git.Git','-e','--source','winget','--silent',\
-     '--accept-package-agreements','--accept-source-agreements','--disable-interactivity'; \
-     winget @a --scope user; if ($LASTEXITCODE -ne 0) { winget @a }; exit $LASTEXITCODE"
-} else if cfg!(target_os = "macos") {
-    "xcode-select --install 2>&1; echo 'Waiting for Apple’s installer to finish.'; \
-     until [ -x \"$(xcode-select -p 2>/dev/null)/usr/bin/git\" ]; do sleep 5; done"
-} else {
-    "say() { echo \"Install Git with your system's package manager, then try again.\"; exit 1; }; \
-     command -v pkexec >/dev/null || say; \
-     if command -v apt-get >/dev/null; then pkexec apt-get install -y git; \
-     elif command -v dnf >/dev/null; then pkexec dnf install -y git; \
-     elif command -v pacman >/dev/null; then pkexec pacman -S --noconfirm --needed git; \
-     elif command -v zypper >/dev/null; then pkexec zypper --non-interactive install git; \
-     else say; fi"
-};
-
-/// A `git` on this computer, with none run to look: on macOS `/usr/bin/git`
-/// is a stub that opens Apple's installer when it runs, and counts only
-/// once Apple's tools are there.
-pub(crate) fn git() -> Option<std::path::PathBuf> {
-    let found = banda_kernel::host::programs("git".as_ref(), &banda_kernel::host::path());
-    let stub = |path: &Path| {
-        cfg!(target_os = "macos")
-            && path == Path::new("/usr/bin/git")
-            && ![
-                "/Library/Developer/CommandLineTools",
-                "/Applications/Xcode.app/Contents/Developer",
-            ]
-            .iter()
-            .any(|tools| Path::new(tools).join("usr/bin/git").is_file())
-    };
-    found.into_iter().find(|path| !stub(path))
-}
-
 /// The program that runs `line`, an installer's, in this system's shell:
 /// the Person's own, outside the fence, as they asked for it.
 pub(crate) fn installer(line: &str) -> banda_kernel::Program {

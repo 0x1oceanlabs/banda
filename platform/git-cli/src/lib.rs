@@ -535,6 +535,52 @@ pub fn remove_stale_lock(lock: &Path, started: SystemTime) -> bool {
     made.is_ok_and(|made| made >= since) && banda_kernel::host::remove_left(lock).is_ok()
 }
 
+/// The program's name, as the host finds it and as a setup's step is
+/// called.
+pub const NAME: &str = "git";
+
+/// Git's install on this system (ADR 0140, decision 5): the one step that
+/// may ask the system for a right, each in the system's own dialog.
+/// - Windows: winget, for the Person alone where it allows it, else for
+///   the machine, which Windows asks to allow.
+/// - macOS: Apple's own tools, in Apple's dialog, waited for.
+/// - Linux: the system's package manager through `pkexec`, which asks for
+///   the password in a dialog of its own.
+pub const INSTALL: &str = if cfg!(windows) {
+    "$a = 'install','--id','Git.Git','-e','--source','winget','--silent',\
+     '--accept-package-agreements','--accept-source-agreements','--disable-interactivity'; \
+     winget @a --scope user; if ($LASTEXITCODE -ne 0) { winget @a }; exit $LASTEXITCODE"
+} else if cfg!(target_os = "macos") {
+    "xcode-select --install 2>&1; echo 'Waiting for Apple’s installer to finish.'; \
+     until [ -x \"$(xcode-select -p 2>/dev/null)/usr/bin/git\" ]; do sleep 5; done"
+} else {
+    "say() { echo \"Install Git with your system's package manager, then try again.\"; exit 1; }; \
+     command -v pkexec >/dev/null || say; \
+     if command -v apt-get >/dev/null; then pkexec apt-get install -y git; \
+     elif command -v dnf >/dev/null; then pkexec dnf install -y git; \
+     elif command -v pacman >/dev/null; then pkexec pacman -S --noconfirm --needed git; \
+     elif command -v zypper >/dev/null; then pkexec zypper --non-interactive install git; \
+     else say; fi"
+};
+
+/// A `git` on this computer, with none run to look: on macOS `/usr/bin/git`
+/// is a stub that opens Apple's installer when it runs, and counts only
+/// once Apple's tools are there.
+pub fn found() -> Option<PathBuf> {
+    let found = banda_kernel::host::programs(NAME.as_ref(), &banda_kernel::host::path());
+    let stub = |path: &Path| {
+        cfg!(target_os = "macos")
+            && path == Path::new("/usr/bin/git")
+            && ![
+                "/Library/Developer/CommandLineTools",
+                "/Applications/Xcode.app/Contents/Developer",
+            ]
+            .iter()
+            .any(|tools| Path::new(tools).join("usr/bin/git").is_file())
+    };
+    found.into_iter().find(|path| !stub(path))
+}
+
 /// git in `dir` as every git starts: as [`EVERY`] says, taking nothing
 /// [`ELSEWHERE`], found as the host finds the engine's own programs, and
 /// stopped once its caller lets go of it ([`banda_kernel::host::own`]).
