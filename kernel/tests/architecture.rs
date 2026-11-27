@@ -255,25 +255,17 @@ const PLATFORM_NAMES: &[(&str, usize)] = &[
     ("platform/workspaces/engine/src/tiling.rs", 2),
 ];
 
-/// Where an App's Rust still names another App, and how often.
-const APPS_NAME_APPS: &[(&str, usize)] = &[
-    // git.acted and browser.lent, heard by name for a Thread's notices.
-    ("apps/agents/engine/src/notices.rs", 4),
-    // The agents module's turns, heard for checkpoints.
-    ("apps/git/engine/src/checkpoint.rs", 1),
-    // The agents module's tools and git.acted, heard for a Thread's pull
-    // requests.
-    ("apps/pulls/engine/src/heard.rs", 3),
-];
-
 #[test]
 fn the_platform_names_an_app_no_more_than_the_list_holds() {
     falls(naming(&platform()), PLATFORM_NAMES);
 }
 
+/// No App's Rust names another App: what one hears of another, its
+/// `app.toml` declares (`[needs.listens]`), and the kernel refuses a
+/// listener it does not (`kernel/src/listens.rs`).
 #[test]
-fn an_app_names_another_no_more_than_the_list_holds() {
-    falls(naming(&apps()), APPS_NAME_APPS);
+fn no_app_names_another() {
+    falls(naming(&apps()), &[]);
 }
 
 #[test]

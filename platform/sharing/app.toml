@@ -12,6 +12,12 @@ from-banda = true
 # The settings files it owns, in ~/.config/banda.
 settings = ["sharing.toml"]
 
-# What it needs of Banda (ADR 0082, decision 2): nothing it could
-# declare here is built yet.
+# What it needs of Banda (ADR 0082, decision 2): the facts of other parts
+# it hears, each listener by its name. The rest it could declare here is
+# not built yet.
 [needs]
+
+# Each Problem recorded, for the event shared of it.
+[needs.listens.exceptions]
+from = "problems"
+kinds = ["recorded", "again"]

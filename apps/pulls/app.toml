@@ -10,6 +10,17 @@ api = 1
 from-banda = true
 settings = []
 
-# What it needs of Banda (ADR 0082, decision 2): nothing it could
-# declare here is built yet.
+# What it needs of Banda (ADR 0082, decision 2): the facts of other parts
+# it hears, each listener by its name. The rest it could declare here is
+# not built yet.
 [needs]
+
+# An Agent's shell calls, for the pull requests it made itself.
+[needs.listens.links]
+from = "agents"
+kinds = ["tool.started", "tool.changed", "tool.output", "turn.started", "turn.ended"]
+
+# A commit, a push or a pull from a Task's card.
+[needs.listens.pushes]
+from = "git"
+kinds = ["git.acted"]

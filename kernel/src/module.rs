@@ -98,6 +98,16 @@ pub trait Module: Send + Sync + 'static {
         &[]
     }
 
+    /// Its `app.toml`, whole: `include_str!("../../app.toml")`. The kernel
+    /// reads in it what the module hears of other parts
+    /// (`[needs.listens]`, ADR 0082, decision 2), and refuses it a
+    /// listener of another's facts it does not declare
+    /// ([`ModuleProject::hears`](crate::ModuleProject::hears)). One that
+    /// hears only its own says nothing.
+    fn manifest(&self) -> &'static str {
+        ""
+    }
+
     /// Where its data lives: each Project's, or this machine's.
     fn scope(&self) -> Scope {
         Scope::Project

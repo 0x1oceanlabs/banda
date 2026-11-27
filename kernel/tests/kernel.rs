@@ -443,6 +443,21 @@ impl Module for Hears {
         if self.machine { "listens" } else { "hears" }
     }
 
+    /// What its listeners hear of the other modules, as an `app.toml`
+    /// declares it.
+    fn manifest(&self) -> &'static str {
+        r#"
+        [needs.listens]
+        notes = { from = "notes" }
+        copies = { from = "notes" }
+        carried = { from = "notes" }
+        ahead = { from = "notes" }
+        nothing = { from = "notes" }
+        added = { from = "notes", kinds = ["added"] }
+        panes = { from = "desk" }
+        "#
+    }
+
     fn scope(&self) -> Scope {
         if self.machine {
             Scope::Machine
@@ -3975,6 +3990,56 @@ fn refused<T>(result: Result<T, Error>, code: Code) -> bool {
     matches!(result, Err(Error::Refused(refused)) if refused.code == code)
 }
 
+/// A module hears another's facts only through a listener its manifest
+/// declares, and no more of them than it declares; its own it hears as it
+/// likes (ADR 0082, decision 2).
+#[tokio::test]
+async fn a_module_hears_another_only_as_its_manifest_declares() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let (notes, hears) = (Notes::default(), Hears::default());
+    let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
+        .module(notes.clone())
+        .module(hears.clone())
+        .open()
+        .await
+        .unwrap();
+    create(&kernel, owner, "Work").await;
+    let module = opened_in(&hears).await;
+    let of = |module: &str, kinds: Option<&[&str]>| EventFilter {
+        module: Some(module.into()),
+        subject: None,
+        kinds: kinds.map(|kinds| kinds.iter().map(|&kind| kind.to_owned()).collect()),
+    };
+
+    // What its manifest declares for a listener is its filter.
+    let declared = module.hears("added").unwrap();
+    assert_eq!(declared, of("notes", Some(&["added"])));
+    assert!(module.listen("added", declared).await.is_ok());
+    assert_eq!(
+        module.hears("undeclared").unwrap_err().code,
+        Code::Forbidden
+    );
+
+    // A listener it does not declare, another part than it declares, more
+    // kinds than it declares, and no part at all are refused.
+    let undeclared = module.listen("undeclared", of("notes", None)).await;
+    assert!(refused(undeclared, Code::Forbidden));
+    let another = module.listen("panes", of("notes", None)).await;
+    assert!(refused(another, Code::Forbidden));
+    let more = module
+        .listen("added", of("notes", Some(&["added", "lost"])))
+        .await;
+    assert!(refused(more, Code::Forbidden));
+    let every = module.listen("added", of("notes", None)).await;
+    assert!(refused(every, Code::Forbidden));
+    let unnamed = module.listen("added", EventFilter::default()).await;
+    assert!(refused(unnamed, Code::Invalid));
+
+    // Its own facts it hears with no word in its manifest.
+    assert!(module.listen("own", of("hears", None)).await.is_ok());
+}
+
 /// One name is one listener of a log while it listens, and it acks only
 /// what it has heard, in its reaction's transaction (ADR 0082, A5).
 #[tokio::test]
@@ -4044,6 +4109,7 @@ async fn a_listener_begun_behind_the_head_has_handled_what_it_does_not_hear() {
     let one = add(&kernel, person, &project, "one").await.unwrap();
     add(&kernel, person, &project, "two").await.unwrap();
     let nothing = EventFilter {
+        module: Some("notes".into()),
         subject: Some("nothing".into()),
         ..EventFilter::default()
     };

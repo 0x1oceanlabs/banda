@@ -7,6 +7,7 @@ use crate::cursors::{Cursor, Listener};
 use crate::environment::Environment;
 use crate::events::{self, Event, EventFilter};
 use crate::kernel::Entry;
+use crate::listens;
 use crate::module::Module;
 use crate::outbox::{self, Boot, Claim, Lease, Outcome};
 use crate::passes::{Pass, Passes};
@@ -1038,8 +1039,10 @@ impl ModuleProject {
             .await
     }
 
-    /// This module's listener `name` of this scope's log: every module's
-    /// events that match `filter`, from where it last acked, and then each
+    /// This module's listener `name` of this scope's log: the events that
+    /// match `filter`, its own or those of the part its manifest declares
+    /// for `name` ([`ModuleProject::hears`]), from where it last acked, and
+    /// then each
     /// as it is committed (ADR 0082, decision 6). How a module reacts to
     /// what another did, as git keeps a checkpoint as a turn starts (ADR
     /// 0034). A listener new to the log hears from now on. Its reaction
@@ -1067,8 +1070,32 @@ impl ModuleProject {
         filter: EventFilter,
         carried: Option<i64>,
     ) -> Result<Listener, Error> {
+        self.admits(name, &filter)?;
         let cursor = Cursor::new(self.module, self.kept(), name, self.project.id, None)?;
         Listener::begin(&self.project, cursor, filter, carried, None).await
+    }
+
+    /// What this module's listener `name` hears of another part, as its
+    /// `app.toml` declares it in `[needs.listens.<name>]`: the part, and
+    /// the kinds of its facts ([`Module::manifest`]). A listener takes it
+    /// for its filter, so the module's code names no other part. Refused
+    /// as `forbidden` when the manifest declares no such listener.
+    pub fn hears(&self, name: &str) -> Result<EventFilter, Refusal> {
+        listens::declared(&*self.itself()?, name)
+    }
+
+    /// Refuses the listener `name` what `filter` matches of another
+    /// part's facts unless its manifest declares it.
+    fn admits(&self, name: &str, filter: &EventFilter) -> Result<(), Refusal> {
+        listens::admits(&*self.itself()?, name, filter)
+    }
+
+    /// This module, as it runs here.
+    fn itself(&self) -> Result<Arc<dyn Module>, Refusal> {
+        let modules = self.project.modules();
+        (modules.iter().find(|module| module.name() == self.module))
+            .cloned()
+            .ok_or_else(|| Refusal::conflict(format!("{} does not run here.", self.module)))
     }
 
     /// This module's listener `name` of this machine's log: its events that
@@ -1089,6 +1116,7 @@ impl ModuleProject {
         let Some(machine) = &self.project.machine else {
             return Ok(None);
         };
+        self.admits(name, &filter)?;
         let cursor = Cursor::new(
             self.module,
             self.kept(),

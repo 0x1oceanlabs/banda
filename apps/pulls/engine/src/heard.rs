@@ -15,7 +15,7 @@ use crate::model::{By, PullRef};
 use crate::reader::Live;
 use crate::shell;
 use crate::store;
-use banda_kernel::{Event, EventFilter, Listener, Participant};
+use banda_kernel::{Event, Listener, Participant};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -24,36 +24,9 @@ use std::sync::Arc;
 /// requests an Agent made to its Thread.
 pub const LINKS: &str = "links";
 
-/// The agents module's facts it hears.
-pub fn agents() -> EventFilter {
-    EventFilter {
-        module: Some("agents".into()),
-        subject: None,
-        kinds: Some(
-            [
-                "tool.started",
-                "tool.changed",
-                "tool.output",
-                "turn.started",
-                "turn.ended",
-            ]
-            .map(str::to_owned)
-            .to_vec(),
-        ),
-    }
-}
-
-/// The name of its listener of the git module.
+/// The name of its listener of a commit, a push or a pull from a Thread's
+/// card. What each listener hears, its `app.toml` declares by its name.
 pub const PUSHES: &str = "pushes";
-
-/// The git module's: a commit, a push or a pull from a Thread's card.
-pub fn git() -> EventFilter {
-    EventFilter {
-        module: Some("git".into()),
-        subject: None,
-        kinds: Some(vec!["git.acted".into()]),
-    }
-}
 
 /// How much of a shell call's words it keeps, to find a URL in.
 const KEPT: usize = 64 << 10;

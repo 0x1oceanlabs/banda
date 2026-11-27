@@ -93,7 +93,12 @@ The kernel holds only what every module needs, and it names no module.
   (`ModuleProject::listen`, `listen_to_machine`), one name to one
   listener, and the kernel keeps how far each has heard in
   `kernel_cursors`, beside that log, so a restart resumes there and loses
-  no fact. A listener new to a log starts at its head. In one scope a
+  no fact. Its own facts a module hears as it likes; another part's only
+  through a listener its `app.toml` declares, with the part and the kinds
+  (`[needs.listens.<name>]`, `ModuleProject::hears`), and the kernel
+  refuses one it does not declare, so who hears whom is read in the
+  manifests (ADR 0082, decision 2). A listener new to a log starts at its
+  head. In one scope a
   reaction acks its fact in the transaction it writes in (`Tx::ack`), so
   it runs once, and a second ack is refused. One that cannot, its work
   outside the store (git's checkpoints) or what it follows spanning
@@ -518,10 +523,10 @@ command (with its ID)
   another's tables, and a Pane imports only the API, `@banda/ui`, React and
   its icons, and the core only as `@banda/core/react`; the terminal's Pane
   also Ghostty. Beside the kernel's test (`kernel/tests/architecture.rs`),
-  two lists that only fall hold where the platform's Rust still names an App
-  and where an App's names another, by file and count, and a third, in
-  `engine/src/apps.rs`, the App crates another crate still depends on, all
-  of them the settings' (ADR 0062). The count reads names as written; a word
+  a list that only falls holds where the platform's Rust still names an App,
+  by file and count; no App's names another, as what one hears of another
+  its `app.toml` declares; and a second list, in `engine/src/apps.rs`,
+  holds the App crates another crate still depends on (ADR 0062). The count reads names as written; a word
   that only looks like an App's, as the program `git`, is listed apart with
   its reason. No code of the engine makes a process but
   `banda-environments`, and the places named in its test, each with how many

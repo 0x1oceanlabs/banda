@@ -9,25 +9,15 @@
 use crate::model::ThreadId;
 use crate::notes::one_line;
 use crate::{store, transcript};
-use banda_kernel::{Error, EventFilter, Listener, Participant, Tx};
+use banda_kernel::{Error, Listener, Participant, Tx};
 
 /// How long a notice may be, in characters.
 pub const NOTICE: usize = 500;
 
-/// What the module hears, each from its module by a listener of its own:
-/// a step git's card asked for was done; a tab the Person lent a Thread,
-/// or the end of its lend.
-pub fn heard() -> [(&'static str, EventFilter); 2] {
-    let told = |module: &str, kind: &str| EventFilter {
-        module: Some(module.into()),
-        subject: None,
-        kinds: Some(vec![kind.into()]),
-    };
-    [
-        ("card-steps", told("git", "git.acted")),
-        ("lent-tabs", told("browser", "browser.lent")),
-    ]
-}
+/// Its listeners, each of one module's notices: a step a card asked for
+/// was done; a tab the Person lent a Thread, or the end of its lend. What
+/// each hears, the module's `app.toml` declares by its name.
+pub const HEARD: [&str; 2] = ["card-steps", "lent-tabs"];
 
 /// Posts each notice one module tells of in its Thread, one at a time,
 /// until the Project is gone: once, as the fact is acked in the same
