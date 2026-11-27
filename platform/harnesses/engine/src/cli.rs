@@ -129,16 +129,22 @@ pub async fn find(
 }
 
 /// `program` itself when it is a path, or the first of that name on the
-/// host's PATH; on Windows, its vendor's folder first.
+/// host's PATH; its vendor's folder first.
 pub(crate) fn located(program: &str) -> Option<PathBuf> {
     candidates(program).next()
 }
 
-/// Where `program` may be, in the order it is looked for: its vendor's
-/// folder, then the host's PATH, a `.cmd` or a `.bat` last.
+/// Where `program` may be, in the order it is looked for: on Windows its
+/// vendor's folder, then the host's PATH, a `.cmd` or a `.bat` last;
+/// elsewhere its vendor's folder after the PATH.
 fn candidates(program: &str) -> impl Iterator<Item = PathBuf> + use<> {
     let on_path = scripts_last(host::programs(Path::new(program), &host::path()));
-    vendors(program).into_iter().chain(on_path)
+    // Elsewhere the PATH comes first: a Person's own choice of it stands.
+    let (first, last) = match cfg!(windows) {
+        true => (vendors(program), Vec::new()),
+        false => (Vec::new(), vendors(program)),
+    };
+    first.into_iter().chain(on_path).chain(last)
 }
 
 /// `found` in its order, but each `.cmd` and `.bat`, which runs through
@@ -192,13 +198,16 @@ fn npm_runs(shim: &Path) -> Option<PathBuf> {
     (startable && runs.is_file()).then_some(runs)
 }
 
-/// Where a CLI's vendor installs it on Windows, by its name: Claude Code's
-/// installer in `%USERPROFILE%\.local\bin`, which it puts on no PATH, and
-/// Codex's in `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin`. None elsewhere.
+/// Where a CLI's vendor installs it, by its name, which no PATH may
+/// name: Claude Code's installer in `.local/bin` of the Person's home on
+/// every system, Codex's there too but on Windows in
+/// `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin`. So a CLI a setup just
+/// installed is found with no new login (ADR 0140, decision 3).
 fn vendors(program: &str) -> Vec<PathBuf> {
+    let local = || dirs::home_dir().map(|home| home.join(".local").join("bin"));
     let folder = match program {
-        _ if !cfg!(windows) => None,
-        "claude" => dirs::home_dir().map(|home| home.join(".local").join("bin")),
+        "claude" => local(),
+        "codex" if !cfg!(windows) => local(),
         "codex" => dirs::data_local_dir().map(|local| {
             local
                 .join("Programs")

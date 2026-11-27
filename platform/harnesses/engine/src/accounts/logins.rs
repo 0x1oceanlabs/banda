@@ -72,30 +72,64 @@ impl Logins {
     pub fn terminal(
         &self,
         id: &str,
-        mut process: banda_kernel::Started,
+        process: banda_kernel::Started,
         pty: banda_kernel::Pty,
         cancel: tokio::sync::oneshot::Receiver<()>,
         finish: impl Future<Output = ()> + Send + 'static,
     ) {
-        use tokio::io::AsyncReadExt;
+        let (say, said) = tokio::sync::mpsc::channel(16);
+        tokio::spawn(pour(pty.output, say));
+        self.program(id, process, said, Some(pty.input), cancel, finish, BOUND);
+    }
+
+    /// Runs a program with no terminal to its end, what it prints on
+    /// either of its pipes its output, for at most `bound`; then `finish`,
+    /// before it is said to be done. An installer runs so, on Windows too,
+    /// which has no terminal yet.
+    pub fn piped(
+        &self,
+        id: &str,
+        mut process: banda_kernel::Started,
+        cancel: tokio::sync::oneshot::Receiver<()>,
+        finish: impl Future<Output = ()> + Send + 'static,
+        bound: std::time::Duration,
+    ) {
+        let (say, said) = tokio::sync::mpsc::channel(16);
+        if let Some(out) = process.stdout.take() {
+            tokio::spawn(pour(out, say.clone()));
+        }
+        if let Some(err) = process.stderr.take() {
+            tokio::spawn(pour(err, say));
+        }
+        let input = process.stdin.take().map(|stdin| Box::new(stdin) as _);
+        self.program(id, process, said, input, cancel, finish, bound);
+    }
+
+    /// Runs `process` to its end, `printed` its output as it comes.
+    #[allow(clippy::too_many_arguments)]
+    fn program(
+        &self,
+        id: &str,
+        mut process: banda_kernel::Started,
+        mut printed: tokio::sync::mpsc::Receiver<Vec<u8>>,
+        input: Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>,
+        cancel: tokio::sync::oneshot::Receiver<()>,
+        finish: impl Future<Output = ()> + Send + 'static,
+        bound: std::time::Duration,
+    ) {
         let state = {
             let mut all = self.0.lock().unwrap();
             let job = all.get_mut(id).unwrap();
-            job.input = Some(std::sync::Arc::new(tokio::sync::Mutex::new(pty.input)));
+            job.input = input.map(|input| std::sync::Arc::new(tokio::sync::Mutex::new(input)));
             job.status.clone()
         };
         tokio::spawn(async move {
-            let mut output = pty.output;
             let reader_state = state.clone();
             let read = async move {
-                let mut bytes = [0; 4096];
                 // A character cut by a read waits for the rest of it.
                 let mut cut = Vec::new();
-                while let Ok(n) = output.read(&mut bytes).await {
-                    if n == 0 {
-                        break;
-                    }
-                    cut.extend_from_slice(&bytes[..n]);
+                while let Some(bytes) = printed.recv().await {
+                    cut.extend_from_slice(&bytes);
                     let whole = match std::str::from_utf8(&cut) {
                         Err(error) if error.error_len().is_none() => error.valid_up_to(),
                         _ => cut.len(),
@@ -107,19 +141,24 @@ impl Logins {
                 std::future::pending::<()>().await;
             };
             tokio::pin!(read);
+            let grace = std::time::Duration::from_secs(2);
             let result = tokio::select! {
-                result = process.wait() => result.is_ok_and(|exit| exit.success()),
-                _ = &mut read => unreachable!("the reader stays pending after EOF"),
-                _ = cancel => { let _ = process.stop(std::time::Duration::from_secs(2)).await; false },
-                _ = tokio::time::sleep(std::time::Duration::from_secs(600)) => { let _ = process.stop(std::time::Duration::from_secs(2)).await; false },
+                result = process.wait() => result.is_ok_and(|exit| exit.success()).then_some(()).ok_or(None),
+                _ = &mut read => unreachable!("the reader stays pending after its end"),
+                _ = cancel => { let _ = process.stop(grace).await; Err(None) },
+                _ = tokio::time::sleep(bound) => {
+                    let _ = process.stop(grace).await;
+                    Err(Some(format!("\nIt took more than {} minutes, and was stopped.", bound.as_secs() / 60)))
+                },
             };
             // Drain what was printed just before exit, without allowing a
-            // descendant holding the PTY to hold the engine forever.
+            // descendant holding its output to hold the engine forever.
             let _ = tokio::time::timeout(std::time::Duration::from_millis(100), &mut read).await;
             process.kill();
-            end(&state, finish, result.then_some(()).ok_or(None)).await;
+            end(&state, finish, result).await;
         });
     }
+
     /// Runs a sign-in the Harness does itself to its end; then `finish`,
     /// before it is said to be done.
     pub fn agent(
@@ -190,6 +229,23 @@ impl Logins {
         self.0.lock().unwrap().remove(id);
     }
 }
+/// How long a sign-in may take.
+const BOUND: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// Sends what `output` gives, as it comes, until it ends or no one hears.
+async fn pour(
+    mut output: impl tokio::io::AsyncRead + Unpin,
+    say: tokio::sync::mpsc::Sender<Vec<u8>>,
+) {
+    use tokio::io::AsyncReadExt;
+    let mut bytes = [0; 4096];
+    while let Ok(n) = output.read(&mut bytes).await {
+        if n == 0 || say.send(bytes[..n].to_vec()).await.is_err() {
+            break;
+        }
+    }
+}
+
 /// Ends a sign-in: `finish` first, then it is said to be done, with why
 /// it failed when it says.
 async fn end(
