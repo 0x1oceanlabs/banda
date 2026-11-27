@@ -45,7 +45,8 @@ card (decision 6). A terminal is the part such a Person cannot read.
    name, one line of what it is for in plain words, how the engine tells
    it is done, and what the engine runs to do it on each system. The
    steps of a Harness Banda knows are in its row of `kinds.rs`. Claude
-   Code and Codex have two, the same on Linux, macOS and Windows:
+   Code and Codex have three, the same on Linux, macOS and Windows:
+   - **Git** (decision 5): a `git` is found;
    - **install**: its CLI is found and says its version;
    - **sign in**: it says someone is signed in.
 
@@ -66,7 +67,8 @@ card (decision 6). A terminal is the part such a Person cannot read.
    steps, the exit code its end.
 
 3. **Install runs the vendor's own installer**, for the Person alone: no
-   administrator, no `sudo`, no npm, no Node.
+   administrator, no `sudo`, no npm, no Node. Git alone may ask the
+   system for a right (decision 5).
 
    | | Linux and macOS | Windows |
    |---|---|---|
@@ -82,15 +84,24 @@ card (decision 6). A terminal is the part such a Person cannot read.
    That step alone asks: the Person does it, in the browser. Its link is
    lifted from its output; a code the page shows is typed into the sheet.
 
-5. **Git for Windows is no step.** Claude Code needs none on Windows now:
-   without Git Bash it uses PowerShell for its shell. So no Banda installs
-   anything machine-wide and Windows asks for no permission. _Roma said
-   yes to installing Git through winget on the word that Claude Code
-   needed it; the vendor's page says it does not, so this is his to
-   turn._
+5. **Git is the first step, on every system** (Roma, 2026-11-27: "install
+   Git with Banda by default if it is not there"). An Agent's work is
+   files, and Git is their history: what an Agent changed is seen and
+   taken back, Banda's own Diff and Files read it, and on Windows it
+   brings the Bash that Claude Code works best in. Claude Code runs
+   without it, so a Git that does not install fails its step and holds
+   back no other: the setup goes on, and the row says Git is missing.
+   The step is done when a `git` is found, and it is the machine's, the
+   same step in every Harness's setup.
+
+   | | What runs |
+   |---|---|
+   | Windows | `winget install --id Git.Git -e --source winget`, for the Person alone where winget allows it; else Windows asks once to allow it |
+   | macOS | `xcode-select --install`: Apple's own dialog, which the Person confirms. The step asks until its tools are there. `/usr/bin/git` alone is a stub and is never run to look |
+   | Linux | the system's package manager, through `pkexec`, which asks for the password in its own dialog. With neither, the step says the command |
 
 6. **The row is ADR 0059's, with one button** (its decision 4). Its
-   states: Not on this computer (Set up), Setting up · 1 of 2 (Show),
+   states: Not on this computer (Set up), Setting up · 2 of 3 (Show),
    Waits for you to sign in (Sign in), Stopped with why (Try again),
    Older than Banda needs (Update), Can't tell (Check again), and ready,
    with who is signed in. It shows where 0059 said: New Thread until one
@@ -122,8 +133,8 @@ card (decision 6). A terminal is the part such a Person cannot read.
     elsewhere (ADR 0120, decision 3).
 
 **Not decided here.** A Harness that brings its steps in its own entry
-or its App's manifest; installing Git, Node or another tool an Agent's
-work may want; starter prompts and What's new (ADR 0059, decisions 7 and
+or its App's manifest; installing Node or another tool an Agent's work
+may want; starter prompts and What's new (ADR 0059, decisions 7 and
 8), which stay as they are.
 
 ## Steps
@@ -139,10 +150,12 @@ work may want; starter prompts and What's new (ADR 0059, decisions 7 and
 ## Consequences
 
 - A Person who is no developer reaches a first answer with two presses
-  and one sign-in, and never reads a terminal.
+  and one sign-in, and never reads a terminal. Their files have a
+  history from the first day.
 - Banda runs a vendor's script from the network on the Person's word.
   The sheet names the vendor, and Details shows the command.
 - A vendor that moves its installer breaks the step until a Banda
   release follows. The step then says Stopped, with what it printed.
-- An Agent on Windows with no Git Bash works in PowerShell. A Person who
-  wants Bash installs Git themselves.
+- Git's install is the one step that may ask the system for a right, and
+  the one that differs by system. Where it fails, an Agent on Windows
+  works in PowerShell and the Person's files have no history yet.
