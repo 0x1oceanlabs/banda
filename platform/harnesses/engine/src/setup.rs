@@ -25,6 +25,10 @@ pub struct Setup {
     pub steps: Vec<SetupStep>,
     /// Whether the engine runs it now.
     pub running: bool,
+    /// Whether a Thread can start on it, as far as Banda can tell: it is
+    /// on this computer and someone is signed in to it, or it says no
+    /// steps and is the Person's own to set up. Git is no part of it.
+    pub ready: bool,
     /// The last of what the step that runs, or the one that failed,
     /// printed: an installer's lines, a sign-in's link.
     pub output: String,
@@ -102,6 +106,15 @@ impl Git {
 struct Run {
     state: watch::Sender<Setup>,
     stop: Arc<Notify>,
+}
+
+impl Setup {
+    /// Says [`Setup::ready`] as its steps are now: a step is done only
+    /// where this is called after.
+    fn tell(&mut self) {
+        let done = |at: usize| self.steps.get(at).map(|step| step.state) == Some(StepState::Done);
+        self.ready = self.steps.is_empty() || (done(INSTALL) && done(SIGN_IN));
+    }
 }
 
 impl Setups {
@@ -281,6 +294,7 @@ async fn look(accounts: &Accounts, project: &ModuleProject, harness: &Harness, g
         ..Setup::default()
     };
     let Some(row) = harness.row() else {
+        setup.tell();
         return setup;
     };
     let step = |id: &str, name: &str, says: String, done: bool| SetupStep {
@@ -316,6 +330,7 @@ async fn look(accounts: &Accounts, project: &ModuleProject, harness: &Harness, g
             signed_in,
         ),
     ];
+    setup.tell();
     setup
 }
 
@@ -357,6 +372,7 @@ impl Going {
             if let Some(step) = now.steps.get_mut(step) {
                 (step.state, step.note) = (to, None);
             }
+            now.tell();
         });
     }
 

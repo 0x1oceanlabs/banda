@@ -19,6 +19,12 @@ steps: Array<SetupStep>,
  */
 running: boolean, 
 /**
+ * Whether a Thread can start on it, as far as Banda can tell: it is
+ * on this computer and someone is signed in to it, or it says no
+ * steps and is the Person's own to set up. Git is no part of it.
+ */
+ready: boolean, 
+/**
  * The last of what the step that runs, or the one that failed,
  * printed: an installer's lines, a sign-in's link.
  */
