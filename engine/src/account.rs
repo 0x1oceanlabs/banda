@@ -4,7 +4,8 @@
 //! they are. A list is a stream narrowed by flags, and a command that takes
 //! an ID takes `-` for the IDs on stdin, one a line, as bare IDs or as the
 //! list's own lines. A key travels only on a pipe: in on stdin, out only
-//! from `secret get`.
+//! from `secret get`. `banda harness setup` is the same kind: a Harness's
+//! setup followed to its end (ADR 0140, decision 2).
 
 use crate::Failure;
 use crate::client::Client;
@@ -12,8 +13,8 @@ use crate::places::Places;
 use banda_harnesses::accounts::AccountList;
 use banda_harnesses::model::{AccountKind, HarnessView};
 use banda_kernel::CommandId;
-use banda_kernel::Refusal;
 use banda_kernel::api::EngineFrame;
+use banda_kernel::{Code, Refusal};
 use clap::{Subcommand, ValueEnum};
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -114,6 +115,17 @@ pub enum AccountCommand {
     Default { id: String },
     /// Choose the fallback for new Threads; without an ID, clear it.
     Fallback { id: Option<String> },
+}
+
+#[derive(Subcommand)]
+pub enum HarnessCommand {
+    /// Set a Harness up, as one process: Git, its CLI, then the sign-in.
+    /// It prints the steps as `{"steps", "running", "ready"}` each time
+    /// one changes and each `{"output"}` the step that runs prints, and
+    /// exits 0 once a Thread can start on it. Each line on stdin goes to
+    /// the sign-in, as a confirmation code. The Person completes the
+    /// browser step; the engine goes on with the setup even if this stops.
+    Setup { id: String },
 }
 
 /// A role a new Thread gives an account.
@@ -310,6 +322,111 @@ fn plan(what: AccountCommand) -> Result<Plan, Failure> {
     })
 }
 
+/// `banda harness`: a Harness's setup, started and followed to its end:
+/// its steps on stdout, stdin's lines its sign-in's input, its end the
+/// exit code.
+pub async fn harness(places: &Places, what: HarnessCommand) -> Result<(), Failure> {
+    let HarnessCommand::Setup { id } = what;
+    let params = json!({ "harness": id });
+    let mut client = Client::connect(places).await?;
+    match one(&mut client, "harnesses.setup_start", params.clone()).await {
+        // One that runs already, as the window started it, is followed.
+        Err(Failure::Refused(refusal)) if refusal.code == Code::Conflict => {}
+        started => drop(started?),
+    }
+    let (login, typed) = tokio::sync::watch::channel(None);
+    let typing = tokio::spawn(type_into(places.clone(), typed));
+    let ended = setup(&mut client, params, &login).await;
+    typing.abort();
+    let setup = ended?;
+    if setup["ready"] == true {
+        return Ok(());
+    }
+    // Why, as the step that failed says it.
+    let steps = setup["steps"].as_array().into_iter().flatten();
+    let why = steps.filter_map(|step| step["note"].as_str()).next_back();
+    let name = plain(&setup["name"]);
+    Err(Failure::Refused(Refusal::conflict(match why {
+        Some(why) => format!("The setup ended, and {name} is not ready. {why}"),
+        None => format!("The setup ended, and {name} is not ready."),
+    })))
+}
+
+/// What of `printed` came after `seen`, the last of what a step printed
+/// before: all of it past where `seen` ends in it, as the oldest is cut
+/// once it is long.
+fn unseen<'a>(seen: &str, printed: &'a str) -> &'a str {
+    let overlap = (seen.char_indices().map(|(at, _)| &seen[at..]))
+        .find(|end| printed.starts_with(end))
+        .map_or(0, str::len);
+    &printed[overlap..]
+}
+
+/// Prints the setup `params` names as it changes, till it runs no more:
+/// the setup as it ended. `login` is told the sign-in that waits for a
+/// code.
+async fn setup(
+    client: &mut Client,
+    params: Value,
+    login: &tokio::sync::watch::Sender<Option<String>>,
+) -> Result<Value, Failure> {
+    let watch = client.stream_with("harnesses.setup_watch", params).await?;
+    let (mut steps, mut output) = (Value::Null, String::new());
+    // The step that prints, and whether it printed yet: until it does,
+    // the output is still the step's before it, and then it is all new.
+    let (mut prints, mut printed_yet) = (None, true);
+    loop {
+        match client.heard().await? {
+            EngineFrame::Piece { stream, mut data } if stream == watch => {
+                let printed = plain(&data["output"]);
+                let going = (data["steps"].as_array().into_iter().flatten())
+                    .find(|step| step["state"] == "running" || step["state"] == "asks")
+                    .map(|step| plain(&step["id"]));
+                if going.is_some() && going != prints {
+                    (prints, printed_yet) = (going, false);
+                }
+                let new = match printed_yet {
+                    true => unseen(&output, &printed),
+                    false if printed == output => "",
+                    false => &printed,
+                };
+                printed_yet |= !new.is_empty();
+                let now = json!({
+                    "steps": data["steps"],
+                    "running": data["running"],
+                    "ready": data["ready"],
+                });
+                if now != steps {
+                    println!("{now}");
+                    steps = now;
+                }
+                if !new.is_empty() {
+                    println!("{}", json!({ "output": new }));
+                }
+                login.send_if_modified(|waits| {
+                    let asks = data["login"].as_str().map(str::to_owned);
+                    let changed = *waits != asks;
+                    *waits = asks;
+                    changed
+                });
+                if data["running"] != true {
+                    return Ok(data.take());
+                }
+                output = printed;
+            }
+            EngineFrame::Result {
+                id,
+                error: Some(refusal),
+                ..
+            } if id == watch => return Err(Failure::Refused(refusal)),
+            EngineFrame::Ended { stream } if stream == watch => {
+                return Err(Failure::broken("The engine stopped telling of the setup."));
+            }
+            _ => {}
+        }
+    }
+}
+
 /// A sign-in the engine started, followed to its end: its events on
 /// stdout, stdin's lines its input, its end the exit code (ADR 0108,
 /// decisions 3 and 5).
@@ -319,7 +436,8 @@ async fn login(places: &Places, mut client: Client, status: Value) -> Result<(),
         "{}",
         json!({ "login": login, "harness": status["harness"] })
     );
-    let typing = tokio::spawn(type_into(places.clone(), login.clone()));
+    let (_waits, typed) = tokio::sync::watch::channel(Some(login.clone()));
+    let typing = tokio::spawn(type_into(places.clone(), typed));
     let watched = watch(&mut client, &login).await;
     typing.abort();
     let signed_in = watched?;
@@ -332,13 +450,17 @@ async fn login(places: &Places, mut client: Client, status: Value) -> Result<(),
     }
 }
 
-/// Each line on stdin, sent to the sign-in `login` on a connection of its
-/// own, made once a line comes.
-async fn type_into(places: Places, login: String) {
+/// Each line on stdin, sent to the sign-in `login` names while it names
+/// one, on a connection of its own, made once a line comes.
+async fn type_into(places: Places, login: tokio::sync::watch::Receiver<Option<String>>) {
     use tokio::io::AsyncBufReadExt;
     let mut lines = tokio::io::BufReader::new(tokio::io::stdin()).lines();
     let mut input = None;
     while let Ok(Some(line)) = lines.next_line().await {
+        // A line typed while no sign-in waits is no code of its.
+        let Some(login) = login.borrow().clone() else {
+            continue;
+        };
         let client = match &mut input {
             Some(client) => client,
             None => match Client::connect(&places).await {
@@ -528,4 +650,21 @@ fn read_unseen(stdin: &std::io::Stdin, line: &mut String) -> std::io::Result<usi
         }
     }
     stdin.lock().read_line(line)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unseen;
+
+    #[test]
+    fn only_what_a_step_printed_since_is_new() {
+        assert_eq!(unseen("", "one\n"), "one\n");
+        assert_eq!(unseen("one\n", "one\ntwo\n"), "two\n");
+        assert_eq!(unseen("one\ntwo\n", "one\ntwo\n"), "");
+        // Its oldest lines cut, as a long output's are.
+        assert_eq!(unseen("one\ntwo\n", "two\nthree\n"), "three\n");
+        // Nothing of it seen before: another step's.
+        assert_eq!(unseen("one\n", "Sign in at…\n"), "Sign in at…\n");
+        assert_eq!(unseen("я", "яя"), "я");
+    }
 }

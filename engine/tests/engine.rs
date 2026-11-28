@@ -2004,6 +2004,23 @@ fn an_agents_pass_outlives_an_engine_restart_until_its_project_goes() {
     assert!(engine.wait().unwrap().success());
 }
 
+/// `banda harness setup` is the engine's own setup (ADR 0140, decision
+/// 2): what the engine refuses, it says on stderr, with nothing on stdout.
+#[test]
+fn banda_harness_setup_says_the_engines_refusal_for_a_harness_it_cannot_set_up() {
+    let places = Places::new();
+    let (_engine, _stdin, _) = places.serve();
+    let refused = places
+        .banda(&["harness", "setup", "fake"])
+        .output()
+        .unwrap();
+    assert!(!refused.status.success(), "{refused:?}");
+    assert!(refused.stdout.is_empty(), "{refused:?}");
+    let said: Value = serde_json::from_slice(&refused.stderr).unwrap();
+    let words = text(&said["error"]["message"]);
+    assert!(words.contains("does not know how Fake is set up"), "{said}");
+}
+
 #[test]
 fn banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it() {
     let places = Places::new();

@@ -49,8 +49,8 @@ PR.
   the report. A way that signs in with the Harness's own program runs it
   on a terminal, and on pipes where the machine has none, as Windows yet:
   Claude Code's and Codex's print their page and read a code so too.
-- **`banda account` and `banda secret` are filters** (ADR 0108, decision
-  3): the result alone on stdout, a list one JSON object a line narrowed
+- **`banda account`, `banda secret` and `banda harness` are filters** (ADR
+  0108, decision 3): the result alone on stdout, a list one JSON object a line narrowed
   by flags, IDs on stdin for `-`, a refusal as JSON on stderr
   (`engine/src/account.rs`).
 - **A Harness is set up in steps the engine runs** (ADR 0140): `setup
@@ -58,7 +58,10 @@ PR.
   running, asking or failed; `setup_start` runs what is not done, in
   order, and answers at once; `setup_watch` is it as it changes and
   `setup_cancel` stops it. One per Harness at a time, with no call or
-  window waiting (`engine/src/setup.rs`). The install is its vendor's own
+  window waiting (`engine/src/setup.rs`). `banda harness setup ID` is the
+  same calls as one process: its steps and what they print on stdout,
+  stdin's lines the sign-in's codes, 0 once a Thread can start on it. It
+  is the Person's: an Agent's pass starts no setup. The install is its vendor's own
   installer, a line of `kinds.rs`'s row for this system, run on pipes for
   at most 30 minutes and watched as a sign-in is; the sign-in is the one
   above. Its CLI is then found in its vendor's folder, which no PATH may
