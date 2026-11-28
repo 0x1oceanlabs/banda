@@ -84,8 +84,8 @@ impl Logins {
 
     /// Runs a program with no terminal to its end, what it prints on
     /// either of its pipes its output, for at most `bound`; then `finish`,
-    /// before it is said to be done. An installer runs so, on Windows too,
-    /// which has no terminal yet.
+    /// before it is said to be done. An installer runs so, and on Windows,
+    /// which has no terminal yet, a sign-in too.
     pub fn piped(
         &self,
         id: &str,
@@ -230,7 +230,7 @@ impl Logins {
     }
 }
 /// How long a sign-in may take.
-const BOUND: std::time::Duration = std::time::Duration::from_secs(600);
+pub(super) const BOUND: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// Sends what `output` gives, as it comes, until it ends or no one hears.
 async fn pour(
@@ -350,6 +350,49 @@ mod tests {
         .unwrap();
         assert!(done.output.contains("Signed in"), "{}", done.output);
         assert!(logins.input(&first.login, "again").await.is_err());
+    }
+
+    /// A sign-in where there is no terminal, as on Windows: it prints and
+    /// reads on pipes.
+    #[tokio::test]
+    async fn a_sign_in_on_pipes_keeps_output_and_accepts_input() {
+        use banda_kernel::{Environment, Input, Program};
+        let logins = Logins::default();
+        let (first, cancel) = logins.reserve("claude-work").unwrap();
+        #[cfg(unix)]
+        let (shell, line) = (
+            "sh",
+            "printf 'Enter code: '; read code; test \"$code\" = accepted && printf 'Signed in'",
+        );
+        #[cfg(windows)]
+        let (shell, line) = (
+            "powershell",
+            "[Console]::Out.Write('Enter code: '); \
+             if ([Console]::In.ReadLine() -ne 'accepted') { exit 1 }; \
+             [Console]::Out.Write('Signed in')",
+        );
+        #[cfg(unix)]
+        let flag = "-c";
+        #[cfg(windows)]
+        let flag = "-Command";
+        let program = Program::terminal(shell, vec![flag.into(), line.into()]).on_pipes();
+        let process = banda_environments::Local
+            .spawn(&program, Input::Piped)
+            .unwrap();
+        logins.piped(&first.login, process, cancel, async {}, BOUND);
+        logins.input(&first.login, "accepted\n").await.unwrap();
+        let mut watched = logins.watch(&first.login).unwrap();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            watched.wait_for(|status| status.done),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let done = logins.status(&first.login).unwrap();
+        assert_eq!(done.succeeded, Some(true), "{}", done.output);
+        assert!(done.output.contains("Enter code: "), "{}", done.output);
+        assert!(done.output.contains("Signed in"), "{}", done.output);
     }
 
     #[test]

@@ -83,7 +83,8 @@ pub enum Whose {
     Terminal,
     /// An act the Person asked for, on pipes: a git act, as a commit or a
     /// push, which runs the repository's hooks as their own git does; or a
-    /// Harness's sign-in with a key they typed, on its input.
+    /// Harness's sign-in with a key they typed, on its input, or its own
+    /// where the machine has no terminal ([`Program::on_pipes`]).
     Act,
 }
 
@@ -150,6 +151,17 @@ impl Program {
     /// they typed: to start outside the fence.
     pub fn act(program: impl Into<String>, args: Vec<String>) -> Program {
         Program::of(Whose::Act, program, args, Holes::default())
+    }
+
+    /// A terminal's program as the same act of the Person's on pipes, for
+    /// a machine with no terminal: both start outside the fence. Any other
+    /// program is as it was, so none leaves the fence this way.
+    #[must_use]
+    pub fn on_pipes(mut self) -> Program {
+        if self.whose == Whose::Terminal {
+            self.whose = Whose::Act;
+        }
+        self
     }
 
     fn of(whose: Whose, program: impl Into<String>, args: Vec<String>, holes: Holes) -> Program {
@@ -237,6 +249,17 @@ impl Environment for Nowhere {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_terminals_program_becomes_an_act_on_pipes() {
+        let mut terminal = Program::terminal("claude", vec!["login".to_owned()]);
+        terminal.env.insert("HOME".to_owned(), "/h".to_owned());
+        let act = terminal.clone().on_pipes();
+        assert_eq!(act.whose(), Whose::Act);
+        assert_eq!((&act.args, &act.env), (&terminal.args, &terminal.env));
+        let harness = Program::harness("adapter", vec![], Holes::default());
+        assert_eq!(harness.on_pipes().whose(), Whose::Harness);
+    }
 
     #[test]
     fn a_program_has_holes_exactly_when_it_is_one_to_fence() {
