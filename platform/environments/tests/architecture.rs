@@ -27,7 +27,7 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 22] = [
+const ON_THE_HOST: [(&str, usize, &str); 23] = [
     (
         "engine/src/moving.rs",
         1,
@@ -97,6 +97,14 @@ const ON_THE_HOST: [(&str, usize, &str); 22] = [
         "runs sudo on the Person's terminal for `banda browser setup`, to write the AppArmor \
          profile Chromium's sandbox needs: no Project's program, and never under an Agent's \
          pass (ADR 0132, decision 2)",
+    ),
+    (
+        "apps/browser/engine/src/driver.rs",
+        1,
+        "starts the browser's driver, which Banda carries, on the engine's Node, for the \
+         machine's tabs of every Project: Banda's own program, which holds each Project's \
+         profile, its sign-ins, where no Agent's program reaches them (ADR 0132, decisions 3 \
+         and 4)",
     ),
     (
         "engine/src/there.rs",

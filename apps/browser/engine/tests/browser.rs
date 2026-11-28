@@ -1,5 +1,6 @@
 //! The browser's tools through the kernel, as an Agent's session calls
-//! them, with a window that answers on the road, or none.
+//! them, with a window that answers on the road, or none. With none, a tab
+//! opens on the machine: `machine.rs` has those, with a driver of its own.
 
 use banda_browser::{Browser, Dialog, Lending, ReadTab, SeenTab, Shown};
 use banda_kernel::{
@@ -10,22 +11,37 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
+mod machine;
+
 async fn open(root: &std::path::Path, owner: PersonId) -> (Arc<Kernel>, ProjectId) {
+    open_with(root, owner, Browser::new()).await
+}
+
+/// A kernel with `browser` as its browser, and a Project in it.
+async fn open_with(
+    root: &std::path::Path,
+    owner: PersonId,
+    browser: Browser,
+) -> (Arc<Kernel>, ProjectId) {
     let kernel = Kernel::builder(root.join("projects"), root.join("data"), owner)
-        .module(Browser::new())
+        .module(browser)
         .open()
         .await
         .unwrap();
-    let person = Participant::Person(owner);
+    let project = project(&kernel, owner, "Work").await;
+    (kernel, project)
+}
+
+/// A new Project of `owner`'s.
+async fn project(kernel: &Kernel, owner: PersonId, name: &str) -> ProjectId {
     let made = kernel.call(
-        person,
+        Participant::Person(owner),
         "projects.create",
         None,
         Some(banda_kernel::CommandId::new()),
-        json!({ "name": "Work" }),
+        json!({ "name": name }),
     );
-    let project = serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap();
-    (kernel, project)
+    serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap()
 }
 
 /// An Agent whose pass is for `project`.
@@ -64,7 +80,7 @@ async fn window(kernel: &Kernel, owner: PersonId) -> Stream {
 }
 
 #[tokio::test]
-async fn with_no_window_the_tools_are_listed_and_refuse() {
+async fn with_no_window_the_tools_are_listed_and_a_banda_with_no_driver_opens_no_tab() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let (kernel, project) = open(root.path(), owner).await;
@@ -91,10 +107,24 @@ async fn with_no_window_the_tools_are_listed_and_refuse() {
             "browser_handoff"
         ]
     );
-    let refused = kernel.call(agent(project), "browser.tabs", None, None, Value::Null);
+    // No window and no machine's tab: there are none, and none to name.
+    let tabs = kernel.call(agent(project), "browser.tabs", None, None, Value::Null);
+    assert_eq!(tabs.await.unwrap(), json!([]));
+    let read = json!({ "tab": 7 });
+    let refused = kernel.call(agent(project), "browser.snapshot", None, None, read);
     let refused = refused.await.unwrap_err();
-    assert_eq!(refused.code, Code::Conflict);
-    assert_eq!(refused.message, "Banda's window is not open.");
+    assert_eq!(refused.code, Code::NotFound);
+    assert_eq!(
+        refused.message,
+        "There is no tab 7: browser_tabs lists them."
+    );
+    let refused = kernel.call(agent(project), "browser.open", None, None, json!({}));
+    let refused = refused.await.unwrap_err();
+    assert_eq!(refused.code, Code::AppUnavailable);
+    assert_eq!(
+        refused.message,
+        "This Banda does not carry its browser for Agents yet."
+    );
 }
 
 #[tokio::test]

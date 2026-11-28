@@ -77,6 +77,9 @@ png = "0.18.1"
 # Each program the engine starts on Windows is born in a Job Object of its
 # own, which none of it can leave (ADR 0090, decision 3).
 process-wrap = { version = "10.0.1", default-features = false, features = ["tokio1", "job-object", "creation-flags", "kill-on-drop"] }
+# The Public Suffix List, compiled in: the site of a page a machine's tab
+# shows, as a browser takes a site to be (ADR 0132; ADR 0029, decision 7).
+psl = "2.1.265"
 pty-process = { version = "0.5.4", features = ["async"] }
 schemars = "1.2.3"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
@@ -112,6 +115,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tokio-tungstenite = "0.29"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
+# The host of a page's address, as a browser reads it; reqwest brings it
+# already.
+url = "2.5.8"
 # No `v4` nor `v7` here: they ask for a source of randomness, which a build
 # for a client has none of (banda-base, banda-tiling). A crate that makes
 # IDs adds them.
