@@ -92,6 +92,14 @@ async fn a_setup_installs_with_no_call_waiting_then_stops_at_the_step_that_fails
     assert_eq!(states(&before), ["done", "waiting", "waiting"]);
     assert_eq!(before["steps"][1]["says"], "The Agent itself, from OpenAI");
     assert_eq!(before["running"], false);
+    assert_eq!(before["ready"], false);
+    // One with no steps is its Person's to set up: ready, as far as Banda
+    // can tell.
+    let own = ask(&kernel, owner, "harnesses.setup", "fake")
+        .await
+        .unwrap();
+    assert_eq!(own["steps"], json!([]));
+    assert_eq!(own["ready"], true);
 
     let started = ask(&kernel, owner, "harnesses.setup_start", "codex")
         .await

@@ -2,7 +2,9 @@
  * A Thread not yet started (ADR 0114, decisions 1 to 3): one phrase,
  * "Write to [who] in [where]", in the middle; a line under it when the
  * account it starts on needs saying; then the Project's latest Threads.
- * The Message box stays at the foot.
+ * The Message box stays at the foot. While no Harness on the machine is
+ * ready, the phrase gives way to "Connect an Agent" (ADR 0140, decision
+ * 6).
  */
 import { useMemo, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
@@ -23,6 +25,9 @@ import { Heading, Row } from "../composer/WhoPicker"
 import type { WhoGroup } from "../composer/who"
 import { PHRASE_WORD } from "../settings/ThreadSettings"
 import type { HarnessView } from "@banda/contract/harnesses"
+import { useAccounts } from "../harnesses"
+import { ConnectAgent } from "../setup/SetupRow"
+import { useConnect } from "../setup/use-setup"
 import { threadsSource } from "../list/list"
 import { threadPaneOf } from "../list/rows"
 
@@ -61,6 +66,13 @@ export function Start({
 }) {
   const [open, setOpen] = useState(false)
   const recent = useRecent(engine, project)
+  const connect = useConnect(engine, now?.id, useAccounts(engine))
+  if (connect)
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
+        <ConnectAgent engine={engine} {...connect} />
+      </div>
+    )
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
       <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-heading font-medium text-muted-foreground">

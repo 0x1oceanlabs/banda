@@ -211,6 +211,16 @@ PR.
   - A Harness that declares ACP's logout signs out when asked
     (`harnesses.sign_out`), and its processes are let go as after a sign-in.
     The adapter signs its CLI out, so the Person's own terminal too.
+  - A Harness is set up from its row, in one sheet (ADR 0140, decisions
+    6 to 9; `pane/src/setup/`). The row says where its setup is and has
+    one button, which opens the sheet: the engine's steps in a list, one
+    button that runs what is left, Stop while it runs, and what its
+    programs printed under Details. The sheet only draws
+    `harnesses.setup_watch` and names no Harness; closed, the setup goes
+    on. A new Thread shows the rows as "Connect an Agent" in place of
+    its phrase while no Harness on the machine is `ready`, and an
+    account's card in the settings has the same button while it does not
+    start or is signed out.
   - The settings Pane's Agents, like T3 Code's provider settings, shows
     each entry with its CLI and adapter versions, who is signed in, Sign
     in, and Sign out where a logout ends the sign-in: an account's, not a

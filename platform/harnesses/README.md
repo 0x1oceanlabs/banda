@@ -63,7 +63,9 @@ PR.
   name yet (`cli.rs`). A step is done when the
   engine finds it so: a `git` found, the CLI found, someone signed in. Git
   is the machine's and the one step that may ask the system for a right
-  (winget, Apple's tools, `pkexec`); failed, it holds back no other. A Harness Banda
+  (winget, Apple's tools, `pkexec`); failed, it holds back no other. Its
+  `ready` says a Thread can start on it: installed and signed in, Git
+  aside, which the window reads and never works out. A Harness Banda
   does not know has no steps.
 - It asks through a Harness process of its own, with no session, in a
   pool keyed by the machine's ID, let go after five minutes with nothing

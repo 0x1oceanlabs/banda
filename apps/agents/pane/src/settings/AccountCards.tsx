@@ -4,7 +4,7 @@
  * limit windows, and its Threads and last use. A card opens its page; an
  * account that is off, signed out or spent shows dimmed, with what to do.
  */
-import type { ReactNode } from "react"
+import { type ReactNode, useState } from "react"
 import type { Engine } from "@banda/contract"
 import type { HarnessView, Limits } from "@banda/contract/harnesses"
 import { Button } from "@banda/ui/components/button"
@@ -13,6 +13,9 @@ import { cn } from "@banda/ui/lib/utils"
 import { clock } from "@banda/core/react"
 import { PlusIcon } from "lucide-react"
 import { useAccount } from "../harnesses"
+import { SetupAction, TONE } from "../setup/SetupRow"
+import { rowOf } from "../setup/setup"
+import { useSetup } from "../setup/use-setup"
 import { outOf, usedOf } from "../thread/starts-on"
 import { Meter, type Roles } from "./AccountPage"
 import {
@@ -85,8 +88,37 @@ function Reading(props: CardProps) {
   const signedOut = who?.signed_in === false
   const out = outOf(limits, now)
   const windows = cardWindows(limits)
+  // One that does not start or is signed out may be one Banda can set
+  // up: then its card says where its setup is, and opens its sheet,
+  // which stays while open to say the Harness is ready.
+  const [sheet, setSheet] = useState(false)
+  const stuck = read.state === "refused" || signedOut
+  const setup = useSetup(engine, stuck || sheet ? harness.id : undefined)
+  const settingUp =
+    setup && setup.steps.length > 0 && (sheet || !setup.ready)
+      ? setup
+      : undefined
+  const words = settingUp && rowOf(settingUp)
   const middle =
-    read.state === "refused" ? (
+    settingUp && words ? (
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={cn(
+            "min-w-0 truncate text-meta text-muted-foreground",
+            words.tone && TONE[words.tone]
+          )}
+        >
+          {words.line}
+        </span>
+        <SetupAction
+          engine={engine}
+          account={harness}
+          setup={settingUp}
+          className="relative"
+          onSheet={setSheet}
+        />
+      </div>
+    ) : read.state === "refused" ? (
       <p className="text-meta text-destructive">Does not start</p>
     ) : signedOut ? (
       <div className="flex items-center justify-between gap-2">
