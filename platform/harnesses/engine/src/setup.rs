@@ -26,8 +26,9 @@ pub struct Setup {
     /// Whether the engine runs it now.
     pub running: bool,
     /// Whether a Thread can start on it, as far as Banda can tell: it is
-    /// on this computer and someone is signed in to it, or it says no
-    /// steps and is the Person's own to set up. Git is no part of it.
+    /// on this computer and does not say that no one is signed in, or it
+    /// says no steps and is the Person's own to set up. One that does
+    /// not say who is signed in counts as ready. Git is no part of it.
     pub ready: bool,
     /// The last of what the step that runs, or the one that failed,
     /// printed: an installer's lines, a sign-in's link.
@@ -109,11 +110,11 @@ struct Run {
 }
 
 impl Setup {
-    /// Says [`Setup::ready`] as its steps are now: a step is done only
-    /// where this is called after.
+    /// Says [`Setup::ready`] once its steps make it so: a step is done
+    /// only where this is called after, and none is undone in a run.
     fn tell(&mut self) {
         let done = |at: usize| self.steps.get(at).map(|step| step.state) == Some(StepState::Done);
-        self.ready = self.steps.is_empty() || (done(INSTALL) && done(SIGN_IN));
+        self.ready |= self.steps.is_empty() || (done(INSTALL) && done(SIGN_IN));
     }
 }
 
@@ -309,7 +310,13 @@ async fn look(accounts: &Accounts, project: &ModuleProject, harness: &Harness, g
         note: None,
     };
     let installed = installed(project, harness).await;
-    let signed_in = installed && signed_in(accounts, project, harness).await;
+    let signed_in = if installed {
+        signed_in(accounts, project, harness).await
+    } else {
+        Some(false)
+    };
+    // Only one that says no one is signed in is not ready for that.
+    setup.ready = installed && signed_in != Some(false);
     setup.steps = vec![
         step(
             banda_git_cli::NAME,
@@ -327,7 +334,7 @@ async fn look(accounts: &Accounts, project: &ModuleProject, harness: &Harness, g
             "sign_in",
             "Sign in",
             format!("With your {} account, in the browser", row.account),
-            signed_in,
+            signed_in == Some(true),
         ),
     ];
     setup.tell();
@@ -339,10 +346,15 @@ async fn installed(project: &ModuleProject, harness: &Harness) -> bool {
     (crate::cli::find(&*project.environment(), harness).await).is_ok()
 }
 
-/// Whether `harness` says someone is signed in to it.
-async fn signed_in(accounts: &Accounts, project: &ModuleProject, harness: &Harness) -> bool {
+/// Whether `harness` says someone is signed in to it; none when it does
+/// not say, or does not start.
+async fn signed_in(
+    accounts: &Accounts,
+    project: &ModuleProject,
+    harness: &Harness,
+) -> Option<bool> {
     let account = accounts.account_in(project, harness.id.clone()).await;
-    account.is_ok_and(|said| said.account.signed_in_as.is_some_and(|who| who.signed_in))
+    Some(account.ok()?.account.signed_in_as?.signed_in)
 }
 
 /// A setup the engine runs.
@@ -410,7 +422,7 @@ impl Going {
             self.set(INSTALL, StepState::Done);
         }
         let project = self.project()?;
-        if done(SIGN_IN) || signed_in(&self.accounts, &project, &self.harness).await {
+        if done(SIGN_IN) || signed_in(&self.accounts, &project, &self.harness).await == Some(true) {
             self.set(SIGN_IN, StepState::Done);
             return Ok(());
         }
@@ -436,7 +448,7 @@ impl Going {
             }
         });
         self.follow(job).await?;
-        if !signed_in(&self.accounts, &self.project()?, &self.harness).await {
+        if signed_in(&self.accounts, &self.project()?, &self.harness).await != Some(true) {
             return Err(Some(format!("No one is signed in to {name} yet.")));
         }
         self.state.send_modify(|now| now.login = None);

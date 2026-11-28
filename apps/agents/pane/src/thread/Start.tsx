@@ -70,7 +70,12 @@ export function Start({
   if (connect)
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-        <ConnectAgent engine={engine} {...connect} />
+        <ConnectAgent
+          engine={engine}
+          {...connect}
+          // The Thread starts on the one the Person made ready.
+          onReady={(account) => account !== now?.id && onWho(account)}
+        />
       </div>
     )
   return (
