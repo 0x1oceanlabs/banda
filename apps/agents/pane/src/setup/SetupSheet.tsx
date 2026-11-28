@@ -61,13 +61,16 @@ export function SetupSheet({
   const stopped = stoppedAt(setup)
   const output = loginOutput(setup.output)
   const harness = setup.harness
+  /** Whether it was done; refused, it says why. */
   const act = async (run: () => Promise<unknown>) => {
     setBusy(true)
     setRefused(undefined)
     try {
       await run()
+      return true
     } catch (error) {
       setRefused(problem(error))
+      return false
     } finally {
       setBusy(false)
     }
@@ -218,7 +221,7 @@ function SignInReply({
 }: {
   links: readonly string[]
   busy: boolean
-  onReply: (text: string) => Promise<void>
+  onReply: (text: string) => Promise<boolean>
 }) {
   const [reply, setReply] = useState("")
   return (
@@ -236,7 +239,7 @@ function SignInReply({
         onSubmit={(event) => {
           event.preventDefault()
           if (!reply || busy) return
-          void onReply(reply).then(() => setReply(""))
+          void onReply(reply).then((sent) => sent && setReply(""))
         }}
       >
         <Input

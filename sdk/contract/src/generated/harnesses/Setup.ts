@@ -20,8 +20,9 @@ steps: Array<SetupStep>,
 running: boolean, 
 /**
  * Whether a Thread can start on it, as far as Banda can tell: it is
- * on this computer and someone is signed in to it, or it says no
- * steps and is the Person's own to set up. Git is no part of it.
+ * on this computer and does not say that no one is signed in, or it
+ * says no steps and is the Person's own to set up. One that does
+ * not say who is signed in counts as ready. Git is no part of it.
  */
 ready: boolean, 
 /**

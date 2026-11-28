@@ -3,7 +3,7 @@
  * setup is, and one button, which opens its sheet. And the card of rows a
  * new Thread shows while no Harness is ready.
  */
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { Engine } from "@banda/contract"
 import type { HarnessView, Setup } from "@banda/contract/harnesses"
 import { Button } from "@banda/ui/components/button"
@@ -24,8 +24,10 @@ type Shown = {
   setup: Setup
   /** What its sheet's button says once it is ready. */
   done?: string
-  /** Hears its sheet open and close. */
+  /** Hears its sheet open and close, and go with it open. */
   onSheet?: (open: boolean) => void
+  /** Hears its sheet close on a Harness that is ready. */
+  onReady?: () => void
 }
 
 /** The row's one button, and the sheet it opens; nothing where there is
@@ -36,13 +38,19 @@ export function SetupAction({
   setup,
   done,
   onSheet,
+  onReady,
   className,
 }: Shown & { className?: string }) {
   const [open, setOpen] = useState(false)
   const words = rowOf(setup)
+  useEffect(() => {
+    if (!open) return
+    onSheet?.(true)
+    return () => onSheet?.(false)
+  }, [open, onSheet])
   const show = (next: boolean) => {
     setOpen(next)
-    onSheet?.(next)
+    if (!next && setup.ready) onReady?.()
   }
   return (
     <>
@@ -105,10 +113,13 @@ export function ConnectAgent({
   engine,
   rows,
   onSheet,
+  onReady,
 }: {
   engine: Engine
   rows: readonly { account: HarnessView; setup: Setup }[]
   onSheet: (open: boolean) => void
+  /** Hears which entry's sheet closed on a Harness that is ready. */
+  onReady: (account: string) => void
 }) {
   return (
     <section
@@ -130,6 +141,7 @@ export function ConnectAgent({
             {...row}
             done="Write the first message"
             onSheet={onSheet}
+            onReady={() => onReady(row.account.id)}
           />
         ))}
       </ul>
