@@ -22,6 +22,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect, Exit, Fiber } from "effect"
 import { TestClock } from "effect/testing"
 import {
+  BROWSER_DRIVER,
   CARRIED,
   ELECTRON,
   NODE_FOLDER,
@@ -293,6 +294,58 @@ describe("the copy and the adapters the app carries", () => {
       expect(readFileSync(adapter, "utf8")).toBe(
         "// the adapter, a newer build"
       )
+    })
+  )
+})
+
+describe("the copy and the driver of the Agents' Chromium the app carries", () => {
+  /** `browser-driver/` beside `program`: the driver, which says `text`,
+   * and Playwright in its `node_modules`. */
+  function carried(program: string, text: string) {
+    const playwright = join(
+      dirname(program),
+      BROWSER_DRIVER,
+      "node_modules/playwright-core"
+    )
+    mkdirSync(playwright, { recursive: true })
+    writeFileSync(join(playwright, "package.json"), "{}")
+    writeFileSync(join(playwright, "../../browser-driver.mjs"), text)
+  }
+
+  it.live("takes it, and the Playwright in its node_modules", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      carried(program, "// the driver")
+      const driver = join(
+        dirname(yield* copyOf(program, copies)),
+        BROWSER_DRIVER
+      )
+      expect(readFileSync(join(driver, "browser-driver.mjs"), "utf8")).toBe(
+        "// the driver"
+      )
+      expect(
+        readFileSync(
+          join(driver, "node_modules/playwright-core/package.json"),
+          "utf8"
+        )
+      ).toBe("{}")
+    })
+  )
+
+  // A copy an older build made, and an app that carries no driver: the
+  // first is made again, the second is whole without it.
+  it.live("made before the app carried it, is made again", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      const copy = yield* copyOf(program, copies)
+      const driver = join(dirname(copy), BROWSER_DRIVER, "browser-driver.mjs")
+      expect(yield* copyOf(program, copies)).toBe(copy)
+      expect(existsSync(driver)).toBe(false)
+      carried(program, "// the driver")
+      expect(yield* copyOf(program, copies)).toBe(copy)
+      expect(readFileSync(driver, "utf8")).toBe("// the driver")
     })
   )
 })

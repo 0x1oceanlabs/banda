@@ -7,6 +7,9 @@ import { CHANNELS } from "./src/channel.ts"
 // The ACP adapters the app carries, bundled as it is imported (ADR 0059):
 // the harnesses' host package.
 import "../../platform/harnesses/adapters/build.mjs"
+// And the driver of the Chromium an Agent's pages run in on a machine with
+// no window (ADR 0132, decision 3): the browser's host package.
+import "../../apps/browser/driver/build.mjs"
 
 // A checkout is local; a name that is no channel stops the build, as it
 // stops the engine's (engine/build.rs).

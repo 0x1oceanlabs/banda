@@ -10,7 +10,9 @@
 //
 // - <folder>-<version>-engine-<os>-<arch>.tar.gz: `banda` and its updater
 //   `banda-update` (ADR 0131), its line tables
-//   on macOS (`banda.dSYM`), the ACP adapters (`adapters/`), the window's
+//   on macOS (`banda.dSYM`), the ACP adapters (`adapters/`), the driver
+//   of the Chromium an Agent's pages run in (`browser-driver/`, ADR 0132:
+//   the browser a machine with no window gives its Agents), the window's
 //   page it serves at its door (`web/dist/`, ADR 0124, with no source
 //   maps), the Node the adapters run on (`node/node`, ADR 0119 step 1b:
 //   scripts/node.mjs put it in target/node/<platform>/) and the licenses,
@@ -60,6 +62,7 @@ const carried = [
   "banda-update",
   ...(os === "mac" ? ["banda.dSYM"] : []),
   "adapters",
+  "browser-driver",
   "web",
   "LICENSE",
   "NOTICE",
@@ -130,6 +133,9 @@ for (const name of [
   "banda-update",
   "adapters/claude-agent-acp.mjs",
   "adapters/codex-acp.mjs",
+  // The driver, and Playwright beside it, which it loads from there.
+  "browser-driver/browser-driver.mjs",
+  "browser-driver/node_modules/playwright-core/package.json",
   "web/dist/index.html",
   "node/node",
 ]) {

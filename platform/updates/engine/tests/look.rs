@@ -57,6 +57,12 @@ fn serve(listener: tokio::net::TcpListener, served: Served) {
 
 /// A bundle whose `banda` says `says`, as scripts/engine.mjs packs one.
 fn bundle(says: &str) -> Vec<u8> {
+    bundle_with(says, true)
+}
+
+/// And one with no `browser-driver/`, as a Banda older than ADR 0132's
+/// packed it.
+fn bundle_with(says: &str, driver: bool) -> Vec<u8> {
     let mut tar = tar::Builder::new(flate2::write::GzEncoder::new(
         Vec::new(),
         flate2::Compression::fast(),
@@ -75,6 +81,14 @@ fn bundle(says: &str) -> Vec<u8> {
     );
     add("adapters/claude-agent-acp.mjs", b"", 0o644);
     add("adapters/codex-acp.mjs", b"", 0o644);
+    if driver {
+        add("browser-driver/browser-driver.mjs", b"", 0o644);
+        add(
+            "browser-driver/node_modules/playwright-core/package.json",
+            b"{}",
+            0o644,
+        );
+    }
     add("LICENSE", b"Apache-2.0", 0o644);
     tar.into_inner().unwrap().finish().unwrap()
 }
@@ -188,6 +202,11 @@ async fn the_newest_engine_is_taken_checked_and_put_in_place() {
     let kept = machine.engine.join("0.1.0-dev.12");
     assert!(kept.join("banda").is_file());
     assert!(kept.join("adapters/codex-acp.mjs").is_file());
+    // The driver of its Agents' Chromium, with what is in its node_modules.
+    assert!(
+        kept.join("browser-driver/node_modules/playwright-core/package.json")
+            .is_file()
+    );
     assert_eq!(
         std::fs::read_to_string(kept.join("version")).unwrap(),
         "banda 0.1.0-dev.12 (build b)\n"
@@ -250,6 +269,35 @@ async fn an_engine_that_says_another_version_is_refused() {
     let failed = state.failed.unwrap();
     assert!(failed.contains("not 0.1.0-dev.12"), "{failed}");
     assert_eq!(take_left(&machine.engine), Vec::<String>::new());
+}
+
+/// A feed may still name a bundle packed before Banda carried the driver
+/// of its Agents' Chromium: it is taken, and its engine refuses the
+/// browser's tools itself.
+#[tokio::test]
+async fn a_bundle_with_no_browser_driver_is_taken() {
+    let machine = machine_running(
+        "dev",
+        "0.1.0-dev.10",
+        |at, served| {
+            let one = publish(
+                served,
+                at,
+                "0.1.0-dev.12",
+                bundle_with("banda 0.1.0-dev.12 (build b)", false),
+                None,
+            );
+            format!("[{one}]")
+        },
+        |_| None,
+    )
+    .await;
+    let state = machine.updates.look().await;
+    assert_eq!(state.failed, None, "{state:?}");
+    assert_eq!(state.ready.as_deref(), Some("0.1.0-dev.12"));
+    let kept = machine.engine.join("0.1.0-dev.12");
+    assert!(kept.join("banda").is_file());
+    assert!(!kept.join("browser-driver").exists());
 }
 
 #[tokio::test]

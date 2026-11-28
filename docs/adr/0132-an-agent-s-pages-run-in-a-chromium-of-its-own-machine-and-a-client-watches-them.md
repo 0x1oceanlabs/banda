@@ -438,7 +438,8 @@ Each with the recommended answer first.
   key the refusal names. **Not tried:** a real page read through the
   engine; an Electron as the Node; a packed Banda; macOS and Windows.
 - **Not yet:**
-  - Packaging: no packed Banda carries the driver, so each refuses.
+  - Packaging: no packed Banda carries the driver, so each refuses
+    (step 3b, below, carries it).
   - The card in the Thread that asks the Person for a site (decision 5).
   - The blocker of ads for a machine's tab (decision 4).
   - The driver stopping when no machine's tab lives (decision 3): it runs
@@ -450,3 +451,46 @@ Each with the recommended answer first.
   - Where the fence holds, the driver runs on the host, on the Node the
     engine found. One on the PATH that is not root's is run there as it
     is: to be looked at with the fence (ADR 0083).
+
+### Every Banda carries the driver (slice 1, step 3b)
+
+- **Where.** `browser-driver/` beside the engine's program, as
+  `adapters/` is: `browser-driver.mjs` and `node_modules/playwright-core`,
+  whole, real files with no links. In the app's `resources`
+  (`electron-builder.config.mjs`), on Linux, macOS and Windows; in the
+  engine's bundle (`scripts/engine.mjs`), which a machine with no window
+  installs (`scripts/install.sh`) and each engine takes to update itself;
+  and in the window's own copy of the engine, `<data>/engine/<version>/`
+  (`program.ts`'s `BESIDE`).
+- **Built with the window**: `client/desktop/build.mjs` imports the
+  driver's `build.mjs`, as it does the adapters', so a checkout's trial
+  has it too.
+- **electron-builder leaves out a `node_modules` at the top of a folder
+  it copies** into the resources, with no warning: the first pack carried
+  the driver with no Playwright. So the config names that folder as a
+  resource of its own, and `scripts/package.sh` refuses an app without
+  `browser-driver/node_modules/playwright-core/package.json`.
+- **What is checked where.** What we build must have it: `package.sh`
+  (the app's resources), `engine.mjs` (the bundle's list), the Windows
+  run's two lists (the install, and the engine's copy), and
+  `packed.test.ts`, which holds the window's copy to every file of the
+  bundle. What takes a Banda built before this does not ask for it:
+  `take.rs` takes a bundle without it (a test holds that), `program.ts`
+  copies it only when the app has it, and `install.sh` installs an older
+  release with a `warning` line, as it does for one with no Node. Such an
+  engine refuses the browser's tools, as before.
+- **Its license** was counted already: `playwright-core` is the window's
+  dependency too, so `scripts/licenses.mjs` names it (Apache-2.0).
+- **What it weighs:** 11.7 MB in 112 files; 2.9 MB of the engine's
+  bundle, gzip'd (133 MB with it). The window keeps its own Playwright in
+  `app.asar`: one for both is slice 4's.
+- **Tried,** on devbox: `scripts/package.sh local`, whose app's
+  `resources/browser-driver` is file for file the driver's `dist`; the
+  driver started from the packed resources, and from the unpacked bundle
+  on the bundle's own Node, answered a method it does not have with
+  `invalid` and ended 0 as its input closed, so Playwright loads from the
+  carried folder; the window's copy of the packed engine
+  (`packed.test.ts`). **Not tried:** the macOS and Windows packs, and the
+  Windows run's lists, which only their runners run; a real page through a
+  packed Banda's engine; `install.sh` against a release, as none carries
+  the driver yet.

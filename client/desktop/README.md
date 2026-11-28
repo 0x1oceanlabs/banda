@@ -145,8 +145,9 @@ page is one part of. A change to main changes this page in the same PR.
   2), never the one inside its AppImage or its app, whose folder may go
   while the program runs. Main copies it into `<data>/engine/<version>/`,
   beside what its `--version` said, its line tables (`banda.dSYM` on
-  macOS, `banda.pdb` on Windows), the ACP adapters the app carries, and on
-  Windows the Node they run on there (`node/`), runs the copy once with
+  macOS, `banda.pdb` on Windows), the ACP adapters the app carries, the
+  driver of the Chromium its Agents browse in (`browser-driver/`, ADR
+  0132), and on Windows the Node they run on there (`node/`), runs the copy once with
   `--version`, and renames it into place only when it says the same
   version and build id (`program.ts`). A copy in place is run again while
   it and what it carries are as long as the packed ones and it says the
