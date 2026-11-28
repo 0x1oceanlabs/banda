@@ -2,7 +2,10 @@
 
 The browser App: Chromium in a Pane, for the Person and every Agent
 (ADR 0013, ADR 0029). `pane/` is the Pane, its tabs and its row;
-`desktop/` the pages and profiles in Electron's main process.
+`desktop/` the pages and profiles in Electron's main process; `driver/`
+the driver of the Chromium an Agent's pages will run in on its Project's
+machine, and what Banda's hands do in a page, which `desktop/` takes from
+it (ADR 0132; nothing starts the driver yet).
 [The architecture](../../docs/architecture.md#window) is the map this
 page is one part of. A change to this App changes this page in the same
 PR.

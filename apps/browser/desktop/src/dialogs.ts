@@ -4,6 +4,7 @@
 import { randomUUID } from "node:crypto"
 import { EventEmitter } from "node:events"
 import { ipcMain, type IpcMainEvent, type WebContents } from "electron"
+import { unanswerable } from "@banda/browser-driver"
 import { PROMPT_CHANNEL } from "@banda/browser-pane/desktop"
 import type { Dialog } from "@banda/contract/browser"
 import { Refused } from "@banda/desktop-kit"
@@ -17,6 +18,7 @@ import {
   Schema,
   Stream,
 } from "effect"
+import { asRefused } from "./refused"
 import { Tabs } from "./tabs"
 
 const Native = Schema.Struct({
@@ -253,21 +255,9 @@ export class Dialogs extends Context.Service<
         answer: (tab, id, accept, text, agent) =>
           Effect.suspend(() => {
             const was = pending.get(tab)
-            if (!was || was.dialog.id !== id)
-              return Effect.fail(
-                new Refused({
-                  code: "conflict",
-                  message:
-                    "That page dialog is no longer open. Take a new snapshot before answering.",
-                })
-              )
-            if (text !== undefined && (!accept || was.dialog.kind !== "prompt"))
-              return Effect.fail(
-                new Refused({
-                  code: "invalid",
-                  message: "Only accepting a prompt takes text.",
-                })
-              )
+            const refusal = unanswerable(was?.dialog ?? null, id, accept, text)
+            // No dialog open is refused too.
+            if (!was || refusal) return Effect.fail(asRefused(refusal!))
             pending.delete(tab)
             if (!agent) revisions.set(tab, (revisions.get(tab) ?? 0) + 1)
             tell(tab)

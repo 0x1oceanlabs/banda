@@ -20,6 +20,24 @@ import type {
   SiteRule,
   WaitFor,
 } from "@banda/contract/browser"
+import {
+  act,
+  captured,
+  type Dialogs as TabDialogs,
+  dialogOpen,
+  during,
+  go,
+  HISTORY,
+  LOADING,
+  type Pointing,
+  read,
+  Refusal,
+  sameAddress,
+  SETTLING,
+  shown as left,
+  waitFor,
+  waitsFor,
+} from "@banda/browser-driver"
 import type { Driver, SiteAnswer, Wait } from "@banda/browser-pane/desktop"
 import { BROWSER_FILE, siteKey } from "@banda/contract/browser"
 import { fileOf } from "@banda/contract/look"
@@ -27,36 +45,25 @@ import { type Broke, Look, Refused, Settings } from "@banda/desktop-kit"
 import { Context, Effect, FiberSet, Layer, RcMap, Stream } from "effect"
 import type { Event, InputEvent, WebContents } from "electron"
 import { setTimeout as sleep } from "node:timers/promises"
-import type { Browser, Frame, Page } from "playwright-core"
+import type { Browser, Page } from "playwright-core"
 import { Dialogs } from "./dialogs"
 import { capture } from "./capture"
 import { Cdp, messageOf } from "./cdp"
 import {
-  act,
   goingTo,
-  hidden,
+  keyboard,
   onWeb,
   opening,
-  type Pointing,
   READING,
   ruleAt,
-  secrets,
   siteAt,
   stepOf,
-  timedOut,
-  waitFor,
 } from "./hands"
+import { asRefused } from "./refused"
 import { pageOf as contentsOf, noTab, Tabs } from "./tabs"
 
 /** How long a tab no call came for stays held. */
 const IDLE = "5 minutes"
-/** How long an address has to answer, and its page then to load: the
- * engine waits 40 s for both (ADR 0029, decision 2). */
-const ANSWERING = 15_000
-const LOADING = 15_000
-/** How long an action's page has to start what it starts: a new address,
- * a tab, a dialog, a download. */
-const SETTLING = 300
 /** How long the Thread's cursor takes to go where its hands act: they
  * wait for it, so the Person sees where they act before they do. The
  * Pane's cursor glides as long. */
@@ -121,9 +128,6 @@ const offWeb = (tab: number) =>
     message: `Tab ${tab} is your Person's, and you use it only at an http or https address: it shows none now.`,
   })
 
-/** Where `browser_navigate` goes in a tab's history, not to an address. */
-const HISTORY = new Set(["back", "forward", "reload"])
-
 /** A tab as an Agent sees it: `lent` when the Person lent it the
  * Agent's Thread. */
 export const seenTab = (
@@ -138,9 +142,19 @@ export const seenTab = (
   lent,
 })
 
-/** What Playwright threw, as the Agent hears it. */
+/** What Playwright threw, or the hands refused, as the Agent hears it. */
 const refused = (error: unknown) =>
-  error instanceof Refused ? error : new Refused({ message: messageOf(error) })
+  error instanceof Refused
+    ? error
+    : error instanceof Refusal
+      ? asRefused(error)
+      : new Refused({ message: messageOf(error) })
+
+/** The dialogs of `tab`, as the hands meet them in its page. */
+const dialogsOf = (held: Held, tab: number): TabDialogs => ({
+  current: () => held.dialogs.current(tab),
+  watch: () => held.dialogs.watch(tab),
+})
 
 /** Where the tab of `held` is once it loaded, or `LOADING` passed, and
  * what `changed`, as the Agent `by` hears it: the Person's input since its
@@ -151,70 +165,28 @@ const shown = async (
   by: string,
   changed: Partial<Shown> = {}
 ): Promise<Shown> => {
-  const { page } = held
-  // Loading and scripts stop while a dialog is open, including one
-  // opened by a load event rather than by an Agent's click.
-  const next = held.dialogs.watch(tab)
-  let loading = false
-  try {
-    if (!held.dialogs.current(tab))
-      loading = await Promise.race([
-        page.waitForLoadState("load", { timeout: LOADING }).then(
-          () => false,
-          (error) => {
-            if (timedOut(error)) return true
-            throw error
-          }
-        ),
-        next.opened.then(() => false),
-      ])
-  } finally {
-    next.stop()
-  }
-  changed = { ...changed, dialog: held.dialogs.current(tab) }
+  const answer = await left(
+    tab,
+    held.page,
+    dialogsOf(held, tab),
+    // From the browser, not the page, while a dialog stops it.
+    () => contentsOf(tab)?.getTitle() ?? "",
+    changed
+  )
   const touched = held.touched.get(by) ?? false
   held.touched.set(by, false)
-  return {
-    tab,
-    url: page.url(),
-    // From the browser, not the page, while a dialog stops it.
-    title: changed.dialog
-      ? (contentsOf(tab)?.getTitle() ?? "")
-      : await page.title(),
-    loading,
-    moved: false,
-    opened: [],
-    dialog: null,
-    download: null,
-    touched,
-    ...changed,
-  }
+  return { ...answer, touched }
 }
 
-/** Takes `page` where `to` says, once its address answered. */
-const go = async (page: Page, { tab, to }: Navigate) => {
-  const options = { waitUntil: "commit", timeout: ANSWERING } as const
+/** Whether the tab has somewhere to go back or forward to, as Electron
+ * has it: nowhere, once it is gone. */
+const historyOf = (tab: number) => {
   const history = contentsOf(tab)?.navigationHistory
-  try {
-    if (to === "back") {
-      if (!history?.canGoBack()) throw nowhere(tab, to)
-      await page.goBack(options)
-    } else if (to === "forward") {
-      if (!history?.canGoForward()) throw nowhere(tab, to)
-      await page.goForward(options)
-    } else if (to === "reload") await page.reload(options)
-    else await page.goto(to, options)
-  } catch (error) {
-    if (!timedOut(error)) throw error
-    throw new Refused({
-      code: "may_have_run",
-      message: `Tab ${tab}'s address did not answer within ${ANSWERING / 1000} s, and may still.`,
-    })
+  return {
+    canGoBack: () => history?.canGoBack() ?? false,
+    canGoForward: () => history?.canGoForward() ?? false,
   }
 }
-
-const nowhere = (tab: number, to: string) =>
-  new Refused({ message: `Tab ${tab} has nowhere to go ${to}.` })
 
 export class Drive extends Context.Service<
   Drive,
@@ -558,70 +530,22 @@ export class Drive extends Context.Service<
             yield* waiting(tab, by)
             yield* gated(tab, by)
             // Connecting Playwright can itself wait on a load-time dialog.
-            if (dialogs.current(tab))
-              return yield* new Refused({
-                code: "conflict",
-                message:
-                  "The page has an open dialog. Answer it before taking a screenshot.",
-              })
+            if (dialogs.current(tab)) return yield* asRefused(dialogOpen())
             const shot = yield* inTab(
               tab,
               by,
               "Taking a screenshot",
               async (held): Promise<Screenshot> => {
-                if (dialogs.current(tab))
-                  throw new Refused({
-                    code: "conflict",
-                    message:
-                      "The page has an open dialog. Answer it before taking a screenshot.",
-                  })
-                const url = held.page.url()
-                const next = dialogs.watch(tab)
-                let navigated = false
-                const moved = () => {
-                  navigated = true
-                }
-                held.page.on("framenavigated", moved)
-                let image: Awaited<ReturnType<typeof capture>>
-                try {
-                  const taking = capture(held.page).catch((error: unknown) => {
-                    if (
-                      timedOut(error) ||
-                      messageOf(error).includes("Unable to capture screenshot")
-                    )
-                      throw new Refused({
-                        code: "conflict",
-                        message:
-                          "The viewport could not be captured. Show this tab in a browser Pane and try again.",
-                      })
-                    throw error
-                  })
-                  taking.catch(() => {})
-                  image = await Promise.race([
-                    taking,
-                    next.opened.then(() => {
-                      throw new Refused({
-                        code: "conflict",
-                        message:
-                          "The page opened a dialog during capture. Answer it and try again.",
-                      })
-                    }),
-                  ])
-                } finally {
-                  held.page.off("framenavigated", moved)
-                  next.stop()
-                }
-                if (navigated || held.page.url() !== url)
-                  throw new Refused({
-                    code: "conflict",
-                    message:
-                      "The page navigated during capture. Take a new snapshot and try again.",
-                  })
+                const shot = await captured(
+                  held.page,
+                  dialogsOf(held, tab),
+                  capture,
+                  "Show this tab in a browser Pane and try again."
+                )
                 return {
                   tab,
-                  url,
                   title: contentsOf(tab)?.getTitle() ?? "",
-                  ...image,
+                  ...shot,
                 }
               }
             )
@@ -629,12 +553,10 @@ export class Drive extends Context.Service<
             yield* access(by, true)
             yield* waiting(tab, by)
             yield* gated(tab, by)
-            if (contentsOf(tab)?.getURL() !== shot.url)
-              return yield* new Refused({
-                code: "conflict",
-                message:
-                  "The page navigated during capture. Take a new snapshot and try again.",
-              })
+            yield* Effect.try({
+              try: () => sameAddress(shot.url, contentsOf(tab)?.getURL()),
+              catch: refused,
+            })
             return shot
           }),
         snapshot: (tab, by) =>
@@ -652,37 +574,10 @@ export class Drive extends Context.Service<
                 }))
               )
             return inTab(tab, by, READING, async (kept) => {
-              const { page } = kept
-              const [title, tree, values, messages, thrown] = await Promise.all(
-                [
-                  page.title(),
-                  page.ariaSnapshot({ mode: "ai" }),
-                  secrets(page),
-                  page.consoleMessages(),
-                  page.pageErrors(),
-                ]
-              )
+              const page = await read(kept.page)
               kept.touched.set(by.id, false)
-              // Playwright keeps the last 200 of each: cleared, the next
-              // snapshot says the new ones.
-              await Promise.all([
-                page.clearConsoleMessages(),
-                page.clearPageErrors(),
-              ])
-              const errors = [
-                ...messages
-                  .filter((message) => message.type() === "error")
-                  .map((message) => message.text()),
-                ...thrown.map((error) => error.message),
-              ]
-              kept.tree = hidden(tree, values)
-              return {
-                url: page.url(),
-                title,
-                tree: kept.tree,
-                errors,
-                dialog: null,
-              }
+              kept.tree = page.tree
+              return { ...page, dialog: null }
             })
           }),
         open: (url, by, agents) =>
@@ -752,12 +647,8 @@ export class Drive extends Context.Service<
                 goingTo(to.to),
                 async (kept) => {
                   const pending = dialogs.current(to.tab)
-                  if (pending)
-                    throw new Refused({
-                      code: "conflict",
-                      message: `The page waits for dialog ${pending.id}. Answer it first.`,
-                    })
-                  await go(kept.page, to)
+                  if (pending) throw waitsFor(pending)
+                  await go(kept.page, to, historyOf(to.tab))
                   return shown(to.tab, kept, by.id)
                 },
                 false
@@ -800,10 +691,9 @@ export class Drive extends Context.Service<
             const pending = dialogs.current(what.tab)
             if (pending)
               return Effect.fail(
-                new Refused({
-                  code: "conflict",
-                  message: `The page waits for dialog ${pending.id}. Take a snapshot and answer it first.`,
-                })
+                asRefused(
+                  waitsFor(pending, "Take a snapshot and answer it first.")
+                )
               )
             return inTab(
               what.tab,
@@ -814,10 +704,6 @@ export class Drive extends Context.Service<
                 const contents = contentsOf(what.tab)
                 if (!contents) throw noTab(what.tab)
                 const before = new Set(tabs.all().map((page) => page.id))
-                let moved = false
-                const navigated = (frame: Frame) => {
-                  if (frame === page.mainFrame()) moved = true
-                }
                 let download: string | null = null
                 const { session } = contents
                 const downloads = (
@@ -827,30 +713,21 @@ export class Drive extends Context.Service<
                 ) => {
                   if (from.id === what.tab) download = item.getFilename()
                 }
-                const dialog = dialogs.watch(what.tab)
-                let opens: Shown["dialog"] = null
-                page.on("framenavigated", navigated)
                 session.on("will-download", downloads)
                 const done = tabs.hands(what.tab)
+                let moved: boolean
                 try {
-                  // Only a Thread's hands have a cursor.
-                  const acting = act(
-                    page,
-                    contents,
-                    what,
-                    by.kind === "agent" ? pointer(what.tab) : undefined
+                  moved = await during(page, dialogsOf(kept, what.tab), () =>
+                    // Only a Thread's hands have a cursor.
+                    act(
+                      page,
+                      keyboard(contents),
+                      what,
+                      by.kind === "agent" ? pointer(what.tab) : undefined
+                    )
                   )
-                  // A dialog the action opens stops the page, and the action
-                  // with it: the dialog is its answer.
-                  acting.catch(() => {})
-                  const shows = await Promise.race([acting, dialog.opened])
-                  if (shows) opens = dialogs.current(what.tab)
-                  // A stopped page starts nothing more.
-                  else await sleep(SETTLING)
                 } finally {
                   done()
-                  dialog.stop()
-                  page.off("framenavigated", navigated)
                   session.off("will-download", downloads)
                 }
                 const opened = tabs
@@ -861,7 +738,6 @@ export class Drive extends Context.Service<
                   moved,
                   opened,
                   download,
-                  dialog: dialogs.current(what.tab) ?? opens,
                 })
               }
             )
@@ -873,11 +749,7 @@ export class Drive extends Context.Service<
             (tree) => stepOf(tree, wait),
             async (kept) => {
               const pending = dialogs.current(wait.tab)
-              if (pending)
-                throw new Refused({
-                  code: "conflict",
-                  message: `The page waits for dialog ${pending.id}. Answer it first.`,
-                })
+              if (pending) throw waitsFor(pending)
               await waitFor(kept.page, wait)
               return shown(wait.tab, kept, by.id)
             }

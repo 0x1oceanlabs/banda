@@ -10,6 +10,8 @@ import { expect, test } from "vitest"
 
 const ALLOWED = [
   /^@banda\/desktop-kit$/,
+  // What Banda's hands do in a page, which the driver does too (ADR 0132).
+  /^@banda\/browser-driver$/,
   /^@banda\/browser-pane\/desktop$/,
   /^@banda\/contract(\/[a-z]+)?$/,
   /^effect(\/[a-z]+)?$/,

@@ -25,6 +25,8 @@ import {
 } from "effect"
 import { type Session, type WebContents, webContents } from "electron"
 import { Refused, tellPage, Window } from "@banda/desktop-kit"
+import { noTab as missing } from "@banda/browser-driver"
+import { asRefused } from "./refused"
 
 /** How long a Pane has to make a tab it was asked for. */
 const CREATING = "10 seconds"
@@ -50,11 +52,7 @@ export type LendChange = {
 type Profiled = Pick<WebContents, "session">
 
 /** A tab no call may name: one there is not, or one outside its reach. */
-export const noTab = (tab: number) =>
-  new Refused({
-    code: "not_found",
-    message: `There is no tab ${tab}: browser_tabs lists them.`,
-  })
+export const noTab = (tab: number) => asRefused(missing(tab))
 
 export class Tabs extends Context.Service<
   Tabs,

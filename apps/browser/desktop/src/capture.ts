@@ -1,35 +1,12 @@
-/** Viewport images for browser_screenshot (ADR 0061). Masking happens in
- * the page before rasterization, including fields in child frames. */
+/** The window's viewport images for browser_screenshot (ADR 0061): the
+ * page's picture, masked as `@banda/browser-driver` takes it, shrunk to
+ * its bounds with Electron's own image. */
+import { BYTES, EDGE, type Image, picture } from "@banda/browser-driver"
 import { nativeImage } from "electron"
 import type { Page } from "playwright-core"
-import type { Screenshot } from "@banda/contract/browser"
 
-const FIELDS = [
-  'input[type="password" i]',
-  ...[
-    "current-password",
-    "new-password",
-    "cc-number",
-    "cc-exp",
-    "cc-exp-month",
-    "cc-exp-year",
-    "cc-csc",
-  ].map((field) => `[autocomplete~="${field}" i]`),
-].join(",")
-const EDGE = 1280
-const BYTES = 1024 * 1024
-
-export async function capture(
-  page: Page
-): Promise<Pick<Screenshot, "width" | "height" | "pictures">> {
-  const png = await page.screenshot({
-    type: "png",
-    scale: "css",
-    fullPage: false,
-    timeout: 8_000,
-    mask: page.frames().map((frame) => frame.locator(FIELDS)),
-    maskColor: "#000000",
-  })
+export async function capture(page: Page): Promise<Image> {
+  const png = await picture(page)
   let image = nativeImage.createFromBuffer(png)
   const size = image.getSize()
   if (Math.max(size.width, size.height) > EDGE) {
