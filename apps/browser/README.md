@@ -3,9 +3,10 @@
 The browser App: Chromium in a Pane, for the Person and every Agent
 (ADR 0013, ADR 0029). `pane/` is the Pane, its tabs and its row;
 `desktop/` the pages and profiles in Electron's main process; `driver/`
-the driver of the Chromium an Agent's pages will run in on its Project's
-machine, and what Banda's hands do in a page, which `desktop/` takes from
-it (ADR 0132; nothing starts the driver yet).
+the driver of the Chromium an Agent's pages run in on its Project's
+machine when no window is open, and what Banda's hands do in a page,
+which `desktop/` takes from it (ADR 0132); `engine/` the tools for
+Agents, which ask the window or start the driver and ask it.
 [The architecture](../../docs/architecture.md#window) is the map this
 page is one part of. A change to this App changes this page in the same
 PR.
@@ -69,7 +70,8 @@ PR.
     the downloads come from the desktop as `browser.listen`, by the page's
     web contents ID; Banda's page shows no remote image, so the desktop
     fetches the icon in the page's profile.
-  - Agents drive tabs with Banda's tools (ADR 0029): the engine part asks
+  - Agents drive tabs with Banda's tools (ADR 0029): for a tab the
+    window holds, the engine part asks
     main, and each request names the call's Project and its Agent. Main
     answers only about the tabs in that call's reach
     (`apps/browser/desktop/src/asked.ts`, `Tabs.seen`): those its
@@ -106,3 +108,21 @@ PR.
     `browser.stop`, which ends every session on it. A tab asked for with
     no browser Pane opens a new one without the focus, through the
     browser module's `start`.
+  - With no window open on its machine, an Agent's `browser_open` opens
+    a machine's tab (ADR 0132, slice 1): the engine part starts the
+    driver on the engine's Node (`apps/browser/engine/src/driver.rs`),
+    one for every Project, for the Chromium the engine fetched
+    (`chromium.rs`), in the Project's own profile, `browser/profile`
+    under the Project's data. Its ids count from 100001, so none is a
+    window's. The engine keeps which tabs are the machine's and each
+    one's Project (`machine.rs`): a tab stays where it opened, a call
+    on it asks the driver, and another Project's Agent hears of a tab
+    there is not. `browser_tabs` lists the window's tabs and the
+    machine's. For a machine's tab the engine checks what main checks
+    for its own, in the same words: the two switches of `browser.toml`,
+    and the Person's say on the page's site (`site.rs`, which finds a
+    site as main does). A site with no rule is refused, with the
+    setting that allows it, and `browser_handoff` is refused: no Pane
+    shows a machine's tab yet, so nothing asks the Person there. A
+    Banda that carries no driver, as every packed one until it is
+    packed in, refuses `browser_open` with no window in words.

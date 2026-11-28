@@ -1,7 +1,8 @@
 # The browser module, as it declares itself (ADR 0022). Its Pane, actions
 # and sources its code declares; its part in the window's main process is
-# `desktop` (ADR 0028), and its engine part, `engine`, holds no pages: its
-# tools for Agents ask the window (ADR 0029).
+# `desktop` (ADR 0028). Its engine part, `engine`, has the tools for
+# Agents: a tool asks the window for a tab the window holds (ADR 0029), and
+# the driver in `driver` for a tab of the machine's own Chromium (ADR 0132).
 id = "browser"
 kind = "app"
 name = "Browser"

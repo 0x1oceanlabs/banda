@@ -96,6 +96,8 @@ pub struct Chromium {
     restricts: PathBuf,
     profiles: PathBuf,
     fetch: Mutex<Fetch>,
+    /// The program, when it was given and is not this one's to fetch.
+    given: Option<PathBuf>,
 }
 
 impl Chromium {
@@ -113,7 +115,18 @@ impl Chromium {
             restricts: RESTRICTS.into(),
             profiles: PROFILES.into(),
             fetch: Mutex::default(),
+            given: None,
         }
+    }
+
+    /// The Chromium that is `program`, there already: nothing is fetched,
+    /// and the system is not asked whether it lets its sandbox be. A
+    /// test's, with a driver of its own or a Chromium it names.
+    pub fn at(program: PathBuf) -> Arc<Chromium> {
+        Arc::new(Chromium {
+            given: Some(program),
+            ..Self::pinned(Path::new(""), Pin::ours(), system())
+        })
     }
 
     /// The system's zip in the pin, or that Banda has none for it.
@@ -140,6 +153,9 @@ impl Chromium {
     /// system that keeps Chromium's sandbox from it refuses with the
     /// command that allows it.
     pub fn ready(self: &Arc<Self>) -> Result<PathBuf, Refusal> {
+        if let Some(program) = &self.given {
+            return Ok(program.clone());
+        }
         let (system, file) = self.file().map_err(Refusal::app_unavailable)?;
         let program = self.program(system);
         if program.is_file() {

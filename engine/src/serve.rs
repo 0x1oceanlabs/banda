@@ -238,7 +238,8 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     let registry = banda_kernel::Registry::new();
     let own = crate::modules::described();
     let listed = own.iter().map(|app| app.app.clone()).collect();
-    let installed = banda_apps::Apps::new(own, places.installed()).serving(registry.clone(), node);
+    let installed =
+        banda_apps::Apps::new(own, places.installed()).serving(registry.clone(), node.clone());
     let builder = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         .named(machine.named())
@@ -270,6 +271,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         restart: &restart,
         apps: &installed,
         devices: &paired,
+        node: node.as_ref(),
     };
     // The Apps installed before this start come after Banda's own.
     let builder = (installed.at_start().into_iter())

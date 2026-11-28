@@ -85,6 +85,9 @@ pub struct HostContext<'a> {
     /// This machine's host key and the devices it paired, which the
     /// engine's door asks and the devices module changes (ADR 0124).
     pub devices: &'a Paired,
+    /// The Node this host runs what Banda carries on, when it has one:
+    /// the adapters, an App's worker and the browser's driver.
+    pub node: Option<&'a banda_kernel::host::Node>,
 }
 
 include!(concat!(env!("OUT_DIR"), "/apps.rs"));
@@ -145,8 +148,17 @@ mod build {
         host.apps.clone()
     }
 
-    pub fn browser(_: &HostContext<'_>) -> Browser {
+    /// Its machine's tabs run in the Chromium fetched into Banda's data,
+    /// which the driver Banda carries drives on the engine's Node, by
+    /// what this machine's browser.toml lets Agents do (ADR 0132).
+    pub fn browser(host: &HostContext<'_>) -> Browser {
+        let program = std::env::current_exe().ok();
+        let program = program.map(|at| dunce::canonicalize(&at).unwrap_or(at));
+        let folders = banda_browser::driver::folders(program.as_deref(), from_checkout());
         Browser::new()
+            .chromium(banda_browser::chromium::Chromium::of(&host.places.data))
+            .driven_by(host.node.cloned(), folders)
+            .config_in(host.places.config.clone())
     }
 
     pub fn devices(host: &HostContext<'_>) -> DevicesModule {
@@ -336,6 +348,7 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
         restart: &Restart::new(banda_updates::restart::Moves::Itself),
         apps: &Apps::new(crate::modules::described(), places.installed()),
         devices: &devices,
+        node: None,
     })
 }
 

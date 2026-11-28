@@ -375,3 +375,78 @@ Each with the recommended answer first.
   sandbox on; macOS and Windows.
 - **Not yet:** nothing starts it. No site gate, waits, handoff, blocker or
   Person's touch: those are the engine's, in the next steps.
+
+### The tools reach it (slice 1, step 3a)
+
+- **Where a tab opens.** `browser_open` asks the window while one is open
+  on the machine, as before, and opens a machine's tab through the driver
+  when none is. A tab stays where it opened: each later call on its id
+  asks the place that holds it. One road for every Agent tab is slice 4.
+- **The engine keeps the machine's tabs** (`apps/browser/engine/src/
+  machine.rs`): which ids they are, and each one's Project. It learns them
+  from `open`'s answer, from the tabs an answer says a page opened, and
+  from the driver's list of a Project's profile. It forgets one the driver
+  answers `not_found` for, and all of them when the driver ends. A call
+  on a machine's tab of another Project is refused as a tab there is not
+  (ADR 0083, decision 4), and so is a call on a tab that is no machine's
+  while no window is open, which before heard "Banda's window is not
+  open."
+- **Their ids** start at 100001, far above the window's, which count its
+  pages from 1. A driver started again counts on above the highest id the
+  engine heard of, so none comes twice while the engine runs.
+- **`browser_tabs`** lists the window's tabs, none with no window, then the
+  machine's tabs of the call's Project. It starts no driver.
+- **The profile** of a Project is `browser/profile` under its data on the
+  machine. Downloads go to the Downloads folder the system names, else
+  `Downloads` in the home (the `dirs` crate, as Files' places).
+- **The driver's process** (`driver.rs`) starts on the first `browser_open`
+  with no window, on the Node the engine found for what Banda carries
+  (`HostContext::node`), with `ELECTRON_RUN_AS_NODE` when that is an
+  Electron, on the host, and is killed when the engine lets go of it. One
+  serves every Project. Its folder is the one `BANDA_BROWSER_DRIVER`
+  names, else `browser-driver` beside the engine's program, else, in a
+  build from a checkout, `apps/browser/driver/dist`. With no folder that
+  has `browser-driver.mjs`, or no Node, the call is refused: "This Banda
+  does not carry its browser for Agents yet." Then `Chromium::ready` is
+  asked, so a Banda with no driver fetches no Chromium.
+- **A driver that ends** refuses what waited for it: an action or a move
+  with `may_have_run`, a read with `conflict`, as it did nothing. Its tabs
+  are forgotten, and the next `browser_open` starts another. A call the
+  driver does not answer in the window's time for it is refused with
+  `may_have_run`, in the window's words with "Banda's browser".
+- **What the window checks, the engine checks for a machine's tab**, in
+  the window's words: the tools' switch, the screenshots' switch, and the
+  rule of `[agents.sites]` for the site of the page the tab is at, which
+  the driver's `where` says. `browser.toml` is read at each call, as the
+  Tiling's file is. A site is found as the window finds it, with the
+  `psl` crate, the Public Suffix List compiled in, private part included;
+  the test names the addresses `tldts` was asked too. `browser_open` and
+  `browser_navigate` are not gated, as in the window. A picture is checked
+  again once taken, by the address it shows.
+- **A site with no rule is refused**, where the window asks on the tab:
+  "Tab 100001 is on github.com, which you may not use yet. Your Person
+  allows it in Settings → Browser, or with `banda settings set
+  browser.toml 'agents.sites."github.com"' allow`: tell them why you need
+  it." It is one arm of `Machine::gated`, which the card's wait takes.
+- **`browser_handoff` on a machine's tab** is refused: "Your Person cannot
+  see this tab yet. Say what you need from them in your message instead."
+- **Tried:** the engine's tests, with a driver of their own that speaks
+  the lines and has no Chromium: each bullet above. On devbox the real
+  driver, started by the engine part's own road, launched Chrome for
+  Testing 156, which stopped at its sandbox, as devbox refuses it to that
+  program (the test `live_…`, by hand). `banda settings set` with the
+  key the refusal names. **Not tried:** a real page read through the
+  engine; an Electron as the Node; a packed Banda; macOS and Windows.
+- **Not yet:**
+  - Packaging: no packed Banda carries the driver, so each refuses.
+  - The card in the Thread that asks the Person for a site (decision 5).
+  - The blocker of ads for a machine's tab (decision 4).
+  - The driver stopping when no machine's tab lives (decision 3): it runs
+    until the engine stops. Each Project's Chromium quits a minute after
+    its last tab closed.
+  - Closing a tab no call came for, and `browser_close` (question 10).
+  - A tab a page opened by itself is known once an answer or
+    `browser_tabs` names it.
+  - Where the fence holds, the driver runs on the host, on the Node the
+    engine found. One on the PATH that is not root's is run there as it
+    is: to be looked at with the fence (ADR 0083).
