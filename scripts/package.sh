@@ -64,12 +64,15 @@ pnpm --filter @banda/desktop build
 pnpm --filter @banda/desktop exec electron-builder --config electron-builder.config.mjs --publish never
 
 # electron-builder only warns when a resource it was told to pack is
-# missing: an app without the adapters it carries (ADR 0059), or on
+# missing: an app without the adapters it carries (ADR 0059), without the
+# driver of its Agents' Chromium and the Playwright it loads (ADR 0132), or on
 # Windows without its engine, the engine's line tables or its Node, stops
 # here.
 resources=$(find client/desktop/dist -maxdepth 4 -type d \
   \( -path '*-unpacked/resources' -o -path '*.app/Contents/Resources' \) -print -quit)
-carried=(adapters/claude-agent-acp.mjs adapters/codex-acp.mjs)
+carried=(adapters/claude-agent-acp.mjs adapters/codex-acp.mjs
+  browser-driver/browser-driver.mjs
+  browser-driver/node_modules/playwright-core/package.json)
 if [[ ${OS:-} == Windows_NT ]]; then
   carried+=(banda.exe banda-update.exe banda.pdb node/node.exe)
 else

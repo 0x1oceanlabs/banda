@@ -26,7 +26,8 @@ export default {
   // out of the bundle come from node_modules.
   files: ["out/**"],
   // Where main looks for them packed: resources/banda (each system's,
-  // below), resources/web/dist and resources/adapters.
+  // below), resources/web/dist, resources/adapters and
+  // resources/browser-driver.
   // Beside them, Banda's license and the notices of what it is built from
   // (scripts/licenses.mjs, ADR 0038).
   extraResources: [
@@ -35,6 +36,16 @@ export default {
     // harnesses' host package. The engine finds them beside its program,
     // and the engine's own copy carries them (src/program.ts).
     { from: "../../platform/harnesses/adapters/dist", to: "adapters" },
+    // The driver of the Chromium an Agent's pages run in, with Playwright
+    // in its node_modules (ADR 0132, decision 3): the browser's host
+    // package, found and carried as the adapters are. electron-builder
+    // leaves out a node_modules at the top of the folder it copies, so
+    // that one is named itself.
+    { from: "../../apps/browser/driver/dist", to: "browser-driver" },
+    {
+      from: "../../apps/browser/driver/dist/node_modules",
+      to: "browser-driver/node_modules",
+    },
     { from: "../../LICENSE", to: "LICENSE" },
     { from: "../../NOTICE", to: "NOTICE" },
     {

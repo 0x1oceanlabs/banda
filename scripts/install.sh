@@ -183,6 +183,13 @@ if [ ! -x "$kept/node/node" ]; then
   fi
 fi
 
+# The driver of the Chromium its Agents browse in (ADR 0132), which a
+# release older than it lacks: its engine refuses the browser's tools.
+if [ ! -f "$kept/browser-driver/browser-driver.mjs" ] ||
+  [ ! -f "$kept/browser-driver/node_modules/playwright-core/package.json" ]; then
+  echo "warning no browser for its Agents: this release carries none"
+fi
+
 # The two newest stay, as the window and platform/updates keep them.
 ls -1 "$engine" | grep -v '^\.' | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | sed '$d' | sed '$d' |
   while read -r old; do

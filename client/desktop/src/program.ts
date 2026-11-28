@@ -10,7 +10,8 @@
  * holds what the program's `--version` says: its version and its build
  * id, and beside the ACP adapters the app carries (`adapters/`), which the
  * engine finds beside its program (ADR 0059): their files never run from
- * inside the AppImage either. It is written into a folder of its own, run
+ * inside the AppImage either. So is the driver of the Chromium an Agent's
+ * pages run in (`browser-driver/`, ADR 0132). It is written into a folder of its own, run
  * once with `--version`, and renamed into place only when it says the
  * same, so a half-written copy, or one that does not start, is never run.
  * A copy in place is run again while it is of the window's build, it and
@@ -95,6 +96,11 @@ export const CARRIED = "adapters"
 /** The folder of the Node the Windows app carries to run them, beside its
  * `banda.exe` and its copy's (the harnesses' `carried::NODE_FOLDER`). */
 export const NODE_FOLDER = "node"
+/** The folder of the driver of the Chromium an Agent's pages run in,
+ * Playwright in its `node_modules`, beside the app's `banda` and its
+ * copy's: where the engine looks for it (the browser's `driver::FOLDER`;
+ * ADR 0132, decision 3). */
+export const BROWSER_DRIVER = "browser-driver"
 /** The folder of the window's page the app carries, `web/dist` in it,
  * beside its `banda` and its copy's: where the engine looks for the page
  * it serves at its door (`engine/src/page.rs`; ADR 0124, SE5). */
@@ -105,7 +111,7 @@ export const UPDATER =
   process.platform === "win32" ? "banda-update.exe" : "banda-update"
 /** What a copy carries beside its program: each folder of it whole, and
  * each file. */
-const BESIDE = [CARRIED, NODE_FOLDER, PAGE_FOLDER, UPDATER]
+const BESIDE = [CARRIED, BROWSER_DRIVER, NODE_FOLDER, PAGE_FOLDER, UPDATER]
 /** The file beside a copy that names the app's Electron, which runs the
  * adapters as Node (the harnesses' `carried::ELECTRON`). */
 export const ELECTRON = "electron"

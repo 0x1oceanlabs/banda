@@ -2,7 +2,9 @@
 //! names, downloaded, checked by its size and SHA-512, unpacked beside the
 //! engine's copies, checked by its own `--version`, and renamed into place
 //! as `<engine>/<version>/`, laid out as the window's copy is
-//! (`client/desktop/src/program.ts`): `banda`, `adapters/` and `version`.
+//! (`client/desktop/src/program.ts`): `banda`, `adapters/` and `version`,
+//! and whatever else the bundle carries, as `browser-driver/` (ADR 0132),
+//! which a bundle older than it lacks and is taken all the same.
 //! The two newest copies stay, and the one that runs.
 
 use crate::feed::{Feed, Version};

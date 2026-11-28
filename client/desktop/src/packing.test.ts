@@ -2,7 +2,8 @@
  * What the packed app carries (`electron-builder.config.mjs`, ADR 0033):
  * the ACP adapters the harnesses' host package builds, as
  * `resources/adapters` beside the engine, where the engine looks for them
- * and the engine's own copy takes them from (ADR 0059; program.ts). On
+ * and the engine's own copy takes them from (ADR 0059; program.ts), and
+ * the driver of its Agents' Chromium beside them (ADR 0132). On
  * Windows also the Node they run on there, which scripts/node.mjs
  * downloads from a pinned Node release (ADR 0090, decision 5), and the
  * engine's line tables. And the icons of the menu bar and the tray, which
@@ -12,7 +13,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { afterEach, expect, test, vi } from "vitest"
-import { CARRIED, ELECTRON, NODE_FOLDER } from "./program"
+import { BROWSER_DRIVER, CARRIED, ELECTRON, NODE_FOLDER } from "./program"
 
 const root = resolve(import.meta.dirname, "../../..")
 const text = (path: string) => readFileSync(resolve(root, path), "utf8")
@@ -63,6 +64,32 @@ test("the app carries the harnesses' host package's adapters beside its engine",
   expect(carried).toContain(`pub const FOLDER: &str = "${CARRIED}";`)
   expect(carried).toContain(`pub const ELECTRON: &str = "${ELECTRON}";`)
   expect(carried).toContain(`pub const NODE_FOLDER: &str = "${NODE_FOLDER}";`)
+})
+
+test("the app carries the driver of its Agents' Chromium beside its engine", async () => {
+  const { extraResources } = await config()
+  expect(extraResources).toContainEqual({
+    from: "../../apps/browser/driver/dist",
+    to: BROWSER_DRIVER,
+  })
+  // Playwright, which electron-builder would leave out with the folder's
+  // own node_modules (scripts/package.sh looks for it in what was packed).
+  expect(extraResources).toContainEqual({
+    from: "../../apps/browser/driver/dist/node_modules",
+    to: `${BROWSER_DRIVER}/node_modules`,
+  })
+  // Built with the window, as the adapters are, into dist/, Playwright
+  // beside it.
+  expect(text("client/desktop/build.mjs")).toContain(
+    'import "../../apps/browser/driver/build.mjs"'
+  )
+  const build = text("apps/browser/driver/build.mjs")
+  expect(build).toContain('const out = join(here, "dist")')
+  expect(build).toContain('join(out, "node_modules/playwright-core")')
+  // The folder the engine looks for beside its program.
+  expect(text("apps/browser/engine/src/driver.rs")).toContain(
+    `pub const FOLDER: &str = "${BROWSER_DRIVER}";`
+  )
 })
 
 test("the app carries the menu bar's icons and the tray's, beside main", async () => {
