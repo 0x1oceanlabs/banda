@@ -112,7 +112,17 @@ this machine (ADR 0126).
   The Tree carries the place in the Project's log it shows (`at`), taken
   before the view read, so a client follows the App's events from there
   and reads the view again on one. A view is no Agent's tool unless it
-  says so. No Pane draws it yet.
+  says so.
+- **An Agent reads a screen as its Person does** (ADR 0139). Every App
+  with a view answers `screen {view, args, rows, from}`, the tool
+  `<app>_screen`, unless a method of its own has the name. It asks the
+  right to read, so it reads the views that ask no more. Banda reads
+  the view as the Pane does and writes its Tree as text
+  (`engine/src/screen.rs`), in the Tree's order, a Table and a List a
+  page of rows at a time. Beside each control is what it sends: the
+  App's tool with its params, those written, those taken from the row
+  and those a form's fields fill, and the question it asks the Person
+  first. It sends nothing.
 - **Agents know the road.** The Banda skill's topic `apps`
   (`platform/apps/skill/apps.md`) says how to write one, with the clients
   App of the module's tests as its example, word for word; the skill's

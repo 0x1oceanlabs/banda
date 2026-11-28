@@ -33,6 +33,7 @@ pub mod folder;
 pub mod installed;
 pub mod new;
 mod params;
+mod screen;
 pub mod served;
 pub mod tree;
 mod worker;
@@ -328,7 +329,19 @@ impl Apps {
             .flat_map(|run| run.methods.iter().filter_map(|method| method.tool))
             .collect();
         for tool in app.tools() {
-            if tools.contains(&tool.name.as_str()) {
+            let taken = tools.contains(&tool.name.as_str());
+            // The tool Banda gives an App for its screens is no method of
+            // the folder's to rename.
+            if taken
+                && tool.method == format!("{}.{}", app.id, screen::METHOD)
+                && app.reads_screens()
+            {
+                return Err(Refusal::conflict(format!(
+                    "An Agent's tool is named {} already, and Banda names the tool that reads this App's screens so: pick another id in app.toml.",
+                    tool.name
+                )));
+            }
+            if taken {
                 return Err(Refusal::conflict(format!(
                     "An Agent's tool is named {} already: name the method {} otherwise, or give it \"tool\": false.",
                     tool.name, tool.method

@@ -173,6 +173,12 @@ runs in the window.
   Task.
 - It is read again whenever the App emits an event: emit one in each
   command that changes what a screen shows, as `add` and `note` do.
+- Read it as your Person sees it: the tool `clients_screen`, which every
+  App with a view has. It answers the screen as text, with the tool each
+  button, form and row's action sends; `view` and `args` read another
+  screen, `rows` and `from` more of a table. Read it before you tell
+  your Person what is on their screen, and to check a screen you wrote.
+  The words you put on a control are what the next Agent acts by.
 
 A Tree is `{ "title", "about", "children": [ … ] }`: `title` names its
 Pane, `about` is a line under it. Each child is a node, an object with

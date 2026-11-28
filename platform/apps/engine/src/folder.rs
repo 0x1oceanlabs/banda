@@ -12,6 +12,7 @@
 //! [`Folder::read`] reads one and checks it, and what it refuses it says
 //! in words an Agent can act on: the file, and what is wrong in it.
 
+use crate::screen;
 use banda_kernel::{Does, Kind, Method, Refusal, Right, Tool};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -281,8 +282,24 @@ impl Folder {
         format!("{}_{method}", self.id)
     }
 
+    /// Whether it answers `screen`, its screens as text for an Agent (ADR
+    /// 0139): an App with a view does, unless a method of its own has the
+    /// name.
+    pub fn reads_screens(&self) -> bool {
+        self.declared(screen::METHOD).is_none() && screen::views(self).next().is_some()
+    }
+
     /// Its methods as `apps.describe` lists them.
     pub fn described(&self) -> Vec<Method> {
+        let screen = self.reads_screens().then(|| Method {
+            name: screen::METHOD,
+            kind: Kind::Call,
+            right: Right::Read,
+            does: Does::Read,
+            tool: Some(kept(self.tool_name(screen::METHOD))),
+            pass: false,
+            about: screen::about(self),
+        });
         self.methods
             .iter()
             .map(|method| Method {
@@ -298,11 +315,21 @@ impl Folder {
                 pass: false,
                 about: method.about.clone(),
             })
+            .chain(screen)
             .collect()
     }
 
-    /// Its methods an Agent calls as tools (ADR 0126, decision 2).
+    /// Its methods an Agent calls as tools (ADR 0126, decision 2), and
+    /// `screen` (ADR 0139).
     pub fn tools(&self) -> Vec<Tool> {
+        let screen = self.reads_screens().then(|| Tool {
+            name: self.tool_name(screen::METHOD),
+            method: format!("{}.{}", self.id, screen::METHOD),
+            kind: Kind::Call,
+            description: screen::about(self),
+            schema: screen::schema(self),
+            was: Vec::new(),
+        });
         (self.methods.iter())
             .filter(|method| method.tool)
             .map(|method| Tool {
@@ -318,6 +345,7 @@ impl Folder {
                 schema: method.params.clone(),
                 was: Vec::new(),
             })
+            .chain(screen)
             .collect()
     }
 }
@@ -504,7 +532,8 @@ mod tests {
             read.methods[1].params,
             json!({ "type": "object", "properties": {} })
         );
-        // Each is an Agent's tool by its App's name, but those left out.
+        // Each is an Agent's tool by its App's name, but those left out;
+        // and `screen`, as it has a view (ADR 0139).
         let tools: Vec<_> = read
             .tools()
             .into_iter()
@@ -515,6 +544,7 @@ mod tests {
             [
                 ("clients_add".to_owned(), "clients.add".to_owned()),
                 ("clients_find".to_owned(), "clients.find".to_owned()),
+                ("clients_screen".to_owned(), "clients.screen".to_owned()),
             ]
         );
         let described = read.described();

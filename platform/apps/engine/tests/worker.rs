@@ -806,3 +806,85 @@ async fn an_apps_data_is_exported_as_lines_anyone_can_read() {
     assert_eq!(after.len(), lines.len());
     assert_eq!(after[4].1["name"], "Anna");
 }
+
+/// An Agent reads a screen as its Person does (ADR 0139): the view's Tree
+/// as text, each control with the tool it sends.
+#[tokio::test]
+async fn an_apps_screen_reads_as_text_with_the_tool_each_control_sends() {
+    needs_node!();
+    let host = host(&["deals"]).await;
+    let work = host.project("Work").await;
+    let anna = json!({ "client": "Anna", "amount": 12000, "stage": "talks", "due": "2020-01-15" });
+    host.call(&work, "deals.add", anna).await.unwrap();
+    let screen = host.call(&work, "deals.screen", json!({})).await.unwrap();
+    let screen = screen.as_str().unwrap();
+    // Its words and values, in the Tree's order.
+    assert!(screen.starts_with("# Deals\n"), "{screen}");
+    for line in [
+        "Alert (warning): 1 open deal is past due — Anna",
+        "Tab \"Open\":",
+        "    0. id: 1, client: \"Anna\", amount: 12000, stage: \"talks\", due: \"2020-01-15\", chance: 50, paid: false",
+        // A row's own screen is this tool again, by the row's id.
+        "    A row opens: tool deals_screen {view: \"deal\", args: {id: the row's id}}",
+        "    Of a row, \"Won\" (good): tool deals_update {stage: \"won\", id: the row's id}",
+        // What the Person is asked first, the Agent reads (decision 4).
+        "    Of a row, \"Delete\" (bad): tool deals_remove {id: the row's id} — it asks your Person first: \"Delete this deal? It can't be undone.\"",
+        // A form's fields are its command's params; the row fills them.
+        "      Form, \"Save\": tool deals_update {id: the row's id, client, amount, stage, due, chance, paid}",
+        "        stage (Stage, radio, one of new | talks | won | lost)",
+        "  Form, \"Add deal\": tool deals_add {client, amount, stage, due, chance, paid}",
+        "    client (Client, text, required)",
+    ] {
+        assert!(
+            screen.lines().any(|had| had == line),
+            "no line {line:?} in:\n{screen}"
+        );
+    }
+    // Every tool it names is one the App has.
+    let tools: Vec<String> = (host.tools().await.into_iter())
+        .map(|tool| tool.name)
+        .collect();
+    let named = screen
+        .split("tool ")
+        .skip(1)
+        .map(|rest| rest.split(' ').next().unwrap());
+    for tool in named {
+        assert!(
+            tools.contains(&tool.to_owned()),
+            "{tool} is no tool: {tools:?}"
+        );
+    }
+    assert!(tools.contains(&"deals_screen".to_owned()), "{tools:?}");
+
+    // Another view, by its own args; and a page of rows, read on by `from`.
+    for client in ["Boris", "Clara"] {
+        let more = json!({ "client": client, "amount": 1 });
+        host.call(&work, "deals.add", more).await.unwrap();
+    }
+    let deal = json!({ "view": "deal", "args": { "id": 1 } });
+    let deal = host.call(&work, "deals.screen", deal).await.unwrap();
+    assert!(deal.as_str().unwrap().contains("Anna"), "{deal}");
+    let paged = json!({ "rows": 1, "from": 1 });
+    let paged = host.call(&work, "deals.screen", paged).await.unwrap();
+    let paged = paged.as_str().unwrap();
+    assert!(
+        paged.contains("\n    1. id: 2, client: \"Boris\""),
+        "{paged}"
+    );
+    assert!(!paged.contains("client: \"Anna\""), "{paged}");
+    assert!(
+        paged.contains("    … of 3: read on with `from`: 2."),
+        "{paged}"
+    );
+
+    // What is no view of the App's is refused with its views.
+    let none = json!({ "view": "add" });
+    let none = host.call(&work, "deals.screen", none).await.unwrap_err();
+    assert_eq!(none.code, Code::Invalid);
+    assert!(
+        none.message
+            .contains("has no view \"add\". Its views: deal, home"),
+        "{}",
+        none.message
+    );
+}
