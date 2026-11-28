@@ -7,6 +7,9 @@ packages:
   - platform/*/desktop
   # The adapters Banda carries, which run on the host (ADR 0059).
   - platform/harnesses/adapters
+  # The driver of the Chromium an Agent's pages run in, which runs on the
+  # host too (ADR 0132).
+  - apps/browser/driver
   # banda.so's site (ADR 0128).
   - site
 

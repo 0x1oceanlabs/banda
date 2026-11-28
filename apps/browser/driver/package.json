@@ -1,0 +1,27 @@
+{
+  "name": "@banda/browser-driver",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "The driver of the Chromium an Agent's pages run in on its Project's machine (ADR 0132, decision 3): a host package, bundled into dist/ for the engine to run on the Node its host provides. What Banda's hands do in a page lives here, and the window's main process takes it from here too.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src"
+  },
+  "dependencies": {
+    "@banda/contract": "workspace:*",
+    "playwright-core": "1.64.1"
+  },
+  "devDependencies": {
+    "@banda/ui": "workspace:*",
+    "@types/node": "^24",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.5"
+  }
+}

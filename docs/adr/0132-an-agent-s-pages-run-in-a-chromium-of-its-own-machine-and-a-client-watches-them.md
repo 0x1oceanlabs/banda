@@ -335,3 +335,43 @@ Each with the recommended answer first.
   `sudo`; macOS and Windows.
 - **Not yet:** nothing calls `ready`. The tools still ask the window.
 
+### The driver (slice 1, step 2)
+
+- **The program** is `apps/browser/driver` (`@banda/browser-driver`), a
+  host package as the adapters are: `node dist/browser-driver.mjs
+  --chromium <headless shell> [--first-tab <n>]`. A request is a line of
+  JSON on its input, `{"id", "method", "params"}`, and its answer a line on
+  its output, `{"id", "ok"}` or `{"id", "refused": {"code", "message"}}`,
+  by the engine's codes. Its methods are `open`, `navigate`, `snapshot`,
+  `screenshot`, `act`, `wait_for`, `tabs`, `where` and `close`. Calls on
+  one tab run in the order they came, but `close`, which ends what waits
+  in its tab. Its input closing closes every Chromium, and it ends.
+- **One home for the hands.** What they do in a page (`hands.ts`,
+  `page.ts`, `capture.ts`, and a dialog's answer in `dialogs.ts`) lives in
+  the driver's package, and the window's main process takes it from there.
+  What only one of them has is given: the keyboard (Electron's in the
+  window, Playwright's in the driver), the tab's dialogs, its history, and
+  how its picture is bounded. It refuses with a plain `Refusal`, which
+  main turns into its `Refused` in `apps/browser/desktop/src/refused.ts`.
+- **A Chromium per profile folder**, started by
+  `launchPersistentContext` with the sandbox on, over a pipe, at 1280 by
+  800, with no permission granted; it quits a minute after its last tab
+  closed. A download is saved in the folder `open` named, under a name no
+  file there has, and the answer names its path. A page dialog is held
+  through Playwright's `dialog` event, which is CDP's
+  `Page.javascriptDialogOpening`.
+- **The sandbox** is always on in the program: no argument and no
+  variable turns it off, and a test holds that
+  (`architecture.test.ts`). The library's `sandbox` option is for the
+  tests on a real Chromium alone, on a system that refuses it.
+- **Playwright is beside the file, not in it**: `dist/node_modules/
+  playwright-core`, whole. It reads its own `package.json` and
+  `browsers.json` from its folder as it loads, so esbuild cannot take it
+  in.
+- **Tried:** the tests on Chrome for Testing 156 on devbox, with
+  `BANDA_CHROMIUM` naming it and its sandbox off, as devbox refuses it;
+  the built program started from a folder outside the checkout, as far as
+  Chromium's refusal of its sandbox. **Not tried:** the program with the
+  sandbox on; macOS and Windows.
+- **Not yet:** nothing starts it. No site gate, waits, handoff, blocker or
+  Person's touch: those are the engine's, in the next steps.

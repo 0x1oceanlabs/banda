@@ -13,6 +13,7 @@
     "test": "vitest run --dir src"
   },
   "dependencies": {
+    "@banda/browser-driver": "workspace:*",
     "@banda/browser-pane": "workspace:*",
     "@banda/contract": "workspace:*",
     "@banda/desktop-kit": "workspace:*",
