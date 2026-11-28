@@ -5,7 +5,8 @@
 //! A program says whose it is ([`Whose`]): a Harness's is one to start
 //! behind the fence (ADR 0083, decision 1), and a terminal is the
 //! Person's, outside it. So a terminal's program starts only on a terminal,
-//! and one to fence never does.
+//! and one to fence never does. Where the machine has no terminal, its
+//! caller makes it an act on pipes (`Program::on_pipes`).
 
 use banda_kernel::{Environment, Input, Program, Pty, PtySize, Started, Whose};
 use std::io;

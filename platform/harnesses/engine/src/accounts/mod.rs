@@ -511,27 +511,36 @@ impl Accounts {
         };
         let (status, cancel) = self.logins.reserve(&harness.id)?;
         if let Some(program) = way.terminal {
-            let started = project.environment().pty(
-                &program,
-                banda_kernel::PtySize {
-                    rows: 30,
-                    cols: 100,
-                },
-            );
-            match started {
-                Ok((process, pty)) => self.logins.terminal(
-                    &status.login,
-                    process.holding(held),
-                    pty,
-                    cancel,
-                    self.finish(project, by, &harness.id),
-                ),
-                Err(error) => {
-                    self.logins.forget(&status.login);
-                    return Err(Refusal::conflict(format!(
-                        "The sign-in could not start: {error}"
-                    )));
+            let environment = project.environment();
+            let size = banda_kernel::PtySize {
+                rows: 30,
+                cols: 100,
+            };
+            let finish = self.finish(project, by, &harness.id);
+            let started = match environment.pty(&program, size) {
+                Ok((process, pty)) => {
+                    let process = process.holding(held);
+                    self.logins
+                        .terminal(&status.login, process, pty, cancel, finish);
+                    Ok(())
                 }
+                // Where there is no terminal, as on Windows yet, the
+                // program runs on pipes: Claude Code's and Codex's own
+                // sign-in print their page and read a code so too.
+                Err(error) if error.kind() == std::io::ErrorKind::Unsupported => environment
+                    .spawn(&program.on_pipes(), banda_kernel::Input::Piped)
+                    .map(|process| {
+                        let process = process.holding(held);
+                        self.logins
+                            .piped(&status.login, process, cancel, finish, logins::BOUND);
+                    }),
+                Err(error) => Err(error),
+            };
+            if let Err(error) = started {
+                self.logins.forget(&status.login);
+                return Err(Refusal::conflict(format!(
+                    "The sign-in could not start: {error}"
+                )));
             }
         } else {
             self.logins.agent(

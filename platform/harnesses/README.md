@@ -46,7 +46,9 @@ PR.
   `harnesses.login_watch` and may close; `banda account login` is one
   process, stdin its input, stdout its events, the exit code its end. The
   polling calls stay for Agents' tools; `login_finish` only lets go of
-  the report.
+  the report. A way that signs in with the Harness's own program runs it
+  on a terminal, and on pipes where the machine has none, as Windows yet:
+  Claude Code's and Codex's print their page and read a code so too.
 - **`banda account` and `banda secret` are filters** (ADR 0108, decision
   3): the result alone on stdout, a list one JSON object a line narrowed
   by flags, IDs on stdin for `-`, a refusal as JSON on stderr

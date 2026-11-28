@@ -264,7 +264,9 @@ The kernel holds only what every module needs, and it names no module.
   terminal the Person opened (`terminal`) and a git act they asked for
   (`act`) are the Person's own, outside it. `local` reads whose a program is
   to start it where it belongs: a terminal's only on a terminal, and one to
-  fence never on one.
+  fence never on one. Where the machine has no terminal, as Windows yet, a
+  terminal's program becomes an act on pipes (`on_pipes`), as a Harness's
+  sign-in does; no other program changes whose it is.
 - **The fence** (ADR 0083, decision 1). `platform/fence` on Linux: the
   engine is its own launcher, `banda fence`, which an environment starts
   from the engine's running program (`/proc/self/exe`) with the program
