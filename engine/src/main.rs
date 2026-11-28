@@ -299,6 +299,11 @@ enum Command {
         #[command(subcommand)]
         what: account::AccountCommand,
     },
+    /// Set a Harness up on this machine, through the engine (ADR 0140).
+    Harness {
+        #[command(subcommand)]
+        what: account::HarnessCommand,
+    },
     /// The browser this machine's Agents use with no window (ADR 0132).
     Browser {
         #[command(subcommand)]
@@ -757,11 +762,12 @@ fn main() -> ExitCode {
     let job = matches!(cli.command, Command::Serve { job: true, .. });
     logging(serving.map(|places| places.logs().join("engine.log")), !job);
     let runtime = || tokio::runtime::Runtime::new().map_err(Failure::broken);
-    // `banda account` and `banda secret` keep stdout for results alone; the
-    // rest of `banda` follows as its own change (ADR 0108, decision 3).
+    // `banda account`, `banda secret` and `banda harness` keep stdout for
+    // results alone; the rest of `banda` follows as its own change (ADR
+    // 0108, decision 3).
     let filter = matches!(
         cli.command,
-        Command::Account { .. } | Command::Secret { .. }
+        Command::Account { .. } | Command::Secret { .. } | Command::Harness { .. }
     );
     let done = match (cli.command, way.zip(starts)) {
         // It needs no places: its variables say where the engine is.
@@ -771,9 +777,17 @@ fn main() -> ExitCode {
                 runtime()?.block_on(control::start(places, with_parent, way, starts))
             })
         }
-        (command, _) => {
-            Places::from_env().and_then(|places| runtime()?.block_on(run(command, places)))
-        }
+        (command, _) => Places::from_env().and_then(|places| {
+            let runtime = runtime()?;
+            let done = runtime.block_on(run(command, places));
+            // A filter that follows a sign-in reads stdin for its codes:
+            // that read, which no line may ever end, holds back no filter
+            // that is done.
+            if filter {
+                runtime.shutdown_background();
+            }
+            done
+        }),
     };
     // The engine stopped to move onto its new copy, its runtime gone:
     // the copy runs in its place (ADR 0119, decision 3).
@@ -947,6 +961,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             export::export(&places, app, project, to).await
         }
         Command::Account { what } => account::account(&places, what).await,
+        Command::Harness { what } => account::harness(&places, what).await,
         Command::Browser {
             what: BrowserCommand::Setup,
         } => browser_setup(&places).await,
